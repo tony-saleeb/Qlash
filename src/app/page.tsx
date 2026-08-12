@@ -113,7 +113,7 @@ export default function LandingPage() {
     }
   };
 
-  // Handle Player Quick Join
+  // Handle Player Quick Join (token-gated via /api/player/join + /api/player/me)
   const handlePlayerJoin = async (e: React.FormEvent) => {
     e.preventDefault();
     if (!pin || pin.length !== 6) {
@@ -131,70 +131,49 @@ export default function LandingPage() {
     setPlayLoading(true);
 
     try {
-      // Find game session by PIN
-      const { data: session, error: sessionError } = await supabase
-        .from('game_sessions')
-        .select('id, status')
-        .eq('pin', pin)
-        .single();
-
-      if (sessionError || !session) {
-        toast.error('Game room not found. Check the PIN and try again.');
-        setPlayLoading(false);
-        return;
-      }
-
-      if (session.status === 'finished') {
-        toast.error('This game has already finished.');
-        setPlayLoading(false);
-        return;
-      }
-
-      // Check if nickname already exists in this session
-      const { data: existingPlayer } = await supabase
-        .from('players')
-        .select('id, client_token')
-        .eq('session_id', session.id)
-        .eq('nickname', nickname.trim())
-        .maybeSingle();
-
-      // Implement Reconnection Check / Duplicate check
-      const clientToken = localStorage.getItem(`quizarena_token_${session.id}`);
-      
-      if (existingPlayer) {
-        if (clientToken && existingPlayer.client_token === clientToken) {
-          // Reconnect existing player
-          toast.success(`Reconnected as ${nickname}!`);
-          router.push(`/play/${session.id}`);
-          return;
-        } else {
-          toast.error('Nickname already taken in this room.');
-          setPlayLoading(false);
-          return;
-        }
-      }
-
-      // Generate a new client token for the player
-      const newToken = Math.random().toString(36).substring(2, 15) + Math.random().toString(36).substring(2, 15);
-      
-      const { error: joinError } = await supabase
-        .from('players')
-        .insert({
-          session_id: session.id,
+      const joinRes = await fetch('/api/player/join', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          pin,
           nickname: nickname.trim(),
-          team_name: isTeamQuiz ? teamName.trim() : null,
-          client_token: newToken,
-          connected: true
-        });
+          teamName: isTeamQuiz ? teamName.trim() : undefined,
+        }),
+      });
+      const joinData = await joinRes.json();
 
-      if (joinError) throw joinError;
+      if (joinRes.status === 409 && joinData.sessionId) {
+        const existingToken = localStorage.getItem(`quizarena_token_${joinData.sessionId}`);
+        if (existingToken) {
+          const meRes = await fetch('/api/player/me', {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({
+              sessionId: joinData.sessionId,
+              token: existingToken,
+              nickname: nickname.trim(),
+            }),
+          });
+          if (meRes.ok) {
+            toast.success(`Reconnected as ${nickname}!`);
+            router.push(`/play/${joinData.sessionId}`);
+            return;
+          }
+        }
+        toast.error('Nickname already taken in this room.');
+        return;
+      }
 
-      localStorage.setItem(`quizarena_token_${session.id}`, newToken);
+      if (!joinRes.ok) {
+        throw new Error(joinData.error || 'Failed to join game room.');
+      }
+
+      localStorage.setItem(`quizarena_token_${joinData.sessionId}`, joinData.token);
       toast.success('Joined the lobby successfully!');
-      router.push(`/play/${session.id}`);
+      router.push(`/play/${joinData.sessionId}`);
     } catch (error) {
       console.error(error);
-      toast.error('Failed to join game room. Please try again.');
+      toast.error(error instanceof Error ? error.message : 'Failed to join game room. Please try again.');
     } finally {
       setPlayLoading(false);
     }

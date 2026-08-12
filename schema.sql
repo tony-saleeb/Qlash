@@ -15,11 +15,11 @@ create table public.quizzes (
   title text not null,
   description text,
   cover_image_url text,
-  theme jsonb default '{"bgColor": "#0f172a", "textColor": "#ffffff", "primaryColor": "#6366f1"}'::jsonb, -- custom theme styles
+  theme jsonb default '{"bgColor": "#0f172a", "textColor": "#ffffff", "primaryColor": "#6366f1"}'::jsonb,
   randomize_questions boolean default false,
   randomize_answers boolean default false,
   team_mode boolean default false,
-  double_points_rounds jsonb default '[]'::jsonb, -- array of question indices or IDs
+  double_points_rounds jsonb default '[]'::jsonb, -- question indices or IDs configured at edit time
   created_at timestamptz default now(),
   updated_at timestamptz default now()
 );
@@ -34,34 +34,45 @@ create table public.questions (
   media_url text,
   media_type text, -- 'image' | 'video' | null
   time_limit_seconds int default 20,
-  points_base int default 1000, -- max points
+  points_base int default 1000,
   scoring_type text default 'linear' not null, -- 'linear' | 'flat' | 'none'
   answers jsonb not null, -- [{id, text, is_correct, color, shape, image_url?}]
   created_at timestamptz default now()
 );
 
 -- 4. Game Sessions
+-- status: 'lobby' | 'question_active' | 'question_paused' | 'question_reveal' | 'leaderboard' | 'finished'
 create table public.game_sessions (
   id uuid primary key default gen_random_uuid(),
   quiz_id uuid references public.quizzes(id) on delete set null,
   host_id uuid references public.hosts(id) on delete cascade not null,
-  pin text unique not null, -- 6-digit join PIN code
-  status text default 'lobby' not null, -- 'lobby' | 'question_active' | 'question_reveal' | 'leaderboard' | 'finished'
+  pin text unique not null,
+  status text default 'lobby' not null,
   current_question_index int default 0 not null,
   question_started_at timestamptz,
+  active_multiplier int default 1 not null check (active_multiplier in (1, 2)),
+  scores_applied_question_id uuid references public.questions(id) on delete set null,
+  question_order jsonb, -- ordered question UUIDs for this live session
   created_at timestamptz default now()
 );
 
--- 5. Players (no auth, joining via PIN + device session client_token)
+-- 5. Players (no auth account; identity via player_tokens)
 create table public.players (
   id uuid primary key default gen_random_uuid(),
   session_id uuid references public.game_sessions(id) on delete cascade not null,
   nickname text not null,
-  client_token text not null, -- stored in localStorage for reconnects
+  team_name text,
   score int default 0 not null,
   streak int default 0 not null,
   joined_at timestamptz default now(),
   connected boolean default true not null
+);
+
+-- 5b. Player tokens (never publicly readable; service-role / security-definer only)
+create table public.player_tokens (
+  player_id uuid primary key references public.players(id) on delete cascade,
+  client_token text not null,
+  created_at timestamptz default now()
 );
 
 -- 6. Answers Submitted (scoring & anti-cheat source of truth)
@@ -70,7 +81,7 @@ create table public.answers_submitted (
   session_id uuid references public.game_sessions(id) on delete cascade not null,
   question_id uuid references public.questions(id) on delete cascade not null,
   player_id uuid references public.players(id) on delete cascade not null,
-  selected_answer_ids jsonb not null, -- array of selected options
+  selected_answer_ids jsonb not null,
   answered_at timestamptz default now(),
   time_taken_ms int not null,
   points_awarded int not null,
@@ -78,27 +89,36 @@ create table public.answers_submitted (
   unique(session_id, question_id, player_id)
 );
 
--- Enable Row Level Security (RLS)
+-- Indexes for ~80-player hot paths
+create index players_session_id_idx on public.players(session_id);
+create index answers_session_question_idx on public.answers_submitted(session_id, question_id);
+create index game_sessions_pin_idx on public.game_sessions(pin);
+create unique index player_tokens_token_idx on public.player_tokens(client_token);
+
+-- Enable Row Level Security
 alter table public.hosts enable row level security;
 alter table public.quizzes enable row level security;
 alter table public.questions enable row level security;
 alter table public.game_sessions enable row level security;
 alter table public.players enable row level security;
+alter table public.player_tokens enable row level security;
 alter table public.answers_submitted enable row level security;
 
 -- RLS Policies
 
--- Hosts profile policies
+-- Hosts
 create policy "Hosts can read own profile" on public.hosts
   for select using (auth.uid() = id);
 create policy "Hosts can update own profile" on public.hosts
   for update using (auth.uid() = id);
 
--- Quizzes policies
+-- Quizzes: hosts manage; public can read metadata (join needs team_mode / theme)
 create policy "Hosts can manage own quizzes" on public.quizzes
   for all using (auth.uid() = host_id);
+create policy "Public can view quizzes" on public.quizzes
+  for select using (true);
 
--- Questions policies (inherits ownership check from quizzes table)
+-- Questions: hosts only (answer keys must never be public)
 create policy "Hosts can manage own quiz questions" on public.questions
   for all using (
     exists (
@@ -107,13 +127,13 @@ create policy "Hosts can manage own quiz questions" on public.questions
     )
   );
 
--- Game Sessions policies
+-- Game Sessions
 create policy "Hosts can manage own game sessions" on public.game_sessions
   for all using (auth.uid() = host_id);
 create policy "Public can view game sessions" on public.game_sessions
   for select using (true);
 
--- Players policies
+-- Players: public read for lobby/leaderboard; writes via service role / host only
 create policy "Hosts can manage players" on public.players
   for all using (
     exists (
@@ -123,13 +143,11 @@ create policy "Hosts can manage players" on public.players
   );
 create policy "Public can view players" on public.players
   for select using (true);
-create policy "Public can join games" on public.players
-  for insert with check (true);
-create policy "Players can update own record" on public.players
-  for update using (true);
--- Note: Insert and update of players connection states will be gated/verified through secure server endpoints (Next.js backend) to prevent client-side profile hijacks.
+-- No public INSERT/UPDATE — join & connection updates go through Next.js APIs (service role)
 
--- Answers Submitted policies
+-- player_tokens: no policies → denied for anon/authenticated (service role bypasses RLS)
+
+-- Answers: hosts only (players fetch own row via /api/player/round-result)
 create policy "Hosts can read answers submitted" on public.answers_submitted
   for select using (
     exists (
@@ -137,21 +155,142 @@ create policy "Hosts can read answers submitted" on public.answers_submitted
       where game_sessions.id = answers_submitted.session_id and game_sessions.host_id = auth.uid()
     )
   );
-create policy "Public can view answers submitted" on public.answers_submitted
-  for select using (true);
--- Note: Insert and update of submissions is strictly handled via Next.js backend API /api/submit-answer using high-privilege client, enforcing timer rules.
 
+-- Batch score apply + idempotent reveal (security definer; caller must be session host)
+create or replace function public.apply_question_scores_and_reveal(
+  p_session_id uuid,
+  p_question_id uuid
+)
+returns jsonb
+language plpgsql
+security definer
+set search_path = public
+as $$
+declare
+  v_session public.game_sessions%rowtype;
+  v_option_counts jsonb := '{}'::jsonb;
+  v_leaderboard jsonb := '[]'::jsonb;
+begin
+  if auth.uid() is null then
+    raise exception 'Unauthorized';
+  end if;
 
-create policy "Public can view quizzes" on public.quizzes
-  for select using (true);
+  select * into v_session
+  from public.game_sessions
+  where id = p_session_id
+  for update;
 
-create policy "Public can view questions" on public.questions
-  for select using (true);
+  if not found then
+    raise exception 'Session not found';
+  end if;
 
+  if v_session.host_id <> auth.uid() then
+    raise exception 'Unauthorized';
+  end if;
+
+  -- Idempotent: scores already applied for this question
+  if v_session.scores_applied_question_id is not distinct from p_question_id then
+    select coalesce(
+      (
+        select jsonb_object_agg(option_id, cnt)
+        from (
+          select opt as option_id, count(*)::int as cnt
+          from public.answers_submitted a,
+               lateral jsonb_array_elements_text(a.selected_answer_ids) opt
+          where a.session_id = p_session_id and a.question_id = p_question_id
+          group by opt
+        ) t
+      ),
+      '{}'::jsonb
+    ) into v_option_counts;
+
+    select coalesce(jsonb_agg(to_jsonb(lb)), '[]'::jsonb)
+    into v_leaderboard
+    from (
+      select id, nickname, score, streak, connected
+      from public.players
+      where session_id = p_session_id
+      order by score desc
+      limit 5
+    ) lb;
+
+    if v_session.status <> 'question_reveal' then
+      update public.game_sessions
+      set status = 'question_reveal', active_multiplier = 1
+      where id = p_session_id;
+    end if;
+
+    return jsonb_build_object(
+      'optionCounts', v_option_counts,
+      'leaderboard', v_leaderboard,
+      'alreadyApplied', true
+    );
+  end if;
+
+  if v_session.status not in ('question_active', 'question_paused') then
+    raise exception 'Invalid session status for reveal: %', v_session.status;
+  end if;
+
+  -- Single-statement score/streak update for all players in the session
+  update public.players as p
+  set
+    score = p.score + coalesce(s.points_awarded, 0),
+    streak = case when s.is_correct is true then p.streak + 1 else 0 end
+  from (
+    select pl.id as player_id, a.points_awarded, a.is_correct
+    from public.players pl
+    left join public.answers_submitted a
+      on a.player_id = pl.id
+     and a.session_id = p_session_id
+     and a.question_id = p_question_id
+    where pl.session_id = p_session_id
+  ) as s
+  where p.id = s.player_id;
+
+  update public.game_sessions
+  set
+    status = 'question_reveal',
+    scores_applied_question_id = p_question_id,
+    active_multiplier = 1
+  where id = p_session_id;
+
+  select coalesce(
+    (
+      select jsonb_object_agg(option_id, cnt)
+      from (
+        select opt as option_id, count(*)::int as cnt
+        from public.answers_submitted a,
+             lateral jsonb_array_elements_text(a.selected_answer_ids) opt
+        where a.session_id = p_session_id and a.question_id = p_question_id
+        group by opt
+      ) t
+    ),
+    '{}'::jsonb
+  ) into v_option_counts;
+
+  select coalesce(jsonb_agg(to_jsonb(lb)), '[]'::jsonb)
+  into v_leaderboard
+  from (
+    select id, nickname, score, streak, connected
+    from public.players
+    where session_id = p_session_id
+    order by score desc
+    limit 5
+  ) lb;
+
+  return jsonb_build_object(
+    'optionCounts', v_option_counts,
+    'leaderboard', v_leaderboard,
+    'alreadyApplied', false
+  );
+end;
+$$;
+
+revoke all on function public.apply_question_scores_and_reveal(uuid, uuid) from public;
+grant execute on function public.apply_question_scores_and_reveal(uuid, uuid) to authenticated;
 
 -- Triggers
 
--- Automatically create a host profile row when a user signs up on Supabase Auth
 create or replace function public.handle_new_user()
 returns trigger as $$
 begin
@@ -168,10 +307,9 @@ create trigger on_auth_user_created
   after insert on auth.users
   for each row execute procedure public.handle_new_user();
 
--- Enable Supabase Realtime for live multiplayer updates
+-- Realtime
 alter publication supabase_realtime add table public.game_sessions;
 alter publication supabase_realtime add table public.players;
 alter publication supabase_realtime add table public.answers_submitted;
 
--- Enable full replica identity on players so DELETE event filters on session_id match successfully
 alter table public.players replica identity full;

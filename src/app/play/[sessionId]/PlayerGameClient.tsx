@@ -1,7 +1,6 @@
 'use client';
-// Force TS cache refresh
 
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useCallback } from 'react';
 import { useRouter } from 'next/navigation';
 import { createClient } from '@/lib/supabase/client';
 import { updatePlayerConnection } from '@/app/actions/game';
@@ -12,45 +11,28 @@ import { Checkbox } from '@/components/ui/checkbox';
 import { Flame, Wifi, WifiOff, Loader2, Award, CheckCircle, XCircle, Clock, Trophy, Pause, Check, Users, Zap } from 'lucide-react';
 import { playCorrectSound, playIncorrectSound, playFanfareSound } from '@/lib/sounds';
 import confetti from 'canvas-confetti';
+import { useSessionChannel } from '@/hooks/useSessionChannel';
+import {
+  SHAPES_MAP,
+  type Player,
+  type PublicQuestionPayload,
+} from '@/lib/game/types';
+import { aggregateTeamScores } from '@/lib/game/teams';
 
-interface Player {
-  id: string;
-  session_id: string;
-  nickname: string;
-  team_name?: string | null;
-  score: number;
-  streak: number;
-  joined_at: string;
-  connected: boolean;
-}
-
-interface AnswerOption {
-  id: string;
-  text: string;
-  color: string;
-  shape: string;
-}
-
-interface ActiveQuestionPayload {
-  id: string;
-  type: string;
-  prompt: string;
-  media_url: string | null;
-  media_type: string | null;
-  time_limit_seconds: number;
-  answers: AnswerOption[];
-}
+type ActiveQuestionPayload = PublicQuestionPayload;
 
 interface PlayerGameClientProps {
   sessionId: string;
   initialSessionStatus: string;
   quizTheme?: Record<string, unknown> | null;
+  teamMode?: boolean;
 }
 
 export default function PlayerGameClient({
   sessionId,
   initialSessionStatus,
   quizTheme,
+  teamMode = false,
 }: PlayerGameClientProps) {
   const router = useRouter();
   const supabase = createClient();
@@ -88,21 +70,182 @@ export default function PlayerGameClient({
     activeQuestionRef.current = activeQuestion;
   }, [activeQuestion]);
 
-  const shapesMap: Record<string, string> = {
-    triangle: '▲',
-    diamond: '◆',
-    circle: '●',
-    square: '■',
-    star: '★',
-    hexagon: '⬢',
-  };
+  const shapesMap = SHAPES_MAP;
 
   const customStyles = {
     backgroundColor: (quizTheme?.bgColor as string) || '#090f1d',
     color: (quizTheme?.textColor as string) || '#f1f5f9',
   };
 
-  // 1. Authenticate player identity and check token on load
+  const applyQuestionPayload = useCallback(
+    (
+      question: ActiveQuestionPayload,
+      serverStartedAt?: string | null,
+      status?: string
+    ) => {
+      setActiveQuestion(question);
+
+      if (serverStartedAt && question.time_limit_seconds) {
+        const started = new Date(serverStartedAt).getTime();
+        const elapsedSec = Math.floor((Date.now() - started) / 1000);
+        setTimeLeft(Math.max(0, question.time_limit_seconds - elapsedSec));
+      } else {
+        setTimeLeft(question.time_limit_seconds);
+      }
+
+      setSelectedAnswerIds([]);
+      setTypeInputValue('');
+      setSubmissionState('idle');
+      setRoundResult(null);
+      if (status) setSessionStatus(status);
+    },
+    []
+  );
+
+  const hydrateCurrentQuestion = useCallback(
+    async (playerId: string) => {
+      const token = localStorage.getItem(`quizarena_token_${sessionId}`) || '';
+      try {
+        const res = await fetch('/api/player/current-question', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ sessionId, playerId, token }),
+        });
+        const data = await res.json();
+        if (!res.ok) return;
+
+        if (data.status) setSessionStatus(data.status);
+        if (typeof data.active_multiplier === 'number') {
+          setActiveMultiplier(data.active_multiplier);
+        }
+        if (data.question) {
+          applyQuestionPayload(data.question, data.server_started_at, data.status);
+        }
+      } catch (err) {
+        console.error('Failed to hydrate current question', err);
+      }
+    },
+    [sessionId, applyQuestionPayload]
+  );
+
+  const fetchRoundResults = useCallback(
+    async (
+      playerId: string,
+      correctAnswerIds: string[],
+      optionCounts?: Record<string, number>
+    ) => {
+      const currentActiveQuestion = activeQuestionRef.current;
+      if (!currentActiveQuestion) return;
+
+      const token = localStorage.getItem(`quizarena_token_${sessionId}`) || '';
+
+      try {
+        const res = await fetch('/api/player/round-result', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({
+            sessionId,
+            playerId,
+            token,
+            questionId: currentActiveQuestion.id,
+          }),
+        });
+        const data = await res.json();
+
+        if (data.player) {
+          setPlayer((prev) =>
+            prev ? { ...prev, score: data.player.score, streak: data.player.streak } : null
+          );
+        }
+
+        const isCorrect = data.submission?.is_correct ?? false;
+        if (isCorrect) playCorrectSound();
+        else playIncorrectSound();
+
+        setRoundResult({
+          isCorrect,
+          pointsAwarded: data.submission?.points_awarded ?? 0,
+          correctAnswerIds,
+          optionCounts,
+        });
+      } catch (err) {
+        console.error('Failed to fetch round result', err);
+        setRoundResult({
+          isCorrect: false,
+          pointsAwarded: 0,
+          correctAnswerIds,
+          optionCounts,
+        });
+      }
+      setSubmissionState('idle');
+    },
+    [sessionId]
+  );
+
+  useSessionChannel(sessionId, {
+    supabase,
+    onEvents: {
+      'question:start': (msg) => {
+        const payload = msg.payload;
+        const questionId = payload.question_id as string | undefined;
+        if (!questionId) return;
+        applyQuestionPayload(
+          {
+            id: questionId,
+            type: payload.type as string,
+            prompt: payload.prompt as string,
+            media_url: (payload.media_url as string | null) ?? null,
+            media_type: (payload.media_type as string | null) ?? null,
+            time_limit_seconds: payload.time_limit_seconds as number,
+            answers: payload.answers as ActiveQuestionPayload['answers'],
+          },
+          (payload.server_started_at as string) || new Date().toISOString(),
+          'question_active'
+        );
+        setActiveMultiplier(1);
+      },
+      'question:reveal': (msg) => {
+        const playerId = playerRef.current?.id;
+        if (!playerId) return;
+        const correctIds = (msg.payload.correct_answer_ids as string[]) || [];
+        const optionCounts = msg.payload.option_counts as Record<string, number> | undefined;
+        fetchRoundResults(playerId, correctIds, optionCounts);
+      },
+      'question:update': (msg) => {
+        setActiveQuestion((prev) => {
+          if (!prev) return prev;
+          return {
+            ...prev,
+            prompt: (msg.payload.prompt as string) || prev.prompt,
+            answers: msg.payload.answers
+              ? prev.answers.map((ans) => {
+                  const updated = (
+                    msg.payload.answers as { id: string; text: string }[]
+                  ).find((a) => a.id === ans.id);
+                  return updated ? { ...ans, text: updated.text } : ans;
+                })
+              : prev.answers,
+          };
+        });
+        toast.info('The host updated the question.');
+      },
+      'host:announcement': (msg) => {
+        const message = msg.payload.message as string;
+        if (message) toast.info(`📢 Host: ${message}`, { duration: 8000 });
+      },
+      'multiplier:change': (msg) => {
+        const multiplier = (msg.payload.multiplier as number) || 1;
+        setActiveMultiplier(multiplier);
+        if (multiplier > 1) {
+          toast.success(`⚡ Double Points activated! (${multiplier}x)`, { duration: 5000 });
+        } else {
+          toast.info('Multiplier deactivated (1x)');
+        }
+      },
+    },
+  });
+
+  // 1. Authenticate player identity via token-gated API (tokens are not publicly readable)
   useEffect(() => {
     const authenticatePlayer = async () => {
       const token = localStorage.getItem(`quizarena_token_${sessionId}`);
@@ -113,25 +256,27 @@ export default function PlayerGameClient({
       }
 
       try {
-        const { data: playerRecord, error } = await supabase
-          .from('players')
-          .select('*')
-          .eq('session_id', sessionId)
-          .eq('client_token', token)
-          .maybeSingle();
+        const res = await fetch('/api/player/me', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ sessionId, token }),
+        });
+        const data = await res.json();
 
-        if (error || !playerRecord) {
+        if (!res.ok || !data.player) {
           localStorage.removeItem(`quizarena_token_${sessionId}`);
           toast.error('Identity verification failed. Please join again.');
           router.push('/play');
           return;
         }
 
-        setPlayer(playerRecord as Player);
+        setPlayer(data.player as Player);
+        if (data.sessionStatus) setSessionStatus(data.sessionStatus);
         setLoading(false);
 
-        // Update connection status
-        await updatePlayerConnection(playerRecord.id, token, true);
+        await updatePlayerConnection(data.player.id, token, true);
+        // Recover mid-question if broadcast was missed (late join / refresh)
+        await hydrateCurrentQuestion(data.player.id);
       } catch (err) {
         console.error('Authentication error:', err);
         router.push('/play');
@@ -139,16 +284,15 @@ export default function PlayerGameClient({
     };
 
     authenticatePlayer();
-  }, [supabase, sessionId, router]);
+  }, [sessionId, router, hydrateCurrentQuestion]);
 
-  // 2. Realtime listener setup for status, kick actions, and broadcasts
+  // 2. Realtime listener setup for status + kick (broadcast handled by useSessionChannel)
   useEffect(() => {
     if (!player?.id) return;
 
     const token = localStorage.getItem(`quizarena_token_${sessionId}`) || '';
     const playerId = player.id;
 
-    // Listen if host deletes our player row (kicking action)
     const playerChannel = supabase
       .channel(`player_self_${playerId}`)
       .on(
@@ -167,7 +311,6 @@ export default function PlayerGameClient({
       )
       .subscribe();
 
-    // Listen to Game Session status changes
     const sessionChannel = supabase
       .channel(`player_session_${sessionId}`)
       .on(
@@ -179,11 +322,19 @@ export default function PlayerGameClient({
           filter: `id=eq.${sessionId}`,
         },
         (payload) => {
-          const newStatus = payload.new.status;
+          const newStatus = payload.new.status as string;
           setSessionStatus(newStatus);
 
-          // Handle resetting states during transitions
-          if (newStatus === 'leaderboard') {
+          if (typeof payload.new.active_multiplier === 'number') {
+            setActiveMultiplier(payload.new.active_multiplier);
+          }
+
+          if (newStatus === 'question_active' || newStatus === 'question_paused') {
+            // Hydrate if we somehow missed the start broadcast
+            if (!activeQuestionRef.current) {
+              hydrateCurrentQuestion(playerId);
+            }
+          } else if (newStatus === 'leaderboard') {
             setRoundResult(null);
           } else if (newStatus === 'finished') {
             fetchFinalRank();
@@ -191,138 +342,6 @@ export default function PlayerGameClient({
         }
       )
       .subscribe();
-
-    // Listen to ephemeral Broadcast events (question starts & reveals)
-    const broadcastChannel = supabase.channel(`session_channel_${sessionId}`);
-
-    broadcastChannel
-      .on('broadcast', { event: 'question:start' }, (payload) => {
-        // Find corresponding question ID by fetching current session index
-        const fetchQuestionDetails = async () => {
-          // Fetch current question ID from the database using public query
-          const { data: sessionData } = await supabase
-            .from('game_sessions')
-            .select('current_question_index, quiz_id')
-            .eq('id', sessionId)
-            .single();
-
-          if (sessionData) {
-            const { data: qData } = await supabase
-              .from('questions')
-              .select('id')
-              .eq('quiz_id', sessionData.quiz_id)
-              .eq('order_index', sessionData.current_question_index)
-              .single();
-
-            if (qData) {
-              setActiveQuestion({
-                id: qData.id,
-                type: payload.payload.type,
-                prompt: payload.payload.prompt,
-                media_url: payload.payload.media_url,
-                media_type: payload.payload.media_type,
-                time_limit_seconds: payload.payload.time_limit_seconds,
-                answers: payload.payload.answers,
-              });
-
-              // Synchronize countdown timer based on server starting timestamp
-              const serverStartedAt = new Date(payload.payload.server_started_at || new Date().toISOString());
-              const elapsedMs = new Date().getTime() - serverStartedAt.getTime();
-              const elapsedSec = Math.floor(elapsedMs / 1000);
-              const remaining = Math.max(0, payload.payload.time_limit_seconds - elapsedSec);
-              setTimeLeft(remaining);
-
-              setSelectedAnswerIds([]);
-              setTypeInputValue('');
-              setSubmissionState('idle');
-              setRoundResult(null);
-            }
-          }
-        };
-
-        fetchQuestionDetails();
-      })
-      .on('broadcast', { event: 'question:reveal' }, (payload) => {
-        // Reveal correct keys
-        const correctIds = payload.payload.correct_answer_ids as string[];
-        const optionCounts = payload.payload.option_counts as Record<string, number> | undefined;
-        fetchRoundResults(correctIds, optionCounts);
-      })
-      .on('broadcast', { event: 'question:update' }, (payload) => {
-        // Live question edit from host
-        setActiveQuestion((prev) => {
-          if (!prev) return prev;
-          return {
-            ...prev,
-            prompt: payload.payload.prompt || prev.prompt,
-            answers: payload.payload.answers
-              ? prev.answers.map((ans) => {
-                  const updated = (payload.payload.answers as { id: string; text: string }[]).find((a) => a.id === ans.id);
-                  return updated ? { ...ans, text: updated.text } : ans;
-                })
-              : prev.answers,
-          };
-        });
-        toast.info('The host updated the question.');
-      })
-      .on('broadcast', { event: 'host:announcement' }, (payload) => {
-        // Host announcement toast
-        const message = payload.payload.message as string;
-        if (message) {
-          toast.info(`📢 Host: ${message}`, { duration: 8000 });
-        }
-      })
-      .on('broadcast', { event: 'multiplier:change' }, (payload) => {
-        // Multiplier toggle from host
-        const multiplier = (payload.payload.multiplier as number) || 1;
-        setActiveMultiplier(multiplier);
-        if (multiplier > 1) {
-          toast.success(`⚡ Double Points activated! (${multiplier}x)`, { duration: 5000 });
-        } else {
-          toast.info('Multiplier deactivated (1x)');
-        }
-      })
-      .subscribe();
-
-    const fetchRoundResults = async (correctAnswerIds: string[], optionCounts?: Record<string, number>) => {
-      // Query player submissions to get points awarded and correctness
-      const currentActiveQuestion = activeQuestionRef.current;
-      if (!currentActiveQuestion) return;
-
-      const { data: subRecord } = await supabase
-        .from('answers_submitted')
-        .select('points_awarded, is_correct')
-        .eq('session_id', sessionId)
-        .eq('question_id', currentActiveQuestion.id)
-        .eq('player_id', playerId)
-        .maybeSingle();
-
-      // Fetch player's updated score & streak
-      const { data: updatedPlayer } = await supabase
-        .from('players')
-        .select('score, streak')
-        .eq('id', playerId)
-        .single();
-
-      if (updatedPlayer) {
-        setPlayer((prev) => prev ? { ...prev, score: updatedPlayer.score, streak: updatedPlayer.streak } : null);
-      }
-
-      const isCorrect = subRecord?.is_correct ?? false;
-      if (isCorrect) {
-        playCorrectSound();
-      } else {
-        playIncorrectSound();
-      }
-
-      setRoundResult({
-        isCorrect,
-        pointsAwarded: subRecord?.points_awarded ?? 0,
-        correctAnswerIds,
-        optionCounts,
-      });
-      setSubmissionState('idle');
-    };
 
     const fetchFinalRank = async () => {
       const { data: allPlayers } = await supabase
@@ -338,11 +357,11 @@ export default function PlayerGameClient({
       }
     };
 
-    // Connection Sync
     const handleVisibilityChange = () => {
       const isVisible = document.visibilityState === 'visible';
       setOnline(isVisible);
       updatePlayerConnection(playerId, token, isVisible);
+      if (isVisible) hydrateCurrentQuestion(playerId);
     };
 
     window.addEventListener('visibilitychange', handleVisibilityChange);
@@ -358,10 +377,9 @@ export default function PlayerGameClient({
     return () => {
       supabase.removeChannel(playerChannel);
       supabase.removeChannel(sessionChannel);
-      supabase.removeChannel(broadcastChannel);
       window.removeEventListener('visibilitychange', handleVisibilityChange);
     };
-  }, [supabase, player?.id, sessionId, router]);
+  }, [supabase, player?.id, sessionId, router, hydrateCurrentQuestion]);
 
   // Countdown timer logic for player client
   useEffect(() => {
@@ -431,7 +449,6 @@ export default function PlayerGameClient({
           token,
           questionId: activeQuestion.id,
           selectedAnswerIds: answersToSubmit,
-          multiplier: activeMultiplier,
         }),
       });
 
@@ -739,6 +756,10 @@ export default function PlayerGameClient({
     const firstPlace = sortedPodium[0];
     const secondPlace = sortedPodium[1];
     const thirdPlace = sortedPodium[2];
+    const teamRows = teamMode ? aggregateTeamScores(podiumPlayers) : [];
+    const myTeamRank = player?.team_name
+      ? teamRows.findIndex((t) => t.team_name === player.team_name) + 1
+      : null;
 
     return (
       <div className="relative min-h-screen bg-slate-950 flex flex-col justify-between items-center p-6 text-center text-slate-100 font-sans overflow-hidden" style={customStyles}>
@@ -833,6 +854,14 @@ export default function PlayerGameClient({
               #{finalRank ?? '-'} Rank
             </span>
           </div>
+          {teamMode && player?.team_name && (
+            <div className="flex justify-between items-center">
+              <span className="text-xs text-slate-400">Team ({player.team_name})</span>
+              <span className="text-sm font-bold text-fuchsia-300">
+                #{myTeamRank || '-'} · {teamRows.find((t) => t.team_name === player.team_name)?.score ?? 0} pts
+              </span>
+            </div>
+          )}
           <div className="flex justify-between items-center">
             <span className="text-xs text-slate-400">Final Points</span>
             <span className="text-lg font-black font-mono text-white">
@@ -845,6 +874,21 @@ export default function PlayerGameClient({
               <Flame className="w-4 h-4 fill-amber-400" /> {player.streak}
             </span>
           </div>
+          {teamMode && teamRows.length > 0 && (
+            <div className="pt-2 border-t border-slate-800 space-y-1.5">
+              <span className="text-[10px] font-bold text-slate-500 uppercase tracking-widest">
+                Team Standings
+              </span>
+              {teamRows.slice(0, 5).map((team, idx) => (
+                <div key={team.team_name} className="flex justify-between text-xs">
+                  <span className={team.team_name === player?.team_name ? 'text-fuchsia-300 font-bold' : 'text-slate-400'}>
+                    #{idx + 1} {team.team_name}
+                  </span>
+                  <span className="font-mono text-slate-300">{team.score}</span>
+                </div>
+              ))}
+            </div>
+          )}
         </div>
 
         <Button

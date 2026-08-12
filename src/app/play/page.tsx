@@ -71,69 +71,49 @@ export default function PlayerJoinPage() {
     setLoading(true);
 
     try {
-      // Run session lookup
-      const sessionResult = await supabase
-        .from('game_sessions')
-        .select('id, status')
-        .eq('pin', pin)
-        .single();
-
-      const { data: session, error: sessionError } = sessionResult;
-
-      if (sessionError || !session) {
-        toast.error('Game room not found. Check the PIN and try again.');
-        setLoading(false);
-        return;
-      }
-
-      if (session.status === 'finished') {
-        toast.error('This game has already finished.');
-        setLoading(false);
-        return;
-      }
-
-      // Now check nickname + reconnect token in parallel
-      const clientToken = localStorage.getItem(`quizarena_token_${session.id}`);
-      const { data: existingPlayer } = await supabase
-        .from('players')
-        .select('id, client_token')
-        .eq('session_id', session.id)
-        .eq('nickname', nickname.trim())
-        .maybeSingle();
-
-      if (existingPlayer) {
-        if (clientToken && existingPlayer.client_token === clientToken) {
-          toast.success(`Reconnected as ${nickname}!`);
-          router.replace(`/play/${session.id}`);
-          return;
-        } else {
-          toast.error('Nickname already taken in this room.');
-          setLoading(false);
-          return;
-        }
-      }
-
-      // Generate token and insert — single query
-      const newToken = crypto.randomUUID();
-
-      const { error: joinError } = await supabase
-        .from('players')
-        .insert({
-          session_id: session.id,
+      const joinRes = await fetch('/api/player/join', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          pin,
           nickname: nickname.trim(),
-          team_name: isTeamQuiz ? teamName.trim() : null,
-          client_token: newToken,
-          connected: true
-        });
+          teamName: isTeamQuiz ? teamName.trim() : undefined,
+        }),
+      });
+      const joinData = await joinRes.json();
 
-      if (joinError) throw joinError;
+      if (joinRes.status === 409 && joinData.sessionId) {
+        const existingToken = localStorage.getItem(`quizarena_token_${joinData.sessionId}`);
+        if (existingToken) {
+          const meRes = await fetch('/api/player/me', {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({
+              sessionId: joinData.sessionId,
+              token: existingToken,
+              nickname: nickname.trim(),
+            }),
+          });
+          if (meRes.ok) {
+            toast.success(`Reconnected as ${nickname}!`);
+            router.replace(`/play/${joinData.sessionId}`);
+            return;
+          }
+        }
+        toast.error('Nickname already taken in this room.');
+        return;
+      }
 
-      localStorage.setItem(`quizarena_token_${session.id}`, newToken);
+      if (!joinRes.ok) {
+        throw new Error(joinData.error || 'Failed to join game room.');
+      }
+
+      localStorage.setItem(`quizarena_token_${joinData.sessionId}`, joinData.token);
       toast.success('Joined the lobby!');
-      router.replace(`/play/${session.id}`);
+      router.replace(`/play/${joinData.sessionId}`);
     } catch (err: unknown) {
       console.error(err);
-      toast.error('Failed to join game room. Please try again.');
+      toast.error(err instanceof Error ? err.message : 'Failed to join game room. Please try again.');
     } finally {
       setLoading(false);
     }

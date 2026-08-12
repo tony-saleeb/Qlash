@@ -29,7 +29,7 @@ if (!supabaseUrl || !supabaseKey) {
 
 const supabase = createClient(supabaseUrl, supabaseKey);
 const NUM_PLAYERS = 80;
-const SERVER_URL = 'http://localhost:3001/api/submit-answer';
+const SERVER_URL = 'http://localhost:3000/api/submit-answer';
 
 async function runScaleTest() {
   console.log("=== Starting Scale Test ===");
@@ -98,14 +98,17 @@ async function runScaleTest() {
     process.exit(1);
   }
 
-  // 5. Create 80+ players in the database
+  // 5. Create 80+ players + opaque tokens (player_tokens table)
   console.log(`Adding ${NUM_PLAYERS} players to the lobby...`);
   const playersToInsert = [];
+  const tokenByNickname = {};
   for (let i = 1; i <= NUM_PLAYERS; i++) {
+    const nickname = `Player_${i}`;
+    const token = `token_player_${i}_${Math.random().toString(36).substr(2, 5)}`;
+    tokenByNickname[nickname] = token;
     playersToInsert.push({
       session_id: session.id,
-      nickname: `Player_${i}`,
-      client_token: `token_player_${i}_${Math.random().toString(36).substr(2, 5)}`,
+      nickname,
       connected: true,
       score: 0,
       streak: 0
@@ -115,7 +118,19 @@ async function runScaleTest() {
   const { data: players, error: playersErr } = await supabase.from('players').insert(playersToInsert).select();
   if (playersErr || !players || players.length !== NUM_PLAYERS) {
     console.error("Error inserting players:", playersErr);
-    // Cleanup
+    await supabase.from('game_sessions').delete().eq('id', session.id);
+    await supabase.from('questions').delete().eq('id', question.id);
+    await supabase.from('quizzes').delete().eq('id', quiz.id);
+    process.exit(1);
+  }
+
+  const tokensToInsert = players.map((player) => ({
+    player_id: player.id,
+    client_token: tokenByNickname[player.nickname],
+  }));
+  const { error: tokensErr } = await supabase.from('player_tokens').insert(tokensToInsert);
+  if (tokensErr) {
+    console.error("Error inserting player tokens:", tokensErr);
     await supabase.from('game_sessions').delete().eq('id', session.id);
     await supabase.from('questions').delete().eq('id', question.id);
     await supabase.from('quizzes').delete().eq('id', quiz.id);
@@ -130,7 +145,6 @@ async function runScaleTest() {
   let failCount = 0;
 
   const promises = players.map(async (player, index) => {
-    // Add a small randomized delay (100ms - 1500ms) to simulate real human pacing
     const delay = 100 + Math.random() * 1400;
     await new Promise(resolve => setTimeout(resolve, delay));
 
@@ -144,9 +158,9 @@ async function runScaleTest() {
         body: JSON.stringify({
           sessionId: session.id,
           playerId: player.id,
-          token: player.client_token,
+          token: tokenByNickname[player.nickname],
           questionId: question.id,
-          selectedAnswerIds: ['opt_2'] // submit the correct answer
+          selectedAnswerIds: ['opt_2']
         })
       });
 

@@ -14,6 +14,11 @@ import {
   goToNextQuestion,
   goToPodium,
   endGameSession,
+  setSessionMultiplier,
+  startGameSession,
+  pauseGameSession,
+  resumeGameSession,
+  addQuestionTime,
 } from '@/app/actions/game';
 import { Flame, Users, Play, Pause, UserX, AlertCircle, Trophy, ArrowRight, Home, CheckCircle2, Clock, Settings, Edit3, Zap, SkipForward, Send, Activity, ChevronDown, ChevronUp, MessageSquare, X } from 'lucide-react';
 import confetti from 'canvas-confetti';
@@ -27,59 +32,29 @@ import {
   DialogTitle,
   DialogTrigger,
 } from '@/components/ui/dialog';
-
-interface Player {
-  id: string;
-  session_id: string;
-  nickname: string;
-  score: number;
-  streak: number;
-  joined_at: string;
-  connected: boolean;
-}
-
-interface LeaderboardPlayer {
-  id: string;
-  nickname: string;
-  score: number;
-  streak: number;
-  connected: boolean;
-}
-
-interface AnswerOption {
-  id: string;
-  text: string;
-  color: string;
-  shape: string;
-  is_correct?: boolean;
-}
-
-interface Question {
-  id: string;
-  type: string;
-  prompt: string;
-  media_url: string | null;
-  media_type: string | null;
-  time_limit_seconds: number;
-  points_base: number;
-  scoring_type: string;
-  answers: AnswerOption[];
-}
+import { useSessionChannel } from '@/hooks/useSessionChannel';
+import {
+  SHAPES_MAP,
+  buildQuestionStartPayload,
+  sanitizeAnswers,
+  type Player,
+  type LeaderboardPlayer,
+  type Question,
+  type GameSessionRow,
+} from '@/lib/game/types';
+import { maybeShuffle } from '@/lib/game/shuffle';
+import { aggregateTeamScores } from '@/lib/game/teams';
 
 interface HostGameClientProps {
-  initialSession: {
-    id: string;
-    pin: string;
-    status: string;
-    current_question_index: number;
-    question_started_at: string | null;
-    quiz_id: string;
-  };
+  initialSession: GameSessionRow;
   quiz: {
     id: string;
     title: string;
     description: string;
     theme: Record<string, unknown>;
+    randomize_questions?: boolean;
+    randomize_answers?: boolean;
+    team_mode?: boolean;
   };
   questions: Question[];
   initialPlayers: Player[];
@@ -93,10 +68,18 @@ export default function HostGameClient({
 }: HostGameClientProps) {
   const router = useRouter();
   const supabase = createClient();
+  const { send: sendSessionEvent } = useSessionChannel(initialSession.id, { supabase });
 
   // Core game states
   const [session, setSession] = useState(initialSession);
   const [players, setPlayers] = useState<Player[]>(initialPlayers);
+  const playersRef = useRef(players);
+  playersRef.current = players;
+  /** Session play order (may be shuffled once at start). */
+  const [playQuestions, setPlayQuestions] = useState<Question[]>(questions);
+  const randomizeQuestions = Boolean(quiz.randomize_questions);
+  const randomizeAnswers = Boolean(quiz.randomize_answers);
+  const teamMode = Boolean(quiz.team_mode);
   const [kickingId, setKickingId] = useState<string | null>(null);
   const [isManagePlayersOpen, setIsManagePlayersOpen] = useState(false);
 
@@ -113,8 +96,10 @@ export default function HostGameClient({
   const [editPrompt, setEditPrompt] = useState('');
   const [editAnswers, setEditAnswers] = useState<{ id: string; text: string }[]>([]);
 
-  // Multiplier state
-  const [isMultiplierActive, setIsMultiplierActive] = useState(false);
+  // Multiplier state (mirrored from session.active_multiplier)
+  const [isMultiplierActive, setIsMultiplierActive] = useState(
+    (initialSession.active_multiplier || 1) === 2
+  );
 
   // Host Announcement state
   const [announcementText, setAnnouncementText] = useState('');
@@ -123,6 +108,8 @@ export default function HostGameClient({
   // Activity Feed state
   const [activityFeed, setActivityFeed] = useState<{ id: string; type: string; message: string; time: Date }[]>([]);
   const [isActivityOpen, setIsActivityOpen] = useState(false);
+  const activityFlushRef = useRef<{ type: string; message: string }[]>([]);
+  const activityTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
 
   // Question Jumper state
   const [isJumperOpen, setIsJumperOpen] = useState(false);
@@ -139,8 +126,8 @@ export default function HostGameClient({
           width: 256,
           margin: 2,
           color: {
-            dark: '#0f172a', // dark blue QR Code elements
-            light: '#ffffff', // white QR Code background
+            dark: '#0f172a',
+            light: '#ffffff',
           },
         },
         (err, url) => {
@@ -155,69 +142,66 @@ export default function HostGameClient({
   }, [session.status, session.pin]);
 
   const activeQuestionIndex = session.current_question_index;
-  const activeQuestion = (questions && questions.length > 0)
-    ? (questions[activeQuestionIndex] || questions[0])
+  const activeQuestion = (playQuestions && playQuestions.length > 0)
+    ? (playQuestions[activeQuestionIndex] || playQuestions[0])
     : null;
   const timerRef = useRef<NodeJS.Timeout | null>(null);
+  const revealingRef = useRef(false);
 
-  // Define shape map
-  const shapesMap: Record<string, string> = {
-    triangle: '▲',
-    diamond: '◆',
-    circle: '●',
-    square: '■',
-    star: '★',
-    hexagon: '⬢',
-  };
+  const shapesMap = SHAPES_MAP;
 
-  // Activity Feed helper (must be defined before useEffects that reference it)
+  // Debounced activity feed to avoid UI thrash at ~80 players
   const addActivityEntry = useCallback((type: string, message: string) => {
-    setActivityFeed((prev) => [
-      { id: crypto.randomUUID(), type, message, time: new Date() },
-      ...prev,
-    ].slice(0, 50)); // keep last 50 entries
+    activityFlushRef.current.push({ type, message });
+    if (activityTimerRef.current) return;
+    activityTimerRef.current = setTimeout(() => {
+      const batch = activityFlushRef.current.splice(0);
+      activityTimerRef.current = null;
+      if (batch.length === 0) return;
+      setActivityFeed((prev) => [
+        ...batch.map((entry) => ({
+          id: crypto.randomUUID(),
+          type: entry.type,
+          message: entry.message,
+          time: new Date(),
+        })).reverse(),
+        ...prev,
+      ].slice(0, 50));
+    }, 250);
   }, []);
 
   // Reveal Question results (grades, computes scoreboard, triggers reveal status)
   const handleRevealAnswer = React.useCallback(async () => {
+    if (revealingRef.current) return;
     if (timerRef.current) clearInterval(timerRef.current);
     if (!activeQuestion) return;
+    revealingRef.current = true;
 
     playRevealSound();
     const loadingToast = toast.loading('Calculating scores...');
     try {
-      // Call server action to apply scores & get statistics
       const results = await revealQuestionResults(session.id, activeQuestion.id);
       setRevealData(results);
 
-      // Broadcast results reveal to players
-      const broadcastChannel = supabase.channel(`session_channel_${session.id}`);
       const correctOptionIds = activeQuestion.answers
         .filter((ans) => ans.is_correct)
         .map((ans) => ans.id);
 
-      broadcastChannel.subscribe((status) => {
-        if (status === 'SUBSCRIBED') {
-          broadcastChannel.send({
-            type: 'broadcast',
-            event: 'question:reveal',
-            payload: {
-              correct_answer_ids: correctOptionIds,
-              leaderboard: results.leaderboard,
-              option_counts: results.optionCounts,
-            },
-          });
-          supabase.removeChannel(broadcastChannel);
-        }
+      await sendSessionEvent('question:reveal', {
+        correct_answer_ids: correctOptionIds,
+        leaderboard: results.leaderboard,
+        option_counts: results.optionCounts,
       });
 
       toast.success('Results calculated!', { id: loadingToast });
     } catch (err) {
       toast.error(err instanceof Error ? err.message : 'Failed to reveal results.', { id: loadingToast });
+    } finally {
+      revealingRef.current = false;
     }
-  }, [session.id, activeQuestion, supabase]);
+  }, [session.id, activeQuestion, sendSessionEvent]);
 
-  // 1. Setup Realtime Player database synchronizer
+  // 1. Setup Realtime Player database synchronizer (stable deps — use playersRef)
   useEffect(() => {
     const channel = supabase
       .channel(`host_players_${session.id}`)
@@ -238,7 +222,7 @@ export default function HostGameClient({
               return [...prev, payload.new as Player];
             });
           } else if (payload.eventType === 'DELETE') {
-            const removed = players.find((p) => p.id === payload.old.id);
+            const removed = playersRef.current.find((p) => p.id === payload.old.id);
             if (removed) addActivityEntry('kick', `${removed.nickname} was removed`);
             setPlayers((prev) => prev.filter((p) => p.id !== payload.old.id));
           } else if (payload.eventType === 'UPDATE') {
@@ -253,7 +237,7 @@ export default function HostGameClient({
     return () => {
       supabase.removeChannel(channel);
     };
-  }, [supabase, session.id, addActivityEntry, players]);
+  }, [supabase, session.id, addActivityEntry]);
 
   // 2. Setup Realtime Session database updates synchronizer
   useEffect(() => {
@@ -270,6 +254,9 @@ export default function HostGameClient({
         (payload) => {
           const updatedSession = payload.new as typeof session;
           setSession(updatedSession);
+          if (typeof updatedSession.active_multiplier === 'number') {
+            setIsMultiplierActive(updatedSession.active_multiplier === 2);
+          }
         }
       )
       .subscribe();
@@ -286,7 +273,6 @@ export default function HostGameClient({
       return;
     }
 
-    // Load current submissions for this round initially
     const loadInitialSubmissions = async () => {
       if (!activeQuestion) return;
       const { count } = await supabase
@@ -298,7 +284,6 @@ export default function HostGameClient({
     };
     loadInitialSubmissions();
 
-    // Listen to new submissions in realtime
     const channel = supabase
       .channel(`host_submissions_${session.id}`)
       .on(
@@ -312,8 +297,7 @@ export default function HostGameClient({
         (payload) => {
           if (activeQuestion && payload.new.question_id === activeQuestion.id) {
             setSubmissionsCount((prev) => prev + 1);
-            // Find player nickname for activity feed
-            const answerer = players.find((p) => p.id === payload.new.player_id);
+            const answerer = playersRef.current.find((p) => p.id === payload.new.player_id);
             if (answerer) addActivityEntry('answer', `${answerer.nickname} submitted an answer`);
           }
         }
@@ -323,7 +307,7 @@ export default function HostGameClient({
     return () => {
       supabase.removeChannel(channel);
     };
-  }, [supabase, session.id, session.status, activeQuestion, addActivityEntry, players]);
+  }, [supabase, session.id, session.status, activeQuestion, addActivityEntry]);
 
   // 4. Timer Tick-down thread logic
   useEffect(() => {
@@ -410,41 +394,15 @@ export default function HostGameClient({
     }
   };
 
-  // Toggle Pause/Resume
+  // Toggle Pause/Resume (server actions — single trust boundary)
   const handleTogglePause = async () => {
     const isPaused = session.status === 'question_paused';
     try {
       if (isPaused) {
-        // Resume from epoch-based paused time
-        const startedAt = new Date(session.question_started_at!).getTime();
-        const elapsed = startedAt; // in paused state, question_started_at stores the elapsed duration
-        const newStartedAt = new Date(Date.now() - elapsed).toISOString();
-
-        const { error } = await supabase
-          .from('game_sessions')
-          .update({
-            status: 'question_active',
-            question_started_at: newStartedAt,
-          })
-          .eq('id', session.id);
-
-        if (error) throw error;
+        await resumeGameSession(session.id);
         toast.success('Game resumed!');
       } else {
-        // Pause and store elapsed time in question_started_at epoch
-        const startedAt = new Date(session.question_started_at!).getTime();
-        const elapsed = Date.now() - startedAt;
-        const pausedStartedAt = new Date(elapsed).toISOString();
-
-        const { error } = await supabase
-          .from('game_sessions')
-          .update({
-            status: 'question_paused',
-            question_started_at: pausedStartedAt,
-          })
-          .eq('id', session.id);
-
-        if (error) throw error;
+        await pauseGameSession(session.id);
         toast.success('Game paused!');
       }
     } catch (err) {
@@ -456,33 +414,24 @@ export default function HostGameClient({
   const handleAddTime = async () => {
     if (!session.question_started_at) return;
     try {
-      const isPaused = session.status === 'question_paused';
-      let newStartedAt;
-
-      if (isPaused) {
-        const elapsed = new Date(session.question_started_at).getTime();
-        const newElapsed = Math.max(0, elapsed - 10000); // reduce elapsed time by 10s
-        newStartedAt = new Date(newElapsed).toISOString();
-      } else {
-        const startedAt = new Date(session.question_started_at).getTime();
-        newStartedAt = new Date(startedAt + 10000).toISOString(); // push start time 10s into the future
-      }
-
-      const { error } = await supabase
-        .from('game_sessions')
-        .update({
-          question_started_at: newStartedAt,
-        })
-        .eq('id', session.id);
-
-      if (error) throw error;
-      
+      await addQuestionTime(session.id, 10);
       setTimeLeft((prev) => prev + 10);
       toast.success('Added 10 seconds to the clock!');
     } catch (err) {
       toast.error(err instanceof Error ? err.message : 'Failed to add time.');
     }
   };
+
+  const prepareQuestionForPlay = useCallback(
+    (question: Question): Question => {
+      if (!randomizeAnswers) return question;
+      return {
+        ...question,
+        answers: maybeShuffle(question.answers, true),
+      };
+    },
+    [randomizeAnswers]
+  );
 
   // Start Game
   const handleStartGame = async () => {
@@ -496,50 +445,24 @@ export default function HostGameClient({
     }
 
     try {
-      const serverStartedAt = new Date().toISOString();
+      const ordered = maybeShuffle(questions, randomizeQuestions).map(prepareQuestionForPlay);
+      setPlayQuestions(ordered);
 
-      const { error } = await supabase
-        .from('game_sessions')
-        .update({
-          status: 'question_active',
-          current_question_index: 0,
-          question_started_at: serverStartedAt,
-        })
-        .eq('id', session.id);
+      const { serverStartedAt } = await startGameSession(
+        session.id,
+        ordered.map((q) => q.id)
+      );
+      setIsMultiplierActive(false);
+      revealingRef.current = false;
 
-      if (error) throw error;
+      const firstQ = ordered[0];
+      await sendSessionEvent('question:start', buildQuestionStartPayload(firstQ, 0, serverStartedAt));
 
-      // Broadcast event
-      const broadcastChannel = supabase.channel(`session_channel_${session.id}`);
-      const firstQ = questions[0];
-      const cleanedAnswers = firstQ.answers.map((ans) => ({
-        id: ans.id,
-        text: ans.text,
-        color: ans.color,
-        shape: ans.shape,
-      }));
-
-      broadcastChannel.subscribe((status) => {
-        if (status === 'SUBSCRIBED') {
-          broadcastChannel.send({
-            type: 'broadcast',
-            event: 'question:start',
-            payload: {
-              question_index: 0,
-              type: firstQ.type,
-              prompt: firstQ.prompt,
-              media_url: firstQ.media_url,
-              media_type: firstQ.media_type,
-              time_limit_seconds: firstQ.time_limit_seconds,
-              answers: cleanedAnswers,
-              server_started_at: serverStartedAt,
-            },
-          });
-          supabase.removeChannel(broadcastChannel);
-        }
-      });
-
-      toast.success('Game started! Broadcasting first question.');
+      toast.success(
+        randomizeQuestions
+          ? 'Game started! Question order randomized.'
+          : 'Game started! Broadcasting first question.'
+      );
     } catch (err) {
       toast.error(err instanceof Error ? err.message : 'Failed to start game.');
     }
@@ -560,40 +483,19 @@ export default function HostGameClient({
   const handleNextQuestion = async () => {
     try {
       const nextIndex = activeQuestionIndex + 1;
-      const nextQ = questions[nextIndex];
-      const serverStartedAt = new Date().toISOString();
-
-      await goToNextQuestion(session.id, nextIndex);
-      setRevealData(null);
-
-      // Broadcast next question to players
-      const broadcastChannel = supabase.channel(`session_channel_${session.id}`);
-      const cleanedAnswers = nextQ.answers.map((ans) => ({
-        id: ans.id,
-        text: ans.text,
-        color: ans.color,
-        shape: ans.shape,
-      }));
-
-      broadcastChannel.subscribe((status) => {
-        if (status === 'SUBSCRIBED') {
-          broadcastChannel.send({
-            type: 'broadcast',
-            event: 'question:start',
-            payload: {
-              question_index: nextIndex,
-              type: nextQ.type,
-              prompt: nextQ.prompt,
-              media_url: nextQ.media_url,
-              media_type: nextQ.media_type,
-              time_limit_seconds: nextQ.time_limit_seconds,
-              answers: cleanedAnswers,
-              server_started_at: serverStartedAt,
-            },
-          });
-          supabase.removeChannel(broadcastChannel);
-        }
+      const nextQ = prepareQuestionForPlay(playQuestions[nextIndex]);
+      setPlayQuestions((prev) => {
+        const copy = [...prev];
+        copy[nextIndex] = nextQ;
+        return copy;
       });
+
+      const { serverStartedAt } = await goToNextQuestion(session.id, nextIndex);
+      setRevealData(null);
+      setIsMultiplierActive(false);
+      revealingRef.current = false;
+
+      await sendSessionEvent('question:start', buildQuestionStartPayload(nextQ, nextIndex, serverStartedAt));
 
       toast.success('Loading next question.');
     } catch (err) {
@@ -654,31 +556,12 @@ export default function HostGameClient({
 
       if (error) throw error;
 
-      // Update local question data
       activeQuestion.prompt = editPrompt;
       activeQuestion.answers = updatedAnswers;
 
-      // Broadcast update to players
-      const broadcastChannel = supabase.channel(`session_channel_${session.id}`);
-      const cleanedAnswers = updatedAnswers.map((ans) => ({
-        id: ans.id,
-        text: ans.text,
-        color: ans.color,
-        shape: ans.shape,
-      }));
-
-      broadcastChannel.subscribe((status) => {
-        if (status === 'SUBSCRIBED') {
-          broadcastChannel.send({
-            type: 'broadcast',
-            event: 'question:update',
-            payload: {
-              prompt: editPrompt,
-              answers: cleanedAnswers,
-            },
-          });
-          supabase.removeChannel(broadcastChannel);
-        }
+      await sendSessionEvent('question:update', {
+        prompt: editPrompt,
+        answers: sanitizeAnswers(updatedAnswers),
       });
 
       setIsEditorOpen(false);
@@ -689,67 +572,43 @@ export default function HostGameClient({
     }
   };
 
-  // Multiplier Toggle: Broadcast multiplier status to players
-  const handleToggleMultiplier = () => {
+  // Multiplier Toggle: persist on session (server-owned) then broadcast UX cue
+  const handleToggleMultiplier = async () => {
     const newState = !isMultiplierActive;
-    setIsMultiplierActive(newState);
+    try {
+      await setSessionMultiplier(session.id, newState ? 2 : 1);
+      setIsMultiplierActive(newState);
 
-    const broadcastChannel = supabase.channel(`session_channel_${session.id}`);
-    broadcastChannel.subscribe((status) => {
-      if (status === 'SUBSCRIBED') {
-        broadcastChannel.send({
-          type: 'broadcast',
-          event: 'multiplier:change',
-          payload: { multiplier: newState ? 2 : 1 },
-        });
-        supabase.removeChannel(broadcastChannel);
-      }
-    });
+      await sendSessionEvent('multiplier:change', { multiplier: newState ? 2 : 1 });
 
-    addActivityEntry('multiplier', newState ? 'Double points activated!' : 'Double points deactivated');
-    toast.success(newState ? 'Double Points Activated! (2x)' : 'Multiplier Deactivated (1x)');
+      addActivityEntry('multiplier', newState ? 'Double points activated!' : 'Double points deactivated');
+      toast.success(newState ? 'Double Points Activated! (2x)' : 'Multiplier Deactivated (1x)');
+    } catch (err) {
+      toast.error(err instanceof Error ? err.message : 'Failed to toggle multiplier.');
+    }
   };
 
   // Question Jumper: Jump to any question index
   const handleJumpToQuestion = async (targetIndex: number) => {
-    if (targetIndex < 0 || targetIndex >= questions.length || targetIndex === activeQuestionIndex) return;
+    if (targetIndex < 0 || targetIndex >= playQuestions.length || targetIndex === activeQuestionIndex) return;
     try {
-      const targetQ = questions[targetIndex];
-      const serverStartedAt = new Date().toISOString();
+      const targetQ = prepareQuestionForPlay(playQuestions[targetIndex]);
+      setPlayQuestions((prev) => {
+        const copy = [...prev];
+        copy[targetIndex] = targetQ;
+        return copy;
+      });
 
-      await goToNextQuestion(session.id, targetIndex);
+      const { serverStartedAt } = await goToNextQuestion(session.id, targetIndex);
       setRevealData(null);
       setIsMultiplierActive(false);
       setIsJumperOpen(false);
+      revealingRef.current = false;
 
-      // Broadcast the jumped question to players
-      const broadcastChannel = supabase.channel(`session_channel_${session.id}`);
-      const cleanedAnswers = targetQ.answers.map((ans) => ({
-        id: ans.id,
-        text: ans.text,
-        color: ans.color,
-        shape: ans.shape,
-      }));
-
-      broadcastChannel.subscribe((status) => {
-        if (status === 'SUBSCRIBED') {
-          broadcastChannel.send({
-            type: 'broadcast',
-            event: 'question:start',
-            payload: {
-              question_index: targetIndex,
-              type: targetQ.type,
-              prompt: targetQ.prompt,
-              media_url: targetQ.media_url,
-              media_type: targetQ.media_type,
-              time_limit_seconds: targetQ.time_limit_seconds,
-              answers: cleanedAnswers,
-              server_started_at: serverStartedAt,
-            },
-          });
-          supabase.removeChannel(broadcastChannel);
-        }
-      });
+      await sendSessionEvent(
+        'question:start',
+        buildQuestionStartPayload(targetQ, targetIndex, serverStartedAt)
+      );
 
       addActivityEntry('jump', `Host jumped to Question ${targetIndex + 1}`);
       toast.success(`Jumped to Question ${targetIndex + 1}`);
@@ -759,23 +618,13 @@ export default function HostGameClient({
   };
 
   // Host Announcement: Send a text message to all players
-  const handleSendAnnouncement = () => {
+  const handleSendAnnouncement = async () => {
     if (!announcementText.trim()) {
       toast.error('Please enter a message to broadcast.');
       return;
     }
 
-    const broadcastChannel = supabase.channel(`session_channel_${session.id}`);
-    broadcastChannel.subscribe((status) => {
-      if (status === 'SUBSCRIBED') {
-        broadcastChannel.send({
-          type: 'broadcast',
-          event: 'host:announcement',
-          payload: { message: announcementText.trim() },
-        });
-        supabase.removeChannel(broadcastChannel);
-      }
-    });
+    await sendSessionEvent('host:announcement', { message: announcementText.trim() });
 
     addActivityEntry('announcement', `Host broadcast: "${announcementText.trim()}"`);
     toast.success('Announcement sent to all players!');
@@ -784,7 +633,7 @@ export default function HostGameClient({
   };
 
   const connectedCount = players.filter((p) => p.connected).length;
-  const isLastQuestion = activeQuestionIndex === questions.length - 1;
+  const isLastQuestion = activeQuestionIndex === playQuestions.length - 1;
 
   // BACKGROUND THEME STYLE EXTRACTOR
   const customStyles = {
@@ -962,7 +811,7 @@ export default function HostGameClient({
         <div className="flex items-center justify-between gap-4 z-10">
           <div className="flex items-center gap-2">
             <span className="text-sm font-black bg-violet-600 px-3 py-1.5 rounded-xl uppercase tracking-wider text-white">
-              Question {activeQuestionIndex + 1} of {questions.length}
+              Question {activeQuestionIndex + 1} of {playQuestions.length}
             </span>
 
             {/* Question Jumper Dropdown */}
@@ -978,7 +827,7 @@ export default function HostGameClient({
               </Button>
               {isJumperOpen && (
                 <div className="absolute top-full left-0 mt-1 w-48 max-h-60 overflow-y-auto bg-slate-950 border border-slate-800 rounded-xl shadow-2xl z-50 p-1.5 animate-fade-in">
-                  {questions.map((q, idx) => (
+                  {playQuestions.map((q, idx) => (
                     <button
                       key={q.id}
                       type="button"
@@ -1454,6 +1303,7 @@ export default function HostGameClient({
   // ==========================================
   if (session.status === 'leaderboard') {
     const leaderboardPlayers = revealData?.leaderboard || players.slice(0, 5).sort((a, b) => b.score - a.score);
+    const teamRows = teamMode ? aggregateTeamScores(players).slice(0, 5) : [];
 
     return (
       <div
@@ -1471,16 +1321,34 @@ export default function HostGameClient({
 
         <div className="my-4 text-center z-10">
           <h1 className="text-4xl font-extrabold text-white tracking-tight">
-            Leaderboard
+            {teamMode ? 'Team Leaderboard' : 'Leaderboard'}
           </h1>
           <p className="text-slate-500 text-xs mt-1">
-            Top players for this round
+            {teamMode ? 'Combined team scores' : 'Top players for this round'}
           </p>
         </div>
 
         {/* Scoreboard List */}
         <div className="flex-1 max-w-xl mx-auto w-full flex flex-col justify-center gap-4 z-10 py-6">
-          {leaderboardPlayers.map((playerRecord, rank) => {
+          {teamMode
+            ? teamRows.map((team, rank) => (
+                <div
+                  key={team.team_name}
+                  className="flex items-center justify-between p-4 bg-slate-900/60 border border-slate-800 rounded-2xl shadow-xl"
+                >
+                  <div className="flex items-center gap-3">
+                    <span className="w-8 text-center font-black text-slate-400">#{rank + 1}</span>
+                    <div>
+                      <p className="font-bold text-white">{team.team_name}</p>
+                      <p className="text-xs text-slate-500">
+                        {team.members} players · top: {team.topPlayer}
+                      </p>
+                    </div>
+                  </div>
+                  <span className="font-black text-violet-300">{team.score}</span>
+                </div>
+              ))
+            : leaderboardPlayers.map((playerRecord, rank) => {
             const isTop3 = rank < 3;
             const medals = ['🥇', '🥈', '🥉'];
 

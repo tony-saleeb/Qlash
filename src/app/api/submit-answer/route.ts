@@ -1,19 +1,27 @@
 import { NextResponse } from 'next/server';
 import { createAdminClient } from '@/lib/supabase/admin';
+import {
+  gradeAnswer,
+  calculatePoints,
+  resolveMultiplier,
+} from '@/lib/game/scoring';
+import type { AnswerOption } from '@/lib/game/types';
+import { clientIpFromRequest, rateLimit } from '@/lib/rate-limit';
 
 export const dynamic = 'force-dynamic';
 
-interface AnswerOption {
-  id: string;
-  text: string;
-  color: string;
-  shape: string;
-  is_correct?: boolean;
-}
-
 export async function POST(request: Request) {
   try {
-    const { sessionId, playerId, token, questionId, selectedAnswerIds, multiplier: clientMultiplier } = await request.json();
+    const ip = clientIpFromRequest(request);
+    const limited = rateLimit({ key: `submit:${ip}`, limit: 120, windowMs: 60_000 });
+    if (!limited.ok) {
+      return NextResponse.json(
+        { error: 'Too many submissions. Please wait and try again.' },
+        { status: 429, headers: { 'Retry-After': String(limited.retryAfterSec) } }
+      );
+    }
+
+    const { sessionId, playerId, token, questionId, selectedAnswerIds } = await request.json();
 
     if (!sessionId || !playerId || !token || !questionId || !selectedAnswerIds) {
       return NextResponse.json({ error: 'Missing parameters' }, { status: 400 });
@@ -21,21 +29,29 @@ export async function POST(request: Request) {
 
     const adminSupabase = createAdminClient();
 
-    // 1. Verify Player Token
-    const { data: player, error: playerError } = await adminSupabase
-      .from('players')
-      .select('id, client_token, score, streak')
-      .eq('id', playerId)
-      .single();
+    const { data: tokenRow, error: tokenError } = await adminSupabase
+      .from('player_tokens')
+      .select('player_id, client_token')
+      .eq('player_id', playerId)
+      .maybeSingle();
 
-    if (playerError || !player || player.client_token !== token) {
+    if (tokenError || !tokenRow || tokenRow.client_token !== token) {
       return NextResponse.json({ error: 'Unauthorized. Invalid player token.' }, { status: 401 });
     }
 
-    // 2. Fetch Session & Verify Active Status
+    const { data: player, error: playerError } = await adminSupabase
+      .from('players')
+      .select('id, score, streak, session_id')
+      .eq('id', playerId)
+      .single();
+
+    if (playerError || !player || player.session_id !== sessionId) {
+      return NextResponse.json({ error: 'Unauthorized. Invalid player.' }, { status: 401 });
+    }
+
     const { data: session, error: sessionError } = await adminSupabase
       .from('game_sessions')
-      .select('status, current_question_index, question_started_at, quiz_id')
+      .select('status, current_question_index, question_started_at, quiz_id, active_multiplier')
       .eq('id', sessionId)
       .single();
 
@@ -47,7 +63,6 @@ export async function POST(request: Request) {
       return NextResponse.json({ error: 'Submissions are closed for this round.' }, { status: 403 });
     }
 
-    // 3. Fetch Question Details
     const { data: question, error: questionError } = await adminSupabase
       .from('questions')
       .select('*')
@@ -59,29 +74,19 @@ export async function POST(request: Request) {
       return NextResponse.json({ error: 'Question not found.' }, { status: 404 });
     }
 
-    // 3b. Validate multiplier against quiz's double_points_rounds config
-    let validatedMultiplier = 1;
-    if (clientMultiplier && clientMultiplier === 2) {
-      const { data: quizConfig } = await adminSupabase
-        .from('quizzes')
-        .select('double_points_rounds')
-        .eq('id', session.quiz_id)
-        .single();
+    const { data: quizConfig } = await adminSupabase
+      .from('quizzes')
+      .select('double_points_rounds')
+      .eq('id', session.quiz_id)
+      .single();
 
-      // Allow multiplier if the quiz has double_points_rounds configured,
-      // or if the host dynamically activated it (check current question index)
-      const doubleRounds = (quizConfig?.double_points_rounds as string[]) || [];
-      const currentIndex = session.current_question_index;
-      if (
-        doubleRounds.includes(questionId) ||
-        doubleRounds.includes(String(currentIndex)) ||
-        doubleRounds.length === 0 // When empty, host can dynamically toggle per round
-      ) {
-        validatedMultiplier = 2;
-      }
-    }
+    const validatedMultiplier = resolveMultiplier(
+      session.active_multiplier,
+      quizConfig?.double_points_rounds,
+      questionId,
+      session.current_question_index
+    );
 
-    // 4. Check if player has already submitted
     const { data: existingSubmission } = await adminSupabase
       .from('answers_submitted')
       .select('id')
@@ -94,89 +99,42 @@ export async function POST(request: Request) {
       return NextResponse.json({ error: 'Answer already submitted for this question.' }, { status: 400 });
     }
 
-    // 5. Calculate Timing (Anti-Cheat Server-Side timing)
     const serverReceivedAt = new Date();
     const startedAt = new Date(session.question_started_at);
     const timeTakenMs = serverReceivedAt.getTime() - startedAt.getTime();
     const timeLimitMs = question.time_limit_seconds * 1000;
+    const isLate = timeTakenMs > timeLimitMs + 1500;
 
-    // 1.5 second latency grace period
-    const isLate = timeTakenMs > (timeLimitMs + 1500);
+    const answers = (question.answers || []) as AnswerOption[];
+    const isCorrect = gradeAnswer({
+      type: question.type,
+      answers,
+      selectedAnswerIds,
+      isLate,
+    });
 
-    // 6. Grade Correctness
-    let isCorrect = false;
-    const correctOptions = (question.answers as AnswerOption[])?.filter((ans) => ans.is_correct) || [];
+    const { pointsAwarded } = calculatePoints({
+      isCorrect,
+      isLate,
+      pointsBase: question.points_base,
+      scoringType: question.scoring_type,
+      timeTakenMs,
+      timeLimitMs,
+      previousStreak: player.streak,
+      multiplier: validatedMultiplier,
+    });
 
-    if (isLate) {
-      isCorrect = false;
-    } else if (question.type === 'poll') {
-      // Poll has no points or correctness, but is valid
-      isCorrect = false;
-    } else if (question.type === 'mcq' || question.type === 'true_false') {
-      const selectedId = selectedAnswerIds[0];
-      const correctId = correctOptions[0]?.id;
-      isCorrect = selectedId === correctId;
-    } else if (question.type === 'multi_select') {
-      // All correct options must be selected, and no incorrect options selected
-      const correctIds = correctOptions.map((opt) => opt.id).sort();
-      const submittedIds = [...selectedAnswerIds].sort();
-      isCorrect =
-        correctIds.length === submittedIds.length &&
-        correctIds.every((id, idx) => id === submittedIds[idx]);
-    } else if (question.type === 'type_answer') {
-      // Free-text fuzzy matching. Split correct options by semicolon.
-      const submittedText = (selectedAnswerIds[0] || '').trim().toLowerCase();
-      const correctAlternatives = (correctOptions[0]?.text || '')
-        .split(';')
-        .map((t: string) => t.trim().toLowerCase());
-      isCorrect = correctAlternatives.includes(submittedText);
-    }
+    const { error: insertError } = await adminSupabase.from('answers_submitted').insert({
+      session_id: sessionId,
+      question_id: questionId,
+      player_id: playerId,
+      selected_answer_ids: selectedAnswerIds,
+      time_taken_ms: timeTakenMs,
+      points_awarded: pointsAwarded,
+      is_correct: isCorrect,
+    });
 
-    // 7. Calculate Points Awarded (Linear Decay vs. Flat Points vs. None)
-    let pointsAwarded = 0;
-    let newStreak = player.streak;
-
-    if (isCorrect && !isLate) {
-      newStreak += 1;
-      const basePoints = question.points_base;
-
-      if (question.scoring_type === 'linear') {
-        const ratio = Math.max(0, Math.min(1, timeTakenMs / timeLimitMs));
-        const decay = 1 - 0.5 * ratio;
-        pointsAwarded = Math.round(basePoints * decay);
-      } else if (question.scoring_type === 'flat') {
-        pointsAwarded = basePoints;
-      } else {
-        pointsAwarded = 0;
-      }
-
-      // Add streak bonus (+50 per consecutive correct, capped at +250)
-      const streakBonus = Math.min(250, (newStreak - 1) * 50);
-      pointsAwarded += streakBonus;
-
-      // Apply validated multiplier (2x if host activated double points for this round)
-      pointsAwarded = Math.round(pointsAwarded * validatedMultiplier);
-    } else {
-      newStreak = 0; // reset streak
-      pointsAwarded = 0;
-    }
-
-    // 8. Record the submission in database
-    const { error: insertError } = await adminSupabase
-      .from('answers_submitted')
-      .insert({
-        session_id: sessionId,
-        question_id: questionId,
-        player_id: playerId,
-        selected_answer_ids: selectedAnswerIds,
-        time_taken_ms: timeTakenMs,
-        points_awarded: pointsAwarded,
-        is_correct: isCorrect,
-      });
-
-    if (insertError) {
-      throw insertError;
-    }
+    if (insertError) throw insertError;
 
     return NextResponse.json({
       success: true,

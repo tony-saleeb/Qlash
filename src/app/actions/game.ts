@@ -3,7 +3,6 @@
 import { createClient } from '@/lib/supabase/server';
 import { SupabaseClient } from '@supabase/supabase-js';
 
-// Helper to get authenticated user
 async function getAuthUser() {
   const supabase = createClient();
   const { data: { user }, error } = await supabase.auth.getUser();
@@ -13,7 +12,6 @@ async function getAuthUser() {
   return { supabase, user };
 }
 
-// Generate a unique 6-digit PIN code
 async function generateUniquePin(supabase: SupabaseClient): Promise<string> {
   let pin = '';
   let isUnique = false;
@@ -21,10 +19,8 @@ async function generateUniquePin(supabase: SupabaseClient): Promise<string> {
 
   while (!isUnique && attempts < 10) {
     attempts++;
-    // Generate random 6-digit code
     pin = Math.floor(100000 + Math.random() * 900000).toString();
 
-    // Check if there is an active room with this PIN
     const { data, error } = await supabase
       .from('game_sessions')
       .select('id')
@@ -44,12 +40,10 @@ async function generateUniquePin(supabase: SupabaseClient): Promise<string> {
   return pin;
 }
 
-// Create a new game session
 export async function createGameSession(quizId: string) {
   try {
     const { supabase, user } = await getAuthUser();
 
-    // 1. Verify quiz exists and belongs to host
     const { data: quiz, error: quizError } = await supabase
       .from('quizzes')
       .select('id')
@@ -61,10 +55,8 @@ export async function createGameSession(quizId: string) {
       throw new Error('Quiz not found or unauthorized.');
     }
 
-    // 2. Generate unique PIN
     const pin = await generateUniquePin(supabase);
 
-    // 3. Insert game session row
     const { data: session, error: sessionError } = await supabase
       .from('game_sessions')
       .insert({
@@ -73,6 +65,7 @@ export async function createGameSession(quizId: string) {
         pin,
         status: 'lobby',
         current_question_index: 0,
+        active_multiplier: 1,
       })
       .select()
       .single();
@@ -88,7 +81,6 @@ export async function createGameSession(quizId: string) {
   }
 }
 
-// End a game session early or manually
 export async function endGameSession(sessionId: string) {
   try {
     const { supabase, user } = await getAuthUser();
@@ -108,12 +100,10 @@ export async function endGameSession(sessionId: string) {
   }
 }
 
-// Kick a player from a session
 export async function kickPlayer(playerId: string, sessionId: string) {
   try {
     const { supabase, user } = await getAuthUser();
 
-    // Verify host owns this session
     const { data: session, error: sessionError } = await supabase
       .from('game_sessions')
       .select('id')
@@ -125,7 +115,6 @@ export async function kickPlayer(playerId: string, sessionId: string) {
       throw new Error('Unauthorized or session not found.');
     }
 
-    // Delete player row
     const { error } = await supabase
       .from('players')
       .delete()
@@ -141,24 +130,21 @@ export async function kickPlayer(playerId: string, sessionId: string) {
   }
 }
 
-// Update player connection status safely (bypassing RLS by validating token)
 export async function updatePlayerConnection(playerId: string, token: string, connected: boolean) {
   try {
     const { createAdminClient } = await import('@/lib/supabase/admin');
     const adminSupabase = createAdminClient();
 
-    // Fetch player to verify token
-    const { data: player, error: fetchError } = await adminSupabase
-      .from('players')
+    const { data: tokenRow, error: fetchError } = await adminSupabase
+      .from('player_tokens')
       .select('client_token')
-      .eq('id', playerId)
-      .single();
+      .eq('player_id', playerId)
+      .maybeSingle();
 
-    if (fetchError || !player || player.client_token !== token) {
+    if (fetchError || !tokenRow || tokenRow.client_token !== token) {
       throw new Error('Unauthorized or player not found.');
     }
 
-    // Update connection state
     const { error: updateError } = await adminSupabase
       .from('players')
       .update({ connected })
@@ -172,15 +158,41 @@ export async function updatePlayerConnection(playerId: string, token: string, co
   }
 }
 
-// 6. Calculate round score adjustments and shift status to 'question_reveal'
+/** Host-controlled live 2x multiplier (persisted; submit-answer reads this). */
+export async function setSessionMultiplier(sessionId: string, multiplier: 1 | 2) {
+  try {
+    const { supabase, user } = await getAuthUser();
+
+    if (multiplier !== 1 && multiplier !== 2) {
+      throw new Error('Invalid multiplier.');
+    }
+
+    const { data: session, error: sessionError } = await supabase
+      .from('game_sessions')
+      .update({ active_multiplier: multiplier })
+      .eq('id', sessionId)
+      .eq('host_id', user.id)
+      .select('id, active_multiplier, status')
+      .single();
+
+    if (sessionError || !session) {
+      throw new Error('Unauthorized or session not found.');
+    }
+
+    return { success: true, active_multiplier: session.active_multiplier as 1 | 2 };
+  } catch (err) {
+    console.error('setSessionMultiplier error:', err);
+    throw new Error(err instanceof Error ? err.message : 'Failed to update multiplier.');
+  }
+}
+
 export async function revealQuestionResults(sessionId: string, questionId: string) {
   try {
     const { supabase, user } = await getAuthUser();
 
-    // Verify session ownership
     const { data: session, error: sessionError } = await supabase
       .from('game_sessions')
-      .select('id, quiz_id')
+      .select('id')
       .eq('id', sessionId)
       .eq('host_id', user.id)
       .single();
@@ -189,82 +201,29 @@ export async function revealQuestionResults(sessionId: string, questionId: strin
       throw new Error('Unauthorized or session not found.');
     }
 
-    // Fetch players in session
-    const { data: players, error: playersError } = await supabase
-      .from('players')
-      .select('*')
-      .eq('session_id', sessionId);
-
-    if (playersError || !players) throw playersError;
-
-    // Fetch all submissions for this question
-    const { data: submissions, error: subsError } = await supabase
-      .from('answers_submitted')
-      .select('*')
-      .eq('session_id', sessionId)
-      .eq('question_id', questionId);
-
-    if (subsError) throw subsError;
-
-    // Update each player's score and streak in DB
-    const { createAdminClient } = await import('@/lib/supabase/admin');
-    const adminSupabase = createAdminClient();
-
-    for (const player of players) {
-      const sub = submissions?.find((s) => s.player_id === player.id);
-      
-      let updatedScore = player.score;
-      let updatedStreak = player.streak;
-
-      if (sub) {
-        updatedScore += sub.points_awarded;
-        updatedStreak = sub.is_correct ? player.streak + 1 : 0;
-      } else {
-        updatedStreak = 0; // reset streak if didn't answer
-      }
-
-      // Save player updates
-      const { error: updateError } = await adminSupabase
-        .from('players')
-        .update({
-          score: updatedScore,
-          streak: updatedStreak,
-        })
-        .eq('id', player.id);
-
-      if (updateError) throw updateError;
-    }
-
-    // Update session status to 'question_reveal'
-    const { error: statusError } = await supabase
-      .from('game_sessions')
-      .update({ status: 'question_reveal' })
-      .eq('id', sessionId);
-
-    if (statusError) throw statusError;
-
-    // Calculate answer option statistics
-    const optionCounts: Record<string, number> = {};
-    submissions?.forEach((sub) => {
-      const selected = sub.selected_answer_ids as string[];
-      selected.forEach((id) => {
-        optionCounts[id] = (optionCounts[id] || 0) + 1;
-      });
+    const { data, error } = await supabase.rpc('apply_question_scores_and_reveal', {
+      p_session_id: sessionId,
+      p_question_id: questionId,
     });
 
-    // Fetch top 5 leaderboard
-    const { data: leaderboard, error: leaderboardError } = await supabase
-      .from('players')
-      .select('id, nickname, score, streak, connected')
-      .eq('session_id', sessionId)
-      .order('score', { ascending: false })
-      .limit(5);
+    if (error) throw error;
 
-    if (leaderboardError) throw leaderboardError;
+    const result = data as {
+      optionCounts: Record<string, number>;
+      leaderboard: Array<{
+        id: string;
+        nickname: string;
+        score: number;
+        streak: number;
+        connected: boolean;
+      }>;
+      alreadyApplied?: boolean;
+    };
 
     return {
-      optionCounts,
-      leaderboard: leaderboard || [],
+      optionCounts: result.optionCounts || {},
+      leaderboard: result.leaderboard || [],
+      alreadyApplied: Boolean(result.alreadyApplied),
     };
   } catch (err) {
     console.error('revealQuestionResults error:', err);
@@ -272,7 +231,6 @@ export async function revealQuestionResults(sessionId: string, questionId: strin
   }
 }
 
-// Transition status to 'leaderboard'
 export async function goToLeaderboard(sessionId: string) {
   try {
     const { supabase, user } = await getAuthUser();
@@ -290,16 +248,68 @@ export async function goToLeaderboard(sessionId: string) {
   }
 }
 
-// Transition session to next active question
-export async function goToNextQuestion(sessionId: string, nextIndex: number) {
+/** Start first question from lobby (host-authenticated). */
+export async function startGameSession(sessionId: string, questionOrder: string[]) {
   try {
     const { supabase, user } = await getAuthUser();
-    const { error } = await supabase
+    const serverStartedAt = new Date().toISOString();
+
+    if (!Array.isArray(questionOrder) || questionOrder.length === 0) {
+      throw new Error('Question order is required to start the game.');
+    }
+
+    const { data, error } = await supabase
       .from('game_sessions')
       .update({
         status: 'question_active',
-        current_question_index: nextIndex,
-        question_started_at: new Date().toISOString(),
+        current_question_index: 0,
+        question_started_at: serverStartedAt,
+        active_multiplier: 1,
+        scores_applied_question_id: null,
+        question_order: questionOrder,
+      })
+      .eq('id', sessionId)
+      .eq('host_id', user.id)
+      .eq('status', 'lobby')
+      .select('id, status, question_started_at')
+      .single();
+
+    if (error || !data) {
+      throw new Error('Unable to start game. Ensure the session is in lobby and you are the host.');
+    }
+
+    return { success: true, serverStartedAt: data.question_started_at as string };
+  } catch (err) {
+    console.error('startGameSession error:', err);
+    throw new Error(err instanceof Error ? err.message : 'Failed to start game.');
+  }
+}
+
+export async function pauseGameSession(sessionId: string) {
+  try {
+    const { supabase, user } = await getAuthUser();
+
+    const { data: session, error: fetchError } = await supabase
+      .from('game_sessions')
+      .select('id, status, question_started_at')
+      .eq('id', sessionId)
+      .eq('host_id', user.id)
+      .single();
+
+    if (fetchError || !session) throw new Error('Unauthorized or session not found.');
+    if (session.status !== 'question_active' || !session.question_started_at) {
+      throw new Error('Game is not in an active question state.');
+    }
+
+    const startedAt = new Date(session.question_started_at).getTime();
+    const elapsed = Date.now() - startedAt;
+    const pausedStartedAt = new Date(elapsed).toISOString();
+
+    const { error } = await supabase
+      .from('game_sessions')
+      .update({
+        status: 'question_paused',
+        question_started_at: pausedStartedAt,
       })
       .eq('id', sessionId)
       .eq('host_id', user.id);
@@ -307,12 +317,116 @@ export async function goToNextQuestion(sessionId: string, nextIndex: number) {
     if (error) throw error;
     return { success: true };
   } catch (err) {
+    console.error('pauseGameSession error:', err);
+    throw new Error(err instanceof Error ? err.message : 'Failed to pause game.');
+  }
+}
+
+export async function resumeGameSession(sessionId: string) {
+  try {
+    const { supabase, user } = await getAuthUser();
+
+    const { data: session, error: fetchError } = await supabase
+      .from('game_sessions')
+      .select('id, status, question_started_at')
+      .eq('id', sessionId)
+      .eq('host_id', user.id)
+      .single();
+
+    if (fetchError || !session) throw new Error('Unauthorized or session not found.');
+    if (session.status !== 'question_paused' || !session.question_started_at) {
+      throw new Error('Game is not paused.');
+    }
+
+    const elapsed = new Date(session.question_started_at).getTime();
+    const newStartedAt = new Date(Date.now() - elapsed).toISOString();
+
+    const { error } = await supabase
+      .from('game_sessions')
+      .update({
+        status: 'question_active',
+        question_started_at: newStartedAt,
+      })
+      .eq('id', sessionId)
+      .eq('host_id', user.id);
+
+    if (error) throw error;
+    return { success: true, serverStartedAt: newStartedAt };
+  } catch (err) {
+    console.error('resumeGameSession error:', err);
+    throw new Error(err instanceof Error ? err.message : 'Failed to resume game.');
+  }
+}
+
+/** Add seconds to the current question clock (default +10s). */
+export async function addQuestionTime(sessionId: string, extraSeconds = 10) {
+  try {
+    const { supabase, user } = await getAuthUser();
+    const ms = Math.max(1, extraSeconds) * 1000;
+
+    const { data: session, error: fetchError } = await supabase
+      .from('game_sessions')
+      .select('id, status, question_started_at')
+      .eq('id', sessionId)
+      .eq('host_id', user.id)
+      .single();
+
+    if (fetchError || !session) throw new Error('Unauthorized or session not found.');
+    if (!session.question_started_at) throw new Error('No active question clock.');
+    if (!['question_active', 'question_paused'].includes(session.status)) {
+      throw new Error('Cannot add time in the current state.');
+    }
+
+    let newStartedAt: string;
+    if (session.status === 'question_paused') {
+      const elapsed = new Date(session.question_started_at).getTime();
+      const newElapsed = Math.max(0, elapsed - ms);
+      newStartedAt = new Date(newElapsed).toISOString();
+    } else {
+      const startedAt = new Date(session.question_started_at).getTime();
+      newStartedAt = new Date(startedAt + ms).toISOString();
+    }
+
+    const { error } = await supabase
+      .from('game_sessions')
+      .update({ question_started_at: newStartedAt })
+      .eq('id', sessionId)
+      .eq('host_id', user.id);
+
+    if (error) throw error;
+    return { success: true, serverStartedAt: newStartedAt, addedSeconds: extraSeconds };
+  } catch (err) {
+    console.error('addQuestionTime error:', err);
+    throw new Error(err instanceof Error ? err.message : 'Failed to add time.');
+  }
+}
+
+export async function goToNextQuestion(sessionId: string, nextIndex: number) {
+  try {
+    const { supabase, user } = await getAuthUser();
+    const serverStartedAt = new Date().toISOString();
+    const { data, error } = await supabase
+      .from('game_sessions')
+      .update({
+        status: 'question_active',
+        current_question_index: nextIndex,
+        question_started_at: serverStartedAt,
+        active_multiplier: 1,
+        scores_applied_question_id: null,
+      })
+      .eq('id', sessionId)
+      .eq('host_id', user.id)
+      .select('question_started_at')
+      .single();
+
+    if (error || !data) throw error || new Error('Failed to open next question.');
+    return { success: true, serverStartedAt: data.question_started_at as string };
+  } catch (err) {
     console.error('goToNextQuestion error:', err);
     throw new Error(err instanceof Error ? err.message : 'Failed to open next question.');
   }
 }
 
-// Transition status to final 'finished' podium
 export async function goToPodium(sessionId: string) {
   try {
     const { supabase, user } = await getAuthUser();
@@ -329,7 +443,3 @@ export async function goToPodium(sessionId: string) {
     throw new Error(err instanceof Error ? err.message : 'Failed to display podium.');
   }
 }
-
-
-
-

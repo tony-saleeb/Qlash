@@ -10,18 +10,16 @@ export async function POST(request: Request) {
 
     const adminSupabase = createAdminClient();
 
-    // Fetch player to verify token
-    const { data: player, error: fetchError } = await adminSupabase
-      .from('players')
+    const { data: tokenRow, error: fetchError } = await adminSupabase
+      .from('player_tokens')
       .select('client_token')
-      .eq('id', playerId)
-      .single();
+      .eq('player_id', playerId)
+      .maybeSingle();
 
-    if (fetchError || !player || player.client_token !== token) {
+    if (fetchError || !tokenRow || tokenRow.client_token !== token) {
       return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
     }
 
-    // Update connection status to offline
     const { error: updateError } = await adminSupabase
       .from('players')
       .update({ connected: false })

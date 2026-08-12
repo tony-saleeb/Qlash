@@ -1,7 +1,6 @@
 import type { Metadata } from "next";
 import localFont from "next/font/local";
 import "./globals.css";
-import QueryProvider from "@/components/QueryProvider";
 import { Toaster } from "@/components/ui/sonner";
 
 const geistSans = localFont({
@@ -28,10 +27,8 @@ export default function RootLayout({
   return (
     <html lang="en" className={`dark ${geistSans.variable} ${geistMono.variable} font-sans`}>
       <body className="antialiased bg-slate-950 text-slate-100">
-        <QueryProvider>
-          {children}
-          <Toaster position="top-center" richColors />
-        </QueryProvider>
+        {children}
+        <Toaster position="top-center" richColors />
       </body>
     </html>
   );
