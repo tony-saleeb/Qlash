@@ -44,6 +44,7 @@ import {
 } from '@/lib/game/types';
 import { maybeShuffle } from '@/lib/game/shuffle';
 import { aggregateTeamScores } from '@/lib/game/teams';
+import { MAX_PLAYERS_PER_SESSION } from '@/lib/game/constants';
 
 interface HostGameClientProps {
   initialSession: GameSessionRow;
@@ -68,7 +69,7 @@ export default function HostGameClient({
 }: HostGameClientProps) {
   const router = useRouter();
   const supabase = createClient();
-  const { send: sendSessionEvent } = useSessionChannel(initialSession.id, { supabase });
+  const { send: sendSessionEvent, ready: channelReady } = useSessionChannel(initialSession.id, { supabase });
 
   // Core game states
   const [session, setSession] = useState(initialSession);
@@ -187,13 +188,19 @@ export default function HostGameClient({
         .filter((ans) => ans.is_correct)
         .map((ans) => ans.id);
 
-      await sendSessionEvent('question:reveal', {
+      const broadcast = await sendSessionEvent('question:reveal', {
         correct_answer_ids: correctOptionIds,
         leaderboard: results.leaderboard,
         option_counts: results.optionCounts,
       });
 
-      toast.success('Results calculated!', { id: loadingToast });
+      if (!broadcast.ok) {
+        toast.warning('Scores saved, but some players may need to refresh for results.', {
+          id: loadingToast,
+        });
+      } else {
+        toast.success('Results calculated!', { id: loadingToast });
+      }
     } catch (err) {
       toast.error(err instanceof Error ? err.message : 'Failed to reveal results.', { id: loadingToast });
     } finally {
@@ -445,6 +452,11 @@ export default function HostGameClient({
     }
 
     try {
+      if (!channelReady) {
+        // Brief wait so first broadcast isn't dropped before subscribe completes
+        await new Promise((r) => setTimeout(r, 300));
+      }
+
       const ordered = maybeShuffle(questions, randomizeQuestions).map(prepareQuestionForPlay);
       setPlayQuestions(ordered);
 
@@ -456,13 +468,20 @@ export default function HostGameClient({
       revealingRef.current = false;
 
       const firstQ = ordered[0];
-      await sendSessionEvent('question:start', buildQuestionStartPayload(firstQ, 0, serverStartedAt));
-
-      toast.success(
-        randomizeQuestions
-          ? 'Game started! Question order randomized.'
-          : 'Game started! Broadcasting first question.'
+      const broadcast = await sendSessionEvent(
+        'question:start',
+        buildQuestionStartPayload(firstQ, 0, serverStartedAt)
       );
+
+      if (!broadcast.ok) {
+        toast.warning('Game started — if players miss the question, ask them to refresh.');
+      } else {
+        toast.success(
+          randomizeQuestions
+            ? 'Game started! Question order randomized.'
+            : 'Game started! Broadcasting first question.'
+        );
+      }
     } catch (err) {
       toast.error(err instanceof Error ? err.message : 'Failed to start game.');
     }
@@ -673,6 +692,7 @@ export default function HostGameClient({
               <Users className="w-3.5 h-3.5" />
               <span>
                 Connected: <strong className="text-white">{connectedCount}</strong> / {players.length}
+                <span className="text-slate-600"> · max {MAX_PLAYERS_PER_SESSION}</span>
               </span>
             </div>
           </div>

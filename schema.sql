@@ -91,6 +91,7 @@ create table public.answers_submitted (
 
 -- Indexes for ~80-player hot paths
 create index players_session_id_idx on public.players(session_id);
+create unique index players_session_nickname_uidx on public.players (session_id, lower(nickname));
 create index answers_session_question_idx on public.answers_submitted(session_id, question_id);
 create index game_sessions_pin_idx on public.game_sessions(pin);
 create unique index player_tokens_token_idx on public.player_tokens(client_token);

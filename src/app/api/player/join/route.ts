@@ -2,13 +2,23 @@ import { NextResponse } from 'next/server';
 import { createAdminClient } from '@/lib/supabase/admin';
 import { randomUUID } from 'crypto';
 import { clientIpFromRequest, rateLimit } from '@/lib/rate-limit';
+import {
+  MAX_PLAYERS_PER_SESSION,
+  NICKNAME_MAX_LEN,
+  NICKNAME_MIN_LEN,
+  RATE_LIMITS,
+} from '@/lib/game/constants';
 
 export const dynamic = 'force-dynamic';
 
 export async function POST(request: Request) {
   try {
     const ip = clientIpFromRequest(request);
-    const limited = rateLimit({ key: `join:${ip}`, limit: 20, windowMs: 60_000 });
+    const limited = rateLimit({
+      key: `join:${ip}`,
+      limit: RATE_LIMITS.joinPerIp.limit,
+      windowMs: RATE_LIMITS.joinPerIp.windowMs,
+    });
     if (!limited.ok) {
       return NextResponse.json(
         { error: 'Too many join attempts. Please wait and try again.' },
@@ -21,7 +31,12 @@ export async function POST(request: Request) {
     if (!pin || typeof pin !== 'string' || pin.length !== 6) {
       return NextResponse.json({ error: 'Invalid PIN.' }, { status: 400 });
     }
-    if (!nickname || typeof nickname !== 'string' || !nickname.trim()) {
+    if (!nickname || typeof nickname !== 'string') {
+      return NextResponse.json({ error: 'Nickname is required.' }, { status: 400 });
+    }
+
+    const trimmedNickname = nickname.trim().slice(0, NICKNAME_MAX_LEN);
+    if (trimmedNickname.length < NICKNAME_MIN_LEN) {
       return NextResponse.json({ error: 'Nickname is required.' }, { status: 400 });
     }
 
@@ -41,6 +56,37 @@ export async function POST(request: Request) {
       return NextResponse.json({ error: 'This game has already finished.' }, { status: 403 });
     }
 
+    // New player inserts only in lobby. Mid-game: reconnect only (same nickname + token via /me).
+    if (session.status !== 'lobby') {
+      const { data: existingMidGame } = await admin
+        .from('players')
+        .select('id')
+        .eq('session_id', session.id)
+        .eq('nickname', trimmedNickname)
+        .maybeSingle();
+
+      if (existingMidGame) {
+        return NextResponse.json(
+          {
+            error: 'Nickname already taken in this room.',
+            code: 'NICKNAME_TAKEN',
+            sessionId: session.id,
+            playerId: existingMidGame.id,
+          },
+          { status: 409 }
+        );
+      }
+
+      return NextResponse.json(
+        {
+          error: 'This game has already started. Reconnect with your same nickname from this device, or wait for the next lobby.',
+          code: 'GAME_STARTED',
+          sessionId: session.id,
+        },
+        { status: 403 }
+      );
+    }
+
     const sessionWithQuiz = session as unknown as {
       id: string;
       status: string;
@@ -52,8 +98,6 @@ export async function POST(request: Request) {
       return NextResponse.json({ error: 'Team name is required.' }, { status: 400 });
     }
 
-    const trimmedNickname = nickname.trim();
-
     const { data: existingPlayer } = await admin
       .from('players')
       .select('id')
@@ -61,8 +105,6 @@ export async function POST(request: Request) {
       .eq('nickname', trimmedNickname)
       .maybeSingle();
 
-    // Reconnect: client must prove possession of token via /api/player/me
-    // Duplicate nicknames from other devices are rejected here.
     if (existingPlayer) {
       return NextResponse.json(
         {
@@ -75,6 +117,23 @@ export async function POST(request: Request) {
       );
     }
 
+    const { count, error: countError } = await admin
+      .from('players')
+      .select('id', { count: 'exact', head: true })
+      .eq('session_id', session.id);
+
+    if (countError) throw countError;
+
+    if ((count || 0) >= MAX_PLAYERS_PER_SESSION) {
+      return NextResponse.json(
+        {
+          error: `This room is full (${MAX_PLAYERS_PER_SESSION} players max).`,
+          code: 'ROOM_FULL',
+        },
+        { status: 403 }
+      );
+    }
+
     const clientToken = randomUUID();
 
     const { data: player, error: joinError } = await admin
@@ -82,13 +141,24 @@ export async function POST(request: Request) {
       .insert({
         session_id: session.id,
         nickname: trimmedNickname,
-        team_name: isTeamQuiz ? String(teamName).trim() : null,
+        team_name: isTeamQuiz ? String(teamName).trim().slice(0, 40) : null,
         connected: true,
       })
       .select('id, session_id, nickname, team_name, score, streak, connected')
       .single();
 
     if (joinError || !player) {
+      // Unique nickname race under concurrent joins
+      if ((joinError as { code?: string } | null)?.code === '23505') {
+        return NextResponse.json(
+          {
+            error: 'Nickname already taken in this room.',
+            code: 'NICKNAME_TAKEN',
+            sessionId: session.id,
+          },
+          { status: 409 }
+        );
+      }
       throw joinError || new Error('Failed to join.');
     }
 

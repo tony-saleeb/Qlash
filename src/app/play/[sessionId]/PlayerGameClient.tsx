@@ -357,11 +357,15 @@ export default function PlayerGameClient({
       }
     };
 
+    let connectionTimer: ReturnType<typeof setTimeout> | null = null;
     const handleVisibilityChange = () => {
       const isVisible = document.visibilityState === 'visible';
       setOnline(isVisible);
-      updatePlayerConnection(playerId, token, isVisible);
-      if (isVisible) hydrateCurrentQuestion(playerId);
+      if (connectionTimer) clearTimeout(connectionTimer);
+      connectionTimer = setTimeout(() => {
+        updatePlayerConnection(playerId, token, isVisible);
+        if (isVisible) hydrateCurrentQuestion(playerId);
+      }, 400);
     };
 
     window.addEventListener('visibilitychange', handleVisibilityChange);
@@ -375,6 +379,7 @@ export default function PlayerGameClient({
     });
 
     return () => {
+      if (connectionTimer) clearTimeout(connectionTimer);
       supabase.removeChannel(playerChannel);
       supabase.removeChannel(sessionChannel);
       window.removeEventListener('visibilitychange', handleVisibilityChange);
@@ -430,19 +435,18 @@ export default function PlayerGameClient({
     }
   }, [sessionStatus]);
 
-  // Handle Answer Submission Call
+  // Instant lock-in UX — never wait on the network to feel responsive
   const submitAnswer = async (answersToSubmit: string[]) => {
     if (!player || !activeQuestion || submissionState !== 'idle') return;
-    setSubmissionState('submitting');
 
     const token = localStorage.getItem(`quizarena_token_${sessionId}`) || '';
+    setSelectedAnswerIds(answersToSubmit);
+    setSubmissionState('submitted'); // optimistic — Kahoot-style instant feedback
 
     try {
       const response = await fetch('/api/submit-answer', {
         method: 'POST',
-        headers: {
-          'Content-Type': 'application/json',
-        },
+        headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({
           sessionId,
           playerId: player.id,
@@ -450,19 +454,17 @@ export default function PlayerGameClient({
           questionId: activeQuestion.id,
           selectedAnswerIds: answersToSubmit,
         }),
+        keepalive: true,
       });
 
-      const data = await response.json();
+      const data = await response.json().catch(() => ({}));
       if (!response.ok) {
         throw new Error(data.error || 'Failed to submit answer.');
       }
-
-      setSubmissionState('submitted');
-      toast.success('Answer submitted successfully!');
     } catch (err: unknown) {
       console.error(err);
-      toast.error(err instanceof Error ? err.message : 'Failed to submit.');
       setSubmissionState('idle');
+      toast.error(err instanceof Error ? err.message : 'Failed to submit — tap again.');
     }
   };
 

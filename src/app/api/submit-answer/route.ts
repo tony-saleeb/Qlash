@@ -1,144 +1,98 @@
 import { NextResponse } from 'next/server';
 import { createAdminClient } from '@/lib/supabase/admin';
-import {
-  gradeAnswer,
-  calculatePoints,
-  resolveMultiplier,
-} from '@/lib/game/scoring';
-import type { AnswerOption } from '@/lib/game/types';
 import { clientIpFromRequest, rateLimit } from '@/lib/rate-limit';
+import { RATE_LIMITS } from '@/lib/game/constants';
 
 export const dynamic = 'force-dynamic';
 
+const RPC_ERROR_MAP: Record<string, { status: number; message: string }> = {
+  UNAUTHORIZED: { status: 401, message: 'Unauthorized. Invalid player token.' },
+  SESSION_NOT_FOUND: { status: 404, message: 'Game session not found.' },
+  SUBMISSIONS_CLOSED: { status: 403, message: 'Submissions are closed for this round.' },
+  CLOCK_NOT_STARTED: { status: 403, message: 'Question clock not started.' },
+  WRONG_QUESTION: { status: 403, message: 'This question is not the active round.' },
+  QUESTION_NOT_FOUND: { status: 404, message: 'Question not found.' },
+  INVALID_ANSWER: { status: 400, message: 'Invalid answer payload.' },
+};
+
+function mapRpcError(message: string) {
+  for (const key of Object.keys(RPC_ERROR_MAP)) {
+    if (message.includes(key)) return RPC_ERROR_MAP[key];
+  }
+  return null;
+}
+
+/**
+ * Ultra-fast submit: one Postgres RPC round-trip (auth + grade + insert).
+ */
 export async function POST(request: Request) {
   try {
     const ip = clientIpFromRequest(request);
-    const limited = rateLimit({ key: `submit:${ip}`, limit: 120, windowMs: 60_000 });
-    if (!limited.ok) {
+    const ipLimit = rateLimit({
+      key: `submit:${ip}`,
+      limit: RATE_LIMITS.submitPerIp.limit,
+      windowMs: RATE_LIMITS.submitPerIp.windowMs,
+    });
+    if (!ipLimit.ok) {
       return NextResponse.json(
-        { error: 'Too many submissions. Please wait and try again.' },
-        { status: 429, headers: { 'Retry-After': String(limited.retryAfterSec) } }
+        { error: 'Too many submissions from this network. Please wait.' },
+        { status: 429, headers: { 'Retry-After': String(ipLimit.retryAfterSec) } }
       );
     }
 
-    const { sessionId, playerId, token, questionId, selectedAnswerIds } = await request.json();
+    const body = await request.json();
+    const { sessionId, playerId, token, questionId, selectedAnswerIds } = body;
 
     if (!sessionId || !playerId || !token || !questionId || !selectedAnswerIds) {
       return NextResponse.json({ error: 'Missing parameters' }, { status: 400 });
     }
-
-    const adminSupabase = createAdminClient();
-
-    const { data: tokenRow, error: tokenError } = await adminSupabase
-      .from('player_tokens')
-      .select('player_id, client_token')
-      .eq('player_id', playerId)
-      .maybeSingle();
-
-    if (tokenError || !tokenRow || tokenRow.client_token !== token) {
-      return NextResponse.json({ error: 'Unauthorized. Invalid player token.' }, { status: 401 });
+    if (!Array.isArray(selectedAnswerIds) || selectedAnswerIds.length === 0 || selectedAnswerIds.length > 6) {
+      return NextResponse.json({ error: 'Invalid answer payload.' }, { status: 400 });
     }
 
-    const { data: player, error: playerError } = await adminSupabase
-      .from('players')
-      .select('id, score, streak, session_id')
-      .eq('id', playerId)
-      .single();
-
-    if (playerError || !player || player.session_id !== sessionId) {
-      return NextResponse.json({ error: 'Unauthorized. Invalid player.' }, { status: 401 });
+    const playerLimit = rateLimit({
+      key: `submit:player:${playerId}`,
+      limit: RATE_LIMITS.submitPerPlayer.limit,
+      windowMs: RATE_LIMITS.submitPerPlayer.windowMs,
+    });
+    if (!playerLimit.ok) {
+      return NextResponse.json(
+        { error: 'Slow down — answer already being processed.' },
+        { status: 429, headers: { 'Retry-After': String(playerLimit.retryAfterSec) } }
+      );
     }
 
-    const { data: session, error: sessionError } = await adminSupabase
-      .from('game_sessions')
-      .select('status, current_question_index, question_started_at, quiz_id, active_multiplier')
-      .eq('id', sessionId)
-      .single();
-
-    if (sessionError || !session) {
-      return NextResponse.json({ error: 'Game session not found.' }, { status: 404 });
-    }
-
-    if (session.status !== 'question_active') {
-      return NextResponse.json({ error: 'Submissions are closed for this round.' }, { status: 403 });
-    }
-
-    const { data: question, error: questionError } = await adminSupabase
-      .from('questions')
-      .select('*')
-      .eq('id', questionId)
-      .eq('quiz_id', session.quiz_id)
-      .single();
-
-    if (questionError || !question) {
-      return NextResponse.json({ error: 'Question not found.' }, { status: 404 });
-    }
-
-    const { data: quizConfig } = await adminSupabase
-      .from('quizzes')
-      .select('double_points_rounds')
-      .eq('id', session.quiz_id)
-      .single();
-
-    const validatedMultiplier = resolveMultiplier(
-      session.active_multiplier,
-      quizConfig?.double_points_rounds,
-      questionId,
-      session.current_question_index
-    );
-
-    const { data: existingSubmission } = await adminSupabase
-      .from('answers_submitted')
-      .select('id')
-      .eq('session_id', sessionId)
-      .eq('question_id', questionId)
-      .eq('player_id', playerId)
-      .maybeSingle();
-
-    if (existingSubmission) {
-      return NextResponse.json({ error: 'Answer already submitted for this question.' }, { status: 400 });
-    }
-
-    const serverReceivedAt = new Date();
-    const startedAt = new Date(session.question_started_at);
-    const timeTakenMs = serverReceivedAt.getTime() - startedAt.getTime();
-    const timeLimitMs = question.time_limit_seconds * 1000;
-    const isLate = timeTakenMs > timeLimitMs + 1500;
-
-    const answers = (question.answers || []) as AnswerOption[];
-    const isCorrect = gradeAnswer({
-      type: question.type,
-      answers,
-      selectedAnswerIds,
-      isLate,
+    const admin = createAdminClient();
+    const { data, error } = await admin.rpc('submit_live_answer', {
+      p_player_id: playerId,
+      p_token: token,
+      p_session_id: sessionId,
+      p_question_id: questionId,
+      p_selected: selectedAnswerIds,
     });
 
-    const { pointsAwarded } = calculatePoints({
-      isCorrect,
-      isLate,
-      pointsBase: question.points_base,
-      scoringType: question.scoring_type,
-      timeTakenMs,
-      timeLimitMs,
-      previousStreak: player.streak,
-      multiplier: validatedMultiplier,
-    });
+    if (error) {
+      const mapped = mapRpcError(error.message || '');
+      if (mapped) {
+        return NextResponse.json({ error: mapped.message }, { status: mapped.status });
+      }
+      // RPC missing — tell operator to run migration
+      if ((error.message || '').toLowerCase().includes('function') && (error.message || '').includes('submit_live_answer')) {
+        console.error('submit_live_answer RPC missing — run schema-fast-submit.sql');
+        return NextResponse.json(
+          { error: 'Server scoring is not configured. Run schema-fast-submit.sql in Supabase.' },
+          { status: 503 }
+        );
+      }
+      console.error('submit_live_answer error:', error);
+      return NextResponse.json({ error: 'Internal Server Error' }, { status: 500 });
+    }
 
-    const { error: insertError } = await adminSupabase.from('answers_submitted').insert({
-      session_id: sessionId,
-      question_id: questionId,
-      player_id: playerId,
-      selected_answer_ids: selectedAnswerIds,
-      time_taken_ms: timeTakenMs,
-      points_awarded: pointsAwarded,
-      is_correct: isCorrect,
-    });
-
-    if (insertError) throw insertError;
-
+    const result = data as { success?: boolean; duplicate?: boolean } | null;
     return NextResponse.json({
       success: true,
-      message: 'Answer submitted successfully.',
+      message: result?.duplicate ? 'Answer already recorded.' : 'Answer submitted successfully.',
+      duplicate: Boolean(result?.duplicate),
     });
   } catch (err: unknown) {
     console.error('Answer submission error:', err);

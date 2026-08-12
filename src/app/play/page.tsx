@@ -71,46 +71,14 @@ export default function PlayerJoinPage() {
     setLoading(true);
 
     try {
-      const joinRes = await fetch('/api/player/join', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({
-          pin,
-          nickname: nickname.trim(),
-          teamName: isTeamQuiz ? teamName.trim() : undefined,
-        }),
+      const { joinOrReconnect } = await import('@/lib/game/joinClient');
+      const result = await joinOrReconnect({
+        pin,
+        nickname: nickname.trim(),
+        teamName: isTeamQuiz ? teamName.trim() : undefined,
       });
-      const joinData = await joinRes.json();
-
-      if (joinRes.status === 409 && joinData.sessionId) {
-        const existingToken = localStorage.getItem(`quizarena_token_${joinData.sessionId}`);
-        if (existingToken) {
-          const meRes = await fetch('/api/player/me', {
-            method: 'POST',
-            headers: { 'Content-Type': 'application/json' },
-            body: JSON.stringify({
-              sessionId: joinData.sessionId,
-              token: existingToken,
-              nickname: nickname.trim(),
-            }),
-          });
-          if (meRes.ok) {
-            toast.success(`Reconnected as ${nickname}!`);
-            router.replace(`/play/${joinData.sessionId}`);
-            return;
-          }
-        }
-        toast.error('Nickname already taken in this room.');
-        return;
-      }
-
-      if (!joinRes.ok) {
-        throw new Error(joinData.error || 'Failed to join game room.');
-      }
-
-      localStorage.setItem(`quizarena_token_${joinData.sessionId}`, joinData.token);
-      toast.success('Joined the lobby!');
-      router.replace(`/play/${joinData.sessionId}`);
+      toast.success(result.reconnected ? `Reconnected as ${nickname}!` : 'Joined the lobby!');
+      router.replace(`/play/${result.sessionId}`);
     } catch (err: unknown) {
       console.error(err);
       toast.error(err instanceof Error ? err.message : 'Failed to join game room. Please try again.');
