@@ -9,15 +9,18 @@ import { Input } from '@/components/ui/input';
 import { Button } from '@/components/ui/button';
 import { Flame, Wifi, WifiOff, Loader2, Award, CheckCircle, XCircle, Clock, Trophy, Pause, Check, Users, Zap } from 'lucide-react';
 import { BrandMark, AnswerButton } from '@/components/brand/BrandMark';
+import { GameShell, LiveChip } from '@/components/brand/GameShell';
+import { QLASH_CONFETTI } from '@/lib/game/theme';
+import { AnswerSwatch } from '@/components/brand/AnswerMark';
 import { playCorrectSound, playIncorrectSound, playFanfareSound } from '@/lib/sounds';
 import confetti from 'canvas-confetti';
 import { useSessionChannel } from '@/hooks/useSessionChannel';
 import {
-  SHAPES_MAP,
   type Player,
   type PublicQuestionPayload,
 } from '@/lib/game/types';
 import { remainingFromPausedElapsed, remainingSeconds, startedAtFromRemaining } from '@/lib/game/clock';
+import { answerUsesInk, resolveAnswerColor } from '@/lib/game/marks';
 import { aggregateTeamScores } from '@/lib/game/teams';
 
 type ActiveQuestionPayload = PublicQuestionPayload;
@@ -25,14 +28,12 @@ type ActiveQuestionPayload = PublicQuestionPayload;
 interface PlayerGameClientProps {
   sessionId: string;
   initialSessionStatus: string;
-  quizTheme?: Record<string, unknown> | null;
   teamMode?: boolean;
 }
 
 export default function PlayerGameClient({
   sessionId,
   initialSessionStatus,
-  quizTheme,
   teamMode = false,
 }: PlayerGameClientProps) {
   const router = useRouter();
@@ -78,13 +79,6 @@ export default function PlayerGameClient({
   React.useEffect(() => {
     activeQuestionRef.current = activeQuestion;
   }, [activeQuestion]);
-
-  const shapesMap = SHAPES_MAP;
-
-  const customStyles = {
-    backgroundColor: (quizTheme?.bgColor as string) || '#12151c',
-    color: (quizTheme?.textColor as string) || '#f4f6f8',
-  };
 
   const applyQuestionPayload = useCallback(
     (
@@ -497,14 +491,14 @@ export default function PlayerGameClient({
           angle: 60,
           spread: 55,
           origin: { x: 0 },
-          colors: ['#a855f7', '#ec4899', '#3b82f6'],
+          colors: [...QLASH_CONFETTI],
         });
         confetti({
           particleCount: 5,
           angle: 120,
           spread: 55,
           origin: { x: 1 },
-          colors: ['#a855f7', '#ec4899', '#3b82f6'],
+          colors: [...QLASH_CONFETTI],
         });
 
         if (Date.now() < end) {
@@ -599,10 +593,12 @@ export default function PlayerGameClient({
 
   if (loading || !player) {
     return (
-      <div className="min-h-screen bg-arena-stage flex flex-col items-center justify-center p-6 text-white font-sans">
-        <Loader2 className="w-10 h-10 text-arena-acid animate-spin mb-4" />
-        <p className="text-sm font-semibold text-white/60">Verifying session token...</p>
-      </div>
+      <GameShell className="items-center justify-center" padded>
+        <div className="flex flex-1 flex-col items-center justify-center text-center">
+          <Loader2 className="mb-4 h-10 w-10 animate-spin text-arena-acid" />
+          <p className="text-sm font-semibold text-white/60">Locking you into the room…</p>
+        </div>
+      </GameShell>
     );
   }
 
@@ -611,20 +607,17 @@ export default function PlayerGameClient({
   // ==========================================
   if (sessionStatus === 'lobby') {
     return (
-      <div className="arena-stage relative flex min-h-screen flex-col items-center justify-between overflow-hidden p-6 font-sans" style={customStyles}>
-        <div className="pointer-events-none absolute inset-0 arena-grid opacity-15" />
-        <div className="pointer-events-none absolute right-4 top-24 h-16 w-16 rotate-12 bg-arena-acid" />
-
-        <header className="relative z-10 py-4">
+      <GameShell>
+        <header className="py-2">
           <BrandMark tone="light" size="sm" />
         </header>
 
-        <main className="relative z-10 my-auto flex w-full max-w-sm flex-col items-center gap-6 text-center">
-          <div className="w-full rounded-2xl border border-white/15 bg-white p-6 text-arena-ink shadow-[0_20px_50px_-24px_rgba(0,0,0,0.5)]">
+        <main className="my-auto flex w-full max-w-sm flex-col items-center gap-6 text-center">
+          <div className="w-full border-2 border-arena-ink bg-white p-6 text-arena-ink shadow-[8px_8px_0_rgba(0,0,0,0.35)]">
             <div className="mb-4 flex justify-center">
               <span
-                className={`inline-flex items-center gap-1.5 rounded-md px-2.5 py-1 text-[10px] font-bold uppercase tracking-wider ${
-                  online ? 'bg-arena-court/15 text-arena-court' : 'bg-arena-signal/15 text-arena-signal'
+                className={`inline-flex items-center gap-1.5 px-2.5 py-1 text-[10px] font-bold uppercase tracking-wider ${
+                  online ? 'bg-arena-acid text-arena-ink' : 'bg-arena-signal text-white'
                 }`}
               >
                 {online ? <Wifi className="h-3.5 w-3.5" /> : <WifiOff className="h-3.5 w-3.5" />}
@@ -632,17 +625,17 @@ export default function PlayerGameClient({
               </span>
             </div>
 
-            <p className="text-[11px] font-bold uppercase tracking-wider text-arena-ink/40">You are in</p>
+            <p className="text-[11px] font-bold uppercase tracking-[0.22em] text-arena-ink/40">You are in</p>
             <h1 className="mt-1 truncate font-display text-3xl font-extrabold text-arena-ink">{player.nickname}</h1>
             {player.team_name && (
-              <p className="mt-2 inline-flex items-center gap-1 rounded-md bg-arena-mist px-2.5 py-1 text-xs font-bold text-arena-court">
+              <p className="mt-2 inline-flex items-center gap-1 bg-arena-mist px-2.5 py-1 text-xs font-bold text-arena-court">
                 <Users className="h-3.5 w-3.5" /> {player.team_name}
               </p>
             )}
 
-            <div className="mt-6 border-t border-arena-line pt-5">
-              <div className="mx-auto mb-3 h-1.5 w-24 overflow-hidden rounded-full bg-arena-mist">
-                <div className="h-full w-1/2 animate-pulse rounded-full bg-arena-signal" />
+            <div className="mt-6 border-t-2 border-arena-ink/10 pt-5">
+              <div className="mx-auto mb-3 h-1.5 w-24 overflow-hidden bg-arena-mist">
+                <div className="h-full w-1/2 animate-pulse bg-arena-signal" />
               </div>
               <p className="font-display text-sm font-bold text-arena-ink">Waiting for host…</p>
               <p className="mt-1 text-xs text-arena-ink/50">Watch the big screen — the round starts there.</p>
@@ -650,8 +643,10 @@ export default function PlayerGameClient({
           </div>
         </main>
 
-        <footer className="relative z-10 py-4 text-[10px] text-white/40">Qlash</footer>
-      </div>
+        <footer className="py-3 text-center font-display text-[10px] font-bold uppercase tracking-[0.22em] text-white/40">
+          Qlash
+        </footer>
+      </GameShell>
     );
   }
 
@@ -665,47 +660,50 @@ export default function PlayerGameClient({
 
     return (
       <div
-        className={`min-h-screen w-full flex flex-col justify-between items-center p-6 text-center text-white font-sans transition-colors duration-500 ${
-          isCorrect ? 'bg-emerald-600' : 'bg-rose-600'
+        className={`flex min-h-dvh w-full flex-col items-center justify-between p-6 text-center font-sans transition-colors duration-500 ${
+          isCorrect ? 'bg-arena-acid text-arena-ink' : 'bg-arena-signal text-white'
         }`}
       >
-        <div />
+        <BrandMark tone={isCorrect ? 'ink' : 'light'} size="sm" wordmark={false} />
 
-        <div className="space-y-4 animate-scale-in w-full max-w-sm">
+        <div className="w-full max-w-sm space-y-4 animate-scale-in">
           <div className="flex justify-center">
             {isCorrect ? (
-              <CheckCircle className="w-20 h-20 text-white fill-emerald-500" />
+              <CheckCircle className="h-20 w-20 text-arena-ink" />
             ) : (
-              <XCircle className="w-20 h-20 text-white fill-rose-500" />
+              <XCircle className="h-20 w-20 text-white" />
             )}
           </div>
-          <h1 className="text-4xl sm:text-5xl font-black uppercase tracking-tight">
-            {isCorrect ? 'Correct!' : 'Incorrect'}
+          <h1 className="font-display text-4xl font-extrabold uppercase tracking-tight sm:text-5xl">
+            {isCorrect ? 'Locked in' : 'Missed'}
           </h1>
-          <p className="text-white/80 font-bold text-xl">
-            {isCorrect ? `+${points.toLocaleString()} Points` : '+0 Points'}
+          <p className={`font-display text-xl font-bold ${isCorrect ? 'text-arena-ink/80' : 'text-white/85'}`}>
+            {isCorrect ? `+${points.toLocaleString()} pts` : '+0 pts'}
           </p>
           {player.streak > 1 && isCorrect && (
-            <div className="inline-flex items-center gap-1.5 px-4 py-1.5 bg-white/20 border border-white/10 rounded-full text-sm font-extrabold animate-bounce">
-              <Flame className="w-4 h-4 fill-current text-amber-300" />
-              <span>Streak: {player.streak} answers!</span>
+            <div className="inline-flex animate-bounce items-center gap-1.5 border-2 border-arena-ink bg-white px-4 py-1.5 text-sm font-extrabold text-arena-ink">
+              <Flame className="h-4 w-4 fill-current" />
+              <span>Streak: {player.streak}</span>
             </div>
           )}
         </div>
 
-        {/* Choices Distribution Chart */}
         {(() => {
           const totalVotes = roundResult.optionCounts
             ? Object.values(roundResult.optionCounts).reduce((a, b) => a + b, 0)
             : 0;
 
           return roundResult.optionCounts ? (
-            <div className="w-full max-w-sm bg-black/25 border border-white/10 rounded-3xl p-5 flex flex-col items-center gap-4 backdrop-blur-md my-2 animate-fade-in">
-              <h3 className="text-[10px] uppercase font-black tracking-wider text-white/55">
-                Answer Choices Distribution
+            <div className={`my-2 flex w-full max-w-sm flex-col items-center gap-4 border-2 p-5 animate-fade-in ${
+              isCorrect ? 'border-arena-ink/20 bg-black/10' : 'border-white/20 bg-black/25'
+            }`}>
+              <h3 className={`text-[10px] font-black uppercase tracking-[0.18em] ${isCorrect ? 'text-arena-ink/55' : 'text-white/55'}`}>
+                How the room voted
               </h3>
 
-              <div className="flex items-end justify-center gap-3.5 h-36 w-full px-2 border-b border-white/10 pb-1">
+              <div className={`flex h-36 w-full items-end justify-center gap-3.5 border-b px-2 pb-1 ${
+                isCorrect ? 'border-arena-ink/20' : 'border-white/15'
+              }`}>
                 {activeQuestion.answers.map((ans) => {
                   const votes = roundResult.optionCounts ? (roundResult.optionCounts[ans.id] || 0) : 0;
                   const ratio = totalVotes > 0 ? votes / totalVotes : 0;
@@ -714,27 +712,27 @@ export default function PlayerGameClient({
                   const isCorrectOption = roundResult.correctAnswerIds.includes(ans.id);
 
                   return (
-                    <div key={ans.id} className="flex-1 flex flex-col items-center gap-1.5 h-full justify-end select-none">
-                      <span className="font-mono text-[10px] font-black text-white bg-arena-stage/80 px-1.5 py-0.5 rounded border border-white/5">
+                    <div key={ans.id} className="flex h-full flex-1 select-none flex-col items-center justify-end gap-1.5">
+                      <span className="border border-white/10 bg-arena-stage/80 px-1.5 py-0.5 font-mono text-[10px] font-black text-white">
                         {votes}
                       </span>
                       <div
-                        className="w-full rounded-t-lg transition-all duration-500 shadow-lg relative flex items-center justify-center"
+                        className="relative flex w-full items-center justify-center shadow-[3px_0_0_rgba(0,0,0,0.2)] transition-all duration-500"
                         style={{
                           height: heightPercent,
-                          backgroundColor: ans.color,
+                          backgroundColor: resolveAnswerColor(ans.color),
                         }}
                       >
                         {isCorrectOption && (
-                          <Check className="w-3.5 h-3.5 text-white bg-emerald-500 rounded-full border border-white absolute top-[-7px] flex items-center justify-center shrink-0" />
+                          <Check className="absolute top-[-7px] h-3.5 w-3.5 shrink-0 border border-arena-ink bg-arena-acid text-arena-ink" />
                         )}
                       </div>
-                      <div
-                        className="w-6 h-6 rounded-md flex items-center justify-center text-white text-[10px] font-black shrink-0"
-                        style={{ backgroundColor: ans.color }}
-                      >
-                        {shapesMap[ans.shape] || '■'}
-                      </div>
+                      <AnswerSwatch
+                        shape={ans.shape}
+                        color={ans.color}
+                        className="h-6 w-6"
+                        markClassName="h-3.5 w-3.5"
+                      />
                     </div>
                   );
                 })}
@@ -743,64 +741,83 @@ export default function PlayerGameClient({
           ) : null;
         })()}
 
-        {/* Answer Breakdown comparison card */}
-        <div className="w-full max-w-sm bg-black/25 border border-white/10 rounded-3xl p-5 space-y-4 text-left backdrop-blur-md my-4 animate-fade-in">
-          <h3 className="text-xs uppercase font-extrabold tracking-wider text-white/50 border-b border-white/10 pb-2">
-            Round Summary
+        <div className={`my-4 w-full max-w-sm space-y-4 border-2 p-5 text-left animate-fade-in ${
+          isCorrect ? 'border-arena-ink/20 bg-black/10' : 'border-white/20 bg-black/25'
+        }`}>
+          <h3 className={`border-b pb-2 text-xs font-extrabold uppercase tracking-wider ${
+            isCorrect ? 'border-arena-ink/15 text-arena-ink/50' : 'border-white/10 text-white/50'
+          }`}>
+            Round summary
           </h3>
           
           <div className="space-y-1">
-            <span className="text-[10px] font-black text-white/40 uppercase tracking-widest block">
-              Your Choice
+            <span className={`block text-[10px] font-black uppercase tracking-widest ${isCorrect ? 'text-arena-ink/40' : 'text-white/40'}`}>
+              Your choice
             </span>
             {selectedAnswerIds.length > 0 ? (
-              <div className="flex flex-wrap gap-2 mt-1">
+              <div className="mt-1 flex flex-wrap gap-2">
                 {activeQuestion.answers
                   .filter((ans) => selectedAnswerIds.includes(ans.id))
                   .map((ans) => (
                     <div
                       key={ans.id}
-                      className="flex items-center gap-2 px-3 py-1.5 rounded-xl text-xs font-bold text-white border border-white/10"
-                      style={{ backgroundColor: ans.color }}
+                      className={`flex items-center gap-2 border-2 border-arena-ink px-3 py-1.5 text-xs font-bold ${
+                        answerUsesInk(ans.color) ? 'text-arena-ink' : 'text-white'
+                      }`}
+                      style={{ backgroundColor: resolveAnswerColor(ans.color) }}
                     >
-                      <span className="shrink-0">{shapesMap[ans.shape] || '■'}</span>
-                      <span className="truncate max-w-[200px]">{ans.text}</span>
+                      <AnswerSwatch
+                        shape={ans.shape}
+                        color={ans.color}
+                        className="h-5 w-5"
+                        markClassName="h-3 w-3"
+                      />
+                      <span className="max-w-[200px] truncate">{ans.text}</span>
                     </div>
                   ))}
               </div>
             ) : (
-              <p className="text-sm font-semibold text-rose-300 mt-0.5">
-                <Clock className="w-3.5 h-3.5 inline-block mr-0.5" /> Time Out (No answer submitted)
+              <p className={`mt-0.5 text-sm font-semibold ${isCorrect ? 'text-arena-ink' : 'text-white'}`}>
+                <Clock className="mr-0.5 inline-block h-3.5 w-3.5" /> Time out — no answer
               </p>
             )}
           </div>
 
           <div className="space-y-1 pt-1">
-            <span className="text-[10px] font-black text-white/40 uppercase tracking-widest block">
-              Correct Answer
+            <span className={`block text-[10px] font-black uppercase tracking-widest ${isCorrect ? 'text-arena-ink/40' : 'text-white/40'}`}>
+              Correct answer
             </span>
-            <div className="flex flex-wrap gap-2 mt-1">
+            <div className="mt-1 flex flex-wrap gap-2">
               {activeQuestion.answers
                 .filter((ans) => roundResult.correctAnswerIds.includes(ans.id))
                 .map((ans) => (
                   <div
                     key={ans.id}
-                    className="flex items-center gap-2 px-3 py-1.5 rounded-xl text-xs font-bold text-white border border-white/10"
-                    style={{ backgroundColor: ans.color }}
+                    className={`flex items-center gap-2 border-2 border-arena-ink px-3 py-1.5 text-xs font-bold ${
+                      answerUsesInk(ans.color) ? 'text-arena-ink' : 'text-white'
+                    }`}
+                    style={{ backgroundColor: resolveAnswerColor(ans.color) }}
                   >
-                    <span className="shrink-0">{shapesMap[ans.shape] || '■'}</span>
-                    <span className="truncate max-w-[200px]">{ans.text}</span>
+                    <AnswerSwatch
+                      shape={ans.shape}
+                      color={ans.color}
+                      className="h-5 w-5"
+                      markClassName="h-3 w-3"
+                    />
+                    <span className="max-w-[200px] truncate">{ans.text}</span>
                   </div>
                 ))}
             </div>
           </div>
         </div>
 
-        <div className="w-full max-w-xs bg-black/20 border border-white/10 p-4 rounded-2xl mb-8">
-          <span className="text-[10px] font-bold text-white/50 uppercase tracking-widest block">
-            Total Score
+        <div className={`mb-8 w-full max-w-xs border-2 p-4 ${
+          isCorrect ? 'border-arena-ink/25 bg-white/40' : 'border-white/20 bg-black/20'
+        }`}>
+          <span className={`block text-[10px] font-bold uppercase tracking-widest ${isCorrect ? 'text-arena-ink/50' : 'text-white/50'}`}>
+            Total score
           </span>
-          <span className="text-2xl font-black font-mono mt-0.5 block">
+          <span className="mt-0.5 block font-display text-2xl font-black tabular-nums">
             {player.score.toLocaleString()}
           </span>
         </div>
@@ -813,21 +830,23 @@ export default function PlayerGameClient({
   // ==========================================
   if (sessionStatus === 'leaderboard') {
     return (
-      <div className="min-h-screen bg-arena-stage flex flex-col items-center justify-center p-6 text-center text-white font-sans" style={customStyles}>
-        <Award className="w-12 h-12 text-arena-acid animate-bounce mb-4" />
-        <h1 className="text-2xl font-black">Scoreboard Time!</h1>
-        <p className="text-white/60 text-sm max-w-xs mt-2 leading-relaxed">
-          Look at the main presenter screen to check the current standings and see if you made it to the top!
-        </p>
-        <div className="w-full max-w-xs bg-white/10 border border-white/15 p-4 rounded-2xl mt-8">
-          <span className="text-[10px] font-bold text-white/50 uppercase tracking-widest block">
-            Your Current Score
-          </span>
-          <span className="text-2xl font-black font-mono text-arena-acid mt-0.5 block">
-            {player.score.toLocaleString()}
-          </span>
+      <GameShell className="items-center justify-center">
+        <div className="flex flex-1 flex-col items-center justify-center text-center">
+          <Award className="mb-4 h-12 w-12 text-arena-acid" />
+          <h1 className="font-display text-2xl font-extrabold text-white">Scoreboard time</h1>
+          <p className="mt-2 max-w-xs text-sm leading-relaxed text-white/60">
+            Look at the projector — standings are on the host screen.
+          </p>
+          <div className="mt-8 w-full max-w-xs border-2 border-white/15 bg-white/[0.06] p-4">
+            <span className="block text-[10px] font-bold uppercase tracking-widest text-white/50">
+              Your score
+            </span>
+            <span className="mt-0.5 block font-display text-2xl font-black tabular-nums text-arena-acid">
+              {player.score.toLocaleString()}
+            </span>
+          </div>
         </div>
-      </div>
+      </GameShell>
     );
   }
 
@@ -845,126 +864,109 @@ export default function PlayerGameClient({
       : null;
 
     return (
-      <div className="relative min-h-screen bg-arena-stage flex flex-col justify-between items-center p-6 text-center text-white font-sans overflow-hidden" style={customStyles}>
-        {/* Glow */}
-        <div className="absolute top-[-20%] left-[-20%] w-[60%] h-[60%] rounded-full bg-transparent blur-[150px] pointer-events-none" />
-        <div className="absolute bottom-[-20%] right-[-20%] w-[60%] h-[60%] rounded-full bg-transparent blur-[150px] pointer-events-none" />
-
-        <div className="flex items-center justify-between gap-4 z-10 w-full max-w-md mt-2">
-          <span className="text-[10px] font-black bg-amber-600 px-2.5 py-1.5 rounded-lg uppercase tracking-wider text-white">
-            Final Standings
-          </span>
-          <div className="flex items-center gap-1.5">
-            <Trophy className="w-4 h-4 text-amber-500 animate-bounce" />
-            <span className="text-white/60 font-bold text-xs">Game Over</span>
-          </div>
+      <GameShell>
+        <div className="mt-2 flex w-full max-w-md items-center justify-between gap-4">
+          <LiveChip tone="acid">Final standings</LiveChip>
+          <BrandMark tone="light" size="sm" wordmark={false} />
         </div>
 
-        <div className="my-2 text-center z-10">
-          <h1 className="text-3xl font-black text-transparent bg-clip-text bg-gradient-to-r from-white via-arena-acid to-white tracking-tight leading-none">
-            Qlash Podium
+        <div className="z-10 my-2 text-center">
+          <h1 className="font-display text-3xl font-extrabold leading-none tracking-tight text-white">
+            Qlash <span className="text-arena-acid">podium</span>
           </h1>
-          <p className="text-white/50 text-[10px] mt-1.5">
-            Celebrating the game champions!
-          </p>
         </div>
 
-        {/* 3D Podium Layout */}
-        <div className="flex-1 max-w-md mx-auto w-full flex items-end justify-center gap-2 sm:gap-4 z-10 py-6">
-          {/* 2nd Place Block (Left) */}
+        <div className="z-10 mx-auto flex w-full max-w-md flex-1 items-end justify-center gap-2 py-6 sm:gap-4">
           {secondPlace && (
-            <div className="flex flex-col items-center gap-2 w-1/4 min-w-[70px] animate-scale-in">
-              <div className="text-center w-full min-w-0">
+            <div className="flex w-1/4 min-w-[70px] flex-col items-center gap-2 animate-scale-in">
+              <div className="w-full min-w-0 text-center">
                 <span className="font-display text-sm font-bold text-white/50">2nd</span>
-                <h3 className="font-extrabold text-[11px] sm:text-xs text-white truncate w-full mt-0.5">
+                <h3 className="mt-0.5 w-full truncate text-[11px] font-extrabold text-white sm:text-xs">
                   {secondPlace.nickname}
                 </h3>
-                <span className="font-mono text-[10px] text-arena-acid font-bold">
+                <span className="font-display text-[10px] font-bold tabular-nums text-arena-acid">
                   {secondPlace.score.toLocaleString()}
                 </span>
               </div>
-              <div className="bg-white/10 border-x border-t border-white/15 rounded-t-2xl w-full h-24 flex flex-col items-center justify-center shadow-xl">
-                <span className="font-black text-2xl text-white/50">2</span>
+              <div className="flex h-24 w-full flex-col items-center justify-center border-2 border-white/20 bg-[#4a2aff] shadow-[4px_4px_0_rgba(0,0,0,0.3)]">
+                <span className="font-display text-2xl font-black text-white">2</span>
               </div>
             </div>
           )}
 
-          {/* 1st Place Block (Center - Highest) */}
           {firstPlace && (
-            <div className="flex flex-col items-center gap-2 w-1/3 min-w-[90px] z-10 animate-scale-in">
-              <div className="text-center w-full min-w-0 flex flex-col items-center">
-                <Trophy className="w-6 h-6 text-amber-400 fill-amber-400 animate-pulse" />
-                <h3 className="font-black text-xs sm:text-sm text-white truncate w-full mt-0.5">
+            <div className="z-10 flex w-1/3 min-w-[90px] flex-col items-center gap-2 animate-scale-in">
+              <div className="flex w-full min-w-0 flex-col items-center text-center">
+                <Trophy className="h-6 w-6 fill-arena-acid text-arena-acid" />
+                <h3 className="mt-0.5 w-full truncate text-xs font-black text-white sm:text-sm">
                   {firstPlace.nickname}
                 </h3>
-                <span className="font-mono text-xs text-arena-acid font-bold">
+                <span className="font-display text-xs font-bold tabular-nums text-arena-acid">
                   {firstPlace.score.toLocaleString()}
                 </span>
               </div>
-              <div className="bg-white/10/90 border-x border-t border-white/25/60 rounded-t-2xl w-full h-32 flex flex-col items-center justify-center shadow-2xl relative">
-                <div className="absolute top-0 inset-x-0 h-0.5 bg-gradient-to-r from-violet-500 via-fuchsia-500 to-rose-500 rounded-t-full" />
-                <span className="font-black text-3xl text-amber-500">1</span>
+              <div className="relative flex h-32 w-full flex-col items-center justify-center border-2 border-arena-ink bg-arena-signal shadow-[6px_6px_0_rgba(200,245,66,0.3)]">
+                <div className="absolute inset-x-0 top-0 h-1 bg-arena-acid" />
+                <span className="font-display text-3xl font-black text-white">1</span>
               </div>
             </div>
           )}
 
-          {/* 3rd Place Block (Right) */}
           {thirdPlace && (
-            <div className="flex flex-col items-center gap-2 w-1/4 min-w-[70px] animate-scale-in">
-              <div className="text-center w-full min-w-0">
+            <div className="flex w-1/4 min-w-[70px] flex-col items-center gap-2 animate-scale-in">
+              <div className="w-full min-w-0 text-center">
                 <span className="font-display text-sm font-bold text-white/50">3rd</span>
-                <h3 className="font-extrabold text-[11px] sm:text-xs text-white truncate w-full mt-0.5">
+                <h3 className="mt-0.5 w-full truncate text-[11px] font-extrabold text-white sm:text-xs">
                   {thirdPlace.nickname}
                 </h3>
-                <span className="font-mono text-[10px] text-arena-acid font-bold">
+                <span className="font-display text-[10px] font-bold tabular-nums text-arena-acid">
                   {thirdPlace.score.toLocaleString()}
                 </span>
               </div>
-              <div className="bg-white/10 border-x border-t border-white/15 rounded-t-2xl w-full h-16 flex flex-col items-center justify-center shadow-xl">
-                <span className="font-black text-2xl text-amber-700">3</span>
+              <div className="flex h-16 w-full flex-col items-center justify-center border-2 border-white/20 bg-arena-court shadow-[4px_4px_0_rgba(0,0,0,0.3)]">
+                <span className="font-display text-2xl font-black text-white">3</span>
               </div>
             </div>
           )}
         </div>
 
-        {/* Player Stats Block */}
-        <div className="w-full max-w-xs bg-white/5 border border-white/15 p-4 rounded-2xl mb-4 z-10 space-y-3">
-          <div className="flex justify-between items-center border-b border-white/15 pb-2">
-            <span className="text-[10px] font-bold text-white/50 uppercase tracking-widest">
-              Your Performance
+        <div className="z-10 mb-4 w-full max-w-xs space-y-3 border-2 border-white/15 bg-white/[0.05] p-4">
+          <div className="flex items-center justify-between border-b border-white/15 pb-2">
+            <span className="text-[10px] font-bold uppercase tracking-widest text-white/50">
+              Your performance
             </span>
             <span className="text-xs font-black text-arena-acid">
               #{finalRank ?? '-'} Rank
             </span>
           </div>
           {teamMode && player?.team_name && (
-            <div className="flex justify-between items-center">
+            <div className="flex items-center justify-between">
               <span className="text-xs text-white/60">Team ({player.team_name})</span>
-              <span className="text-sm font-bold text-fuchsia-300">
+              <span className="text-sm font-bold text-arena-acid">
                 #{myTeamRank || '-'} · {teamRows.find((t) => t.team_name === player.team_name)?.score ?? 0} pts
               </span>
             </div>
           )}
-          <div className="flex justify-between items-center">
-            <span className="text-xs text-white/60">Final Points</span>
-            <span className="text-lg font-black font-mono text-white">
+          <div className="flex items-center justify-between">
+            <span className="text-xs text-white/60">Final points</span>
+            <span className="font-display text-lg font-black tabular-nums text-white">
               {player.score.toLocaleString()}
             </span>
           </div>
-          <div className="flex justify-between items-center">
-            <span className="text-xs text-white/60">Answer Streak</span>
-            <span className="text-sm font-bold text-amber-400 flex items-center gap-0.5">
-              <Flame className="w-4 h-4 fill-amber-400" /> {player.streak}
+          <div className="flex items-center justify-between">
+            <span className="text-xs text-white/60">Answer streak</span>
+            <span className="flex items-center gap-0.5 text-sm font-bold text-arena-acid">
+              <Flame className="h-4 w-4 fill-current" /> {player.streak}
             </span>
           </div>
           {teamMode && teamRows.length > 0 && (
-            <div className="pt-2 border-t border-white/15 space-y-1.5">
-              <span className="text-[10px] font-bold text-white/50 uppercase tracking-widest">
-                Team Standings
+            <div className="space-y-1.5 border-t border-white/15 pt-2">
+              <span className="text-[10px] font-bold uppercase tracking-widest text-white/50">
+                Team standings
               </span>
               {teamRows.slice(0, 5).map((team, idx) => (
                 <div key={team.team_name} className="flex justify-between text-xs">
-                  <span className={team.team_name === player?.team_name ? 'text-fuchsia-300 font-bold' : 'text-white/60'}>
+                  <span className={team.team_name === player?.team_name ? 'font-bold text-arena-acid' : 'text-white/60'}>
                     #{idx + 1} {team.team_name}
                   </span>
                   <span className="font-mono text-white/80">{team.score}</span>
@@ -979,11 +981,11 @@ export default function PlayerGameClient({
             localStorage.removeItem(`quizarena_token_${sessionId}`);
             router.push('/play');
           }}
-          className="bg-white/10 hover:bg-slate-800 border border-white/15 font-bold rounded-xl text-xs h-11 px-6 w-full max-w-xs mb-6 z-10"
+          className="z-10 mb-4 h-11 w-full max-w-xs rounded-none border-2 border-white/30 bg-white/10 text-xs font-bold text-white hover:border-arena-acid hover:bg-arena-acid hover:text-arena-ink"
         >
-          Return to Arena Joiner
+          Return to join
         </Button>
-      </div>
+      </GameShell>
     );
   }
 
@@ -994,81 +996,81 @@ export default function PlayerGameClient({
     // 1. SUBMITTED VIEW
     if (submissionState === 'submitted') {
       return (
-        <div className="arena-stage flex min-h-screen flex-col items-center justify-center p-6 text-center font-sans">
-          <div className="mb-6 flex h-16 w-16 items-center justify-center rounded-2xl bg-arena-acid font-display text-2xl font-extrabold text-arena-ink motion-pulse-soft">
-            ✓
-          </div>
-          <h1 className="font-display text-3xl font-extrabold text-white">Answer locked</h1>
-          {timeLeft > 0 && (
-            <div className="mt-6 flex justify-center">
-              <div
-                className={`relative flex h-24 w-24 flex-col items-center justify-center rounded-2xl border-4 bg-white/5 transition-all duration-300 ${
-                  timeLeft <= 5 ? 'scale-105 border-arena-signal' : 'border-arena-acid/60'
-                }`}
-              >
-                <span
-                  className={`font-display text-3xl font-extrabold tabular-nums ${
-                    timeLeft <= 5 ? 'text-arena-signal' : 'text-white'
+        <GameShell className="items-center justify-center">
+          <div className="flex flex-1 flex-col items-center justify-center text-center">
+            <div className="mb-6 flex h-16 w-16 items-center justify-center bg-arena-acid font-display text-2xl font-extrabold text-arena-ink motion-pulse-soft">
+              ✓
+            </div>
+            <h1 className="font-display text-3xl font-extrabold text-white">Answer locked</h1>
+            {timeLeft > 0 && (
+              <div className="mt-6 flex justify-center">
+                <div
+                  className={`relative flex h-24 w-24 flex-col items-center justify-center border-4 bg-black/35 transition-all duration-300 ${
+                    timeLeft <= 5 ? 'scale-105 border-arena-signal' : 'border-arena-acid'
                   }`}
                 >
-                  {timeLeft}
-                </span>
-                <span className="text-[9px] font-bold uppercase tracking-wider text-white/45">sec</span>
+                  <span
+                    className={`font-display text-3xl font-extrabold tabular-nums ${
+                      timeLeft <= 5 ? 'text-arena-signal' : 'text-white'
+                    }`}
+                  >
+                    {timeLeft}
+                  </span>
+                  <span className="text-[9px] font-bold uppercase tracking-wider text-white/45">sec</span>
+                </div>
               </div>
-            </div>
-          )}
-          <p className="mt-6 max-w-xs text-sm text-white/55">
-            Waiting for the room — results hit when the host reveals.
-          </p>
-        </div>
+            )}
+            <p className="mt-6 max-w-xs text-sm text-white/55">
+              Waiting for the room — results hit when the host reveals.
+            </p>
+          </div>
+        </GameShell>
       );
     }
 
-    // 2. SUBMITTING INTERMEDIATE VIEW
     if (submissionState === 'submitting') {
       return (
-        <div className="min-h-screen bg-arena-stage flex flex-col items-center justify-center p-6 text-center text-white font-sans">
-          <Loader2 className="w-10 h-10 text-arena-acid animate-spin mb-4" />
-          <p className="text-sm font-semibold text-white/60">Grading answer...</p>
-        </div>
+        <GameShell className="items-center justify-center">
+          <div className="flex flex-1 flex-col items-center justify-center text-center">
+            <Loader2 className="mb-4 h-10 w-10 animate-spin text-arena-acid" />
+            <p className="text-sm font-semibold text-white/60">Locking answer…</p>
+          </div>
+        </GameShell>
       );
     }
 
-    // 3. INPUT FORM RENDER BASED ON QUESTION TYPE
     return (
-      <div className="relative min-h-screen bg-arena-stage text-white flex flex-col justify-between p-4 font-sans" style={customStyles}>
+      <GameShell padded={false}>
+        <div className="relative flex min-h-dvh flex-col justify-between p-4">
         {sessionStatus === 'question_paused' && (
-          <div className="absolute inset-0 bg-arena-stage/80 backdrop-blur-sm flex flex-col items-center justify-center text-center p-6 z-50 animate-fade-in">
-            <Pause className="w-12 h-12 text-amber-500 animate-pulse mb-3" />
-            <h2 className="text-xl font-bold text-white mb-1">Game is Paused</h2>
-            <p className="text-white/60 text-xs max-w-xs">
-              The host has paused the round timer. Hold on, submissions will resume shortly!
+          <div className="absolute inset-0 z-50 flex flex-col items-center justify-center bg-arena-stage/85 p-6 text-center animate-fade-in">
+            <Pause className="mb-3 h-12 w-12 text-arena-acid motion-pulse-soft" />
+            <h2 className="mb-1 font-display text-xl font-bold text-white">Paused</h2>
+            <p className="max-w-xs text-xs text-white/60">
+              The host paused the timer. Submissions resume when they hit play.
             </p>
           </div>
         )}
-        {/* Header summary */}
-        <div className="flex items-center justify-between text-xs text-white/50 font-semibold border-b border-white/10 pb-3">
-          <span>PIN: {sessionId}</span>
-          <span className="uppercase tracking-widest text-arena-acid font-bold">
-            {player.team_name ? <><Users className="w-3 h-3 inline-block mr-0.5" /> {player.team_name}</> : activeQuestion.type.replace('_', ' ')}
+        <div className="flex items-center justify-between border-b border-white/10 pb-3 text-xs font-semibold text-white/50">
+          <BrandMark tone="light" size="sm" wordmark={false} />
+          <span className="font-bold uppercase tracking-widest text-arena-acid">
+            {player.team_name ? <><Users className="mr-0.5 inline-block h-3 w-3" /> {player.team_name}</> : activeQuestion.type.replace('_', ' ')}
           </span>
-          <span>Score: {player.score}</span>
+          <span className="font-display font-extrabold text-white">{player.score}</span>
         </div>
 
-        {/* Input Interface Area */}
-        <main className="flex-1 flex flex-col items-center justify-center py-6 w-full max-w-md mx-auto">
-          {/* Question Prompt & Timer */}
-          <div className="text-center space-y-4 mb-6 max-w-sm flex flex-col items-center">
+        <main className="mx-auto flex w-full max-w-md flex-1 flex-col items-center justify-center py-6">
+          <div className="mb-6 flex max-w-sm flex-col items-center space-y-4 text-center">
             {activeMultiplier > 1 && (
-              <div className="px-3 py-1.5 rounded-lg bg-amber-500 text-arena-ink text-xs font-black uppercase tracking-wider animate-pulse flex items-center gap-1 mb-1">
-                <Zap className="w-3.5 h-3.5" /> {activeMultiplier}x Points Active
+              <div className="mb-1 flex items-center gap-1 bg-arena-acid px-3 py-1.5 text-xs font-black uppercase tracking-wider text-arena-ink motion-pulse-soft">
+                <Zap className="h-3.5 w-3.5" /> {activeMultiplier}x points
               </div>
             )}
             
             {timeLeft > 0 && (
-              <div className="flex justify-center my-2">
+              <div className="my-2 flex justify-center">
                 <div
-                  className={`relative flex h-24 w-24 flex-col items-center justify-center border-4 bg-white/5 transition-all duration-300 ${
+                  className={`relative flex h-24 w-24 flex-col items-center justify-center border-4 bg-black/35 transition-all duration-300 ${
                     timeLeft <= 5
                       ? 'scale-105 border-arena-signal motion-pulse-soft'
                       : 'border-arena-acid'
@@ -1086,52 +1088,47 @@ export default function PlayerGameClient({
               </div>
             )}
 
-            <h2 className="text-xl font-extrabold text-white leading-snug tracking-tight">
+            <h2 className="font-display text-xl font-extrabold leading-snug tracking-tight text-white">
               {activeQuestion.prompt}
             </h2>
           </div>
 
           {activeQuestion.type === 'type_answer' ? (
-            // TYPE ANSWER MODE
-            <form onSubmit={handleTextSubmit} className="w-full space-y-4 bg-white/5 p-6 border border-white/15 rounded-3xl shadow-xl">
-              <div className="text-center space-y-1 mb-4">
-                <h2 className="text-xs uppercase font-extrabold text-white/50 tracking-wider">
-                  Type Your Answer
+            <form onSubmit={handleTextSubmit} className="w-full space-y-4 border-2 border-white/15 bg-white/[0.05] p-6">
+              <div className="mb-4 space-y-1 text-center">
+                <h2 className="text-xs font-extrabold uppercase tracking-wider text-white/50">
+                  Type your answer
                 </h2>
-                <p className="text-white/60 text-xs">
-                  Fuzzy case-insensitive matching is active.
-                </p>
               </div>
 
               <Input
                 placeholder="Type here..."
                 value={typeInputValue}
                 onChange={(e) => setTypeInputValue(e.target.value)}
-                className="bg-arena-stage border-white/15 h-14 text-center text-lg font-bold focus-visible:ring-arena-court rounded-xl"
+                className="h-14 rounded-none border-white/15 bg-arena-stage text-center text-lg font-bold focus-visible:ring-arena-acid"
                 maxLength={40}
                 required
               />
 
               <Button
                 type="submit"
-                className="w-full bg-arena-signal hover:bg-arena-signal/90 text-white font-bold h-12 rounded-xl text-base shadow-lg"
+                className="h-12 w-full rounded-none bg-arena-signal text-base font-bold text-white shadow-[4px_4px_0_rgba(0,0,0,0.3)] hover:brightness-110"
               >
-                Submit Answer
+                Lock answer
               </Button>
             </form>
           ) : activeQuestion.type === 'multi_select' ? (
-            // MULTI-SELECT CHECKBOX GRID MODE
             <div className="w-full space-y-6">
-              <div className="text-center space-y-1 mb-2">
-                <h2 className="text-xs uppercase font-extrabold text-arena-acid tracking-wider">
-                  Select Multiple Answers
+              <div className="mb-2 space-y-1 text-center">
+                <h2 className="text-xs font-extrabold uppercase tracking-wider text-arena-acid">
+                  Select all that apply
                 </h2>
-                <p className="text-white/50 text-xs">
-                  Pick all options you believe are correct, then tap Submit.
+                <p className="text-xs text-white/50">
+                  Tap every correct option, then lock in.
                 </p>
               </div>
 
-              <div className="grid grid-cols-2 gap-3 w-full">
+              <div className="grid w-full grid-cols-2 gap-3">
                 {activeQuestion.answers.map((ans) => {
                   const isChecked = selectedAnswerIds.includes(ans.id);
                   return (
@@ -1150,14 +1147,13 @@ export default function PlayerGameClient({
 
               <Button
                 onClick={handleMultiSubmit}
-                className="w-full bg-gradient-to-r from-arena-signal to-[#c21828] hover:brightness-110 text-white font-bold h-12 rounded-xl text-base shadow-lg"
+                className="h-12 w-full rounded-none bg-arena-signal text-base font-bold text-white shadow-[4px_4px_0_rgba(0,0,0,0.3)] hover:brightness-110"
               >
-                Submit Choices
+                Lock answers
               </Button>
             </div>
           ) : (
-            // MCQ / TRUE-FALSE / POLL SINGLE CLICK BUTTONS GRID
-            <div className="grid grid-cols-2 gap-3 w-full">
+            <div className="grid w-full grid-cols-2 gap-3">
               {activeQuestion.answers.map((ans) => (
                 <AnswerButton
                   key={ans.id}
@@ -1172,20 +1168,21 @@ export default function PlayerGameClient({
           )}
         </main>
 
-        {/* Footer timing indicator */}
-        <div className="flex justify-center items-center gap-1.5 py-4 border-t border-white/10 text-white/50 text-xs font-semibold text-center">
-          <Clock className="w-4 h-4 text-white/50" />
-          <span>Timer is ticking! Answer quickly for a speed bonus.</span>
+        <div className="flex items-center justify-center gap-1.5 border-t border-white/10 py-4 text-center text-xs font-semibold text-white/50">
+          <Clock className="h-4 w-4" />
+          <span>Faster lock = bigger speed bonus</span>
         </div>
-      </div>
+        </div>
+      </GameShell>
     );
   }
 
-  // Fallback Loading screen
   return (
-    <div className="min-h-screen bg-arena-stage flex flex-col items-center justify-center p-6 text-white font-sans">
-      <Loader2 className="w-10 h-10 text-arena-acid animate-spin mb-4" />
-      <p className="text-sm font-semibold text-white/60">Loading arena state...</p>
-    </div>
+    <GameShell className="items-center justify-center">
+      <div className="flex flex-1 flex-col items-center justify-center text-center">
+        <Loader2 className="mb-4 h-10 w-10 animate-spin text-arena-acid" />
+        <p className="text-sm font-semibold text-white/60">Loading the room…</p>
+      </div>
+    </GameShell>
   );
 }

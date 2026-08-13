@@ -1,5 +1,7 @@
 import type { ReactNode } from 'react';
 import { cn } from '@/lib/utils';
+import { AnswerMark } from '@/components/brand/AnswerMark';
+import { answerMarkClass, answerUsesInk, resolveAnswerColor } from '@/lib/game/marks';
 
 export const BRAND_NAME = 'Qlash';
 
@@ -109,7 +111,7 @@ export function PinDisplay({
   );
 }
 
-export function StageBadge({ children, className }: { children: React.ReactNode; className?: string }) {
+export function StageBadge({ children, className }: { children: ReactNode; className?: string }) {
   return (
     <span
       className={cn(
@@ -122,30 +124,22 @@ export function StageBadge({ children, className }: { children: React.ReactNode;
   );
 }
 
-/** Four classic answer shapes — the product’s visual signature */
+/** Four Qlash marks — slash, Q-ring, bolt, chevron. */
 export function ArenaFloor({ className }: { className?: string }) {
   return (
     <div className={cn('relative aspect-square w-full max-w-lg', className)} aria-hidden>
       <div className="absolute inset-0 grid grid-cols-2 grid-rows-2 gap-3 sm:gap-4">
-        <div className="arena-shape-tile flex items-center justify-center bg-[#e21b3c] motion-tile-1">
-          <svg viewBox="0 0 48 48" className="h-14 w-14 text-white/95 sm:h-20 sm:w-20">
-            <polygon points="24,6 44,40 4,40" fill="currentColor" />
-          </svg>
+        <div className="arena-shape-tile flex items-center justify-center bg-arena-signal motion-tile-1">
+          <AnswerMark shape="slash" className="h-14 w-14 text-white sm:h-20 sm:w-20" />
         </div>
-        <div className="arena-shape-tile flex items-center justify-center bg-[#1368ce] motion-tile-2">
-          <svg viewBox="0 0 48 48" className="h-14 w-14 text-white/95 sm:h-20 sm:w-20">
-            <polygon points="24,4 44,24 24,44 4,24" fill="currentColor" />
-          </svg>
+        <div className="arena-shape-tile flex items-center justify-center bg-[#4a2aff] motion-tile-2">
+          <AnswerMark shape="qring" className="h-14 w-14 text-white sm:h-20 sm:w-20" />
         </div>
-        <div className="arena-shape-tile flex items-center justify-center bg-[#d89e00] motion-tile-3">
-          <svg viewBox="0 0 48 48" className="h-14 w-14 text-white/95 sm:h-20 sm:w-20">
-            <circle cx="24" cy="24" r="16" fill="currentColor" />
-          </svg>
+        <div className="arena-shape-tile flex items-center justify-center bg-arena-acid motion-tile-3">
+          <AnswerMark shape="bolt" className="h-14 w-14 text-arena-ink sm:h-20 sm:w-20" />
         </div>
-        <div className="arena-shape-tile flex items-center justify-center bg-[#26890c] motion-tile-4">
-          <svg viewBox="0 0 48 48" className="h-14 w-14 text-white/95 sm:h-20 sm:w-20">
-            <rect x="8" y="8" width="32" height="32" fill="currentColor" />
-          </svg>
+        <div className="arena-shape-tile flex items-center justify-center bg-arena-court motion-tile-4">
+          <AnswerMark shape="chevron" className="h-14 w-14 text-white sm:h-20 sm:w-20" />
         </div>
       </div>
     </div>
@@ -167,28 +161,22 @@ export function AnswerButton({
   selected?: boolean;
   className?: string;
 }) {
-  const shapePath: Record<string, ReactNode> = {
-    triangle: <polygon points="16,3 30,28 2,28" fill="currentColor" />,
-    diamond: <polygon points="16,2 30,16 16,30 2,16" fill="currentColor" />,
-    circle: <circle cx="16" cy="16" r="12" fill="currentColor" />,
-    square: <rect x="4" y="4" width="24" height="24" fill="currentColor" />,
-  };
+  const bg = resolveAnswerColor(color);
 
   return (
     <button
       type="button"
       onClick={onClick}
       className={cn(
-        'arena-answer group relative flex min-h-[7.5rem] flex-col items-center justify-center gap-2 overflow-hidden p-4 text-center text-white transition active:translate-y-1 active:shadow-none',
+        'arena-answer group relative flex min-h-[7.5rem] flex-col items-center justify-center gap-2 overflow-hidden p-4 text-center transition active:translate-y-1 active:shadow-none',
+        answerUsesInk(bg) ? 'text-arena-ink' : 'text-white',
         selected && 'ring-4 ring-white ring-offset-2 ring-offset-transparent',
         className
       )}
-      style={{ backgroundColor: color }}
+      style={{ backgroundColor: bg }}
     >
       <span className="pointer-events-none absolute inset-x-0 top-0 h-1/3 bg-gradient-to-b from-white/25 to-transparent" />
-      <svg viewBox="0 0 32 32" className="h-9 w-9 shrink-0 drop-shadow-sm">
-        {shapePath[shape] || shapePath.square}
-      </svg>
+      <AnswerMark shape={shape} className={cn('h-9 w-9 shrink-0 drop-shadow-sm', answerMarkClass(bg))} />
       <span className="line-clamp-3 max-w-full px-1 font-display text-sm font-extrabold leading-snug sm:text-base">
         {label}
       </span>
@@ -196,7 +184,7 @@ export function AnswerButton({
   );
 }
 
-const CHIP_COLORS = ['#e11d2e', '#0a6b5c', '#1368ce', '#d89e00', '#26890c', '#0e7490'];
+const CHIP_COLORS = ['#e11d2e', '#4a2aff', '#0a6b5c', '#ff2d6a', '#0a0c10', '#155eef'];
 
 export function playerChipColor(name: string) {
   let hash = 0;

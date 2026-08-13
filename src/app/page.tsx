@@ -134,21 +134,16 @@ export default function LandingPage() {
   };
 
   return (
-    <div className="arena-noise relative min-h-screen overflow-hidden bg-arena-canvas">
+    <div className="arena-noise relative flex h-dvh flex-col overflow-hidden bg-arena-canvas">
       {/* Full-bleed ink plane — dominant visual edge */}
       <div className="pointer-events-none absolute inset-y-0 right-0 hidden w-[46%] bg-arena-ink lg:block">
         <div className="absolute inset-0 arena-grid opacity-30" />
         <div className="absolute -left-8 top-1/2 w-[min(28vw,380px)] -translate-y-1/2">
           <ArenaFloor />
         </div>
-        <div className="absolute bottom-10 left-10 right-10">
-          <p className="font-display text-xs font-bold uppercase tracking-[0.35em] text-arena-acid">
-            Live room · 80 players · zero accounts
-          </p>
-        </div>
       </div>
 
-      <header className="relative z-20 mx-auto flex max-w-6xl items-center justify-between px-6 py-6 lg:max-w-none lg:px-10">
+      <header className="relative z-20 mx-auto flex w-full max-w-6xl shrink-0 items-center justify-between px-6 py-4 lg:max-w-none lg:px-10">
         <BrandMark />
         {currentHost ? (
           <Link
@@ -169,8 +164,8 @@ export default function LandingPage() {
         )}
       </header>
 
-      <main className="relative z-20 grid min-h-[calc(100vh-5.5rem)] lg:grid-cols-12">
-        <section className="flex flex-col justify-center px-6 pb-10 pt-4 lg:col-span-6 lg:px-10 lg:pb-20 lg:pt-6 xl:col-span-5">
+      <main className="relative z-20 grid min-h-0 flex-1 grid-cols-1 lg:grid-cols-12">
+        <section className="flex flex-col justify-center px-6 py-4 lg:col-span-6 lg:px-10 lg:py-6 xl:col-span-5">
           <p className="motion-rise arena-chip mb-6 w-fit bg-arena-acid">Pin. Lock. Clash.</p>
           <h1 className="motion-rise font-display text-[clamp(3.25rem,8vw,5.75rem)] font-extrabold leading-[0.88] tracking-[-0.05em] text-arena-ink">
             Qlash
@@ -189,12 +184,12 @@ export default function LandingPage() {
           </div>
 
           {/* Mobile arena floor */}
-          <div className="motion-rise-delay-2 mx-auto mt-12 w-full max-w-xs lg:hidden">
+          <div className="motion-rise-delay-2 mx-auto mt-8 w-full max-w-xs lg:hidden">
             <ArenaFloor />
           </div>
         </section>
 
-        <section className="flex items-end px-6 pb-12 lg:col-span-6 lg:items-center lg:justify-end lg:px-10 lg:pb-20 xl:col-span-7">
+        <section className="flex items-center px-6 py-4 lg:col-span-6 lg:justify-end lg:px-10 lg:py-6 xl:col-span-7">
           <div className="motion-rise-delay w-full max-w-md lg:mr-[min(4vw,2rem)]">
             <div className="arena-panel overflow-hidden">
               <div className="flex border-b-2 border-arena-ink">
@@ -365,7 +360,7 @@ export default function LandingPage() {
         </section>
       </main>
 
-      <div className="relative z-30 overflow-hidden border-y-2 border-arena-ink bg-arena-acid py-3.5">
+      <div className="relative z-30 shrink-0 overflow-hidden border-t-2 border-arena-ink bg-arena-acid py-3">
         <div className="motion-slide-x flex w-max gap-12 whitespace-nowrap font-display text-sm font-extrabold uppercase tracking-[0.22em] text-arena-ink">
           {Array.from({ length: 2 }).map((_, i) => (
             <span key={i} className="flex gap-12 px-6">

@@ -18,7 +18,7 @@ export default async function PlayerSessionPage({ params }: PlayerSessionPagePro
   // Fetch session and associated quiz theme
   const { data: session, error } = await supabase
     .from('game_sessions')
-    .select('*, quizzes(theme, team_mode)')
+    .select('*, quizzes(team_mode)')
     .eq('id', sessionId)
     .single();
 
@@ -31,15 +31,13 @@ export default async function PlayerSessionPage({ params }: PlayerSessionPagePro
   }
 
   const sessionWithQuiz = session as unknown as {
-    quizzes: { theme: Record<string, unknown>; team_mode?: boolean } | null;
+    quizzes: { team_mode?: boolean } | null;
   };
-  const theme = sessionWithQuiz?.quizzes?.theme || null;
 
   return (
     <PlayerGameClient
       sessionId={sessionId}
       initialSessionStatus={session.status}
-      quizTheme={theme}
       teamMode={Boolean(sessionWithQuiz?.quizzes?.team_mode)}
     />
   );

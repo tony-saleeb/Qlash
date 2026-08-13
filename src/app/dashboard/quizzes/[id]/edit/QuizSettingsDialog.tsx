@@ -36,13 +36,11 @@ export default function QuizSettingsDialog({
   onOpenChange,
   title,
   description,
-  theme,
   randomizeQs,
   randomizeAs,
   teamMode,
   onTitleChange,
   onDescriptionChange,
-  onThemeChange,
   onRandomizeQsChange,
   onRandomizeAsChange,
   onTeamModeChange,
@@ -53,7 +51,7 @@ export default function QuizSettingsDialog({
         <DialogHeader>
           <DialogTitle className="text-xl font-bold text-arena-ink">Quiz Template Settings</DialogTitle>
           <DialogDescription className="text-arena-ink/55 text-xs">
-            Configure parameters that control layout pacing and theme visuals.
+            Title, teams, and shuffle. Live rooms always use the Qlash stage.
           </DialogDescription>
         </DialogHeader>
         <div className="space-y-4 my-4">
@@ -82,43 +80,9 @@ export default function QuizSettingsDialog({
             />
           </div>
 
-          {/* Custom Theme Color Settings */}
-          {(() => {
-            const themeBg = (theme.bgColor as string) || '#12151c';
-            const themeAccent = (theme.accentColor as string) || '#e11d2e';
-            return (
-              <div className="grid grid-cols-2 gap-4">
-                <div className="space-y-1.5">
-                  <Label className="text-arena-ink/55 text-[10px] uppercase font-bold tracking-wider">
-                    Bg Color
-                  </Label>
-                  <div className="flex gap-2 items-center">
-                    <input
-                      type="color"
-                      value={themeBg}
-                      onChange={(e) => onThemeChange({ ...theme, bgColor: e.target.value })}
-                      className="w-8 h-8 rounded-lg cursor-pointer bg-transparent border-0 outline-none"
-                    />
-                    <span className="font-mono text-xs text-arena-ink/55">{themeBg}</span>
-                  </div>
-                </div>
-                <div className="space-y-1.5">
-                  <Label className="text-arena-ink/55 text-[10px] uppercase font-bold tracking-wider">
-                    Accent Color
-                  </Label>
-                  <div className="flex gap-2 items-center">
-                    <input
-                      type="color"
-                      value={themeAccent}
-                      onChange={(e) => onThemeChange({ ...theme, accentColor: e.target.value })}
-                      className="w-8 h-8 rounded-lg cursor-pointer bg-transparent border-0 outline-none"
-                    />
-                    <span className="font-mono text-xs text-arena-ink/55">{themeAccent}</span>
-                  </div>
-                </div>
-              </div>
-            );
-          })()}
+          <p className="border-2 border-arena-ink/10 bg-white px-3 py-2.5 text-[11px] leading-relaxed text-arena-ink/60">
+            Live host and player screens use the Qlash stage — ink, acid, and signal. Answer tiles keep their slash / ring / bolt / chevron marks.
+          </p>
 
           {/* Settings Toggles */}
           <div className="space-y-3.5 pt-2 border-t border-arena-line">

@@ -1,9 +1,13 @@
+import { ANSWER_MARKS } from '@/lib/game/marks';
+
+export type AnswerShape = 'slash' | 'qring' | 'bolt' | 'chevron' | 'spark' | 'bars';
+
 export interface AnswerOption {
   id: string;
   text: string;
   is_correct: boolean;
   color: string;
-  shape: 'triangle' | 'diamond' | 'circle' | 'square' | 'star' | 'hexagon';
+  shape: AnswerShape | string;
 }
 
 export interface Question {
@@ -32,15 +36,14 @@ export interface QuizEditorClientProps {
   initialQuestions: Question[];
 }
 
-// Pre-defined shapes and colors à la Kahoot
-export const DEFAULT_ANSWERS: AnswerOption[] = [
-  { id: '1', text: '', is_correct: false, color: '#e21b3c', shape: 'triangle' },
-  { id: '2', text: '', is_correct: false, color: '#1368ce', shape: 'diamond' },
-  { id: '3', text: '', is_correct: false, color: '#d89e00', shape: 'circle' },
-  { id: '4', text: '', is_correct: false, color: '#26890c', shape: 'square' },
-  { id: '5', text: '', is_correct: false, color: '#a855f7', shape: 'star' },
-  { id: '6', text: '', is_correct: false, color: '#f97316', shape: 'hexagon' },
-];
+// Qlash marks — slash, Q-ring, bolt, chevron, spark, bars
+export const DEFAULT_ANSWERS: AnswerOption[] = ANSWER_MARKS.map((mark, i) => ({
+  id: String(i + 1),
+  text: '',
+  is_correct: false,
+  color: mark.color,
+  shape: mark.id,
+}));
 
 export function createDefaultQuestion(
   type: 'mcq' | 'true_false' | 'multi_select' | 'type_answer' | 'poll'
@@ -51,14 +54,14 @@ export function createDefaultQuestion(
     answers = DEFAULT_ANSWERS.slice(0, 4).map((ans) => ({ ...ans }));
   } else if (type === 'true_false') {
     answers = [
-      { id: '1', text: 'True', is_correct: false, color: '#e21b3c', shape: 'triangle' },
-      { id: '2', text: 'False', is_correct: false, color: '#1368ce', shape: 'diamond' },
+      { id: '1', text: 'True', is_correct: false, color: ANSWER_MARKS[0].color, shape: ANSWER_MARKS[0].id },
+      { id: '2', text: 'False', is_correct: false, color: ANSWER_MARKS[1].color, shape: ANSWER_MARKS[1].id },
     ];
   } else if (type === 'type_answer') {
     // Type answer doesn't display choices. Players type input which is fuzzy checked.
     // We keep a single placeholder answer where correct text answer options are defined.
     answers = [
-      { id: '1', text: '', is_correct: true, color: '#6366f1', shape: 'square' },
+      { id: '1', text: '', is_correct: true, color: ANSWER_MARKS[1].color, shape: ANSWER_MARKS[1].id },
     ];
   }
 
@@ -117,13 +120,13 @@ export function parseCsvQuestions(csvText: string): Question[] {
     let answers: AnswerOption[] = [];
 
     if (type === 'type_answer') {
-      answers = [{ id: '1', text: gradingField, is_correct: true, color: '#6366f1', shape: 'square' }];
+      answers = [{ id: '1', text: gradingField, is_correct: true, color: ANSWER_MARKS[1].color, shape: ANSWER_MARKS[1].id }];
     } else if (type === 'true_false') {
       const correctVal = gradingField.trim().toLowerCase();
       const isTrueCorrect = correctVal === 'true' || correctVal === '1' || correctVal === 't';
       answers = [
-        { id: '1', text: 'True', is_correct: isTrueCorrect, color: '#e21b3c', shape: 'triangle' },
-        { id: '2', text: 'False', is_correct: !isTrueCorrect, color: '#1368ce', shape: 'diamond' },
+        { id: '1', text: 'True', is_correct: isTrueCorrect, color: ANSWER_MARKS[0].color, shape: ANSWER_MARKS[0].id },
+        { id: '2', text: 'False', is_correct: !isTrueCorrect, color: ANSWER_MARKS[1].color, shape: ANSWER_MARKS[1].id },
       ];
     } else if (type === 'poll') {
       answers = choices.slice(0, 6).map((c, idx) => ({

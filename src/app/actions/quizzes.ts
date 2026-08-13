@@ -2,6 +2,8 @@
 
 import { createClient } from '@/lib/supabase/server';
 import { revalidatePath } from 'next/cache';
+import { ANSWER_MARKS } from '@/lib/game/marks';
+import { DEFAULT_QUIZ_THEME } from '@/lib/game/theme';
 
 interface AnswerOptionInput {
   id: string;
@@ -72,13 +74,7 @@ export async function createQuiz(title: string, description: string = '') {
         host_id: user.id,
         title,
         description,
-        theme: {
-          bgColor: '#0f172a',
-          textColor: '#ffffff',
-          primaryColor: '#6366f1',
-          accentColor: '#ec4899',
-          fontFamily: 'Inter',
-        },
+        theme: DEFAULT_QUIZ_THEME,
       })
       .select()
       .single();
@@ -312,22 +308,15 @@ export async function createTemplateQuiz() {
         host_id: user.id,
         title: 'أسئلة معلومات عامة',
         description: '30 سؤال متنوع – ديني، رياضي، علمي، جغرافي',
-        theme: {
-          bgColor: '#0f172a',
-          textColor: '#ffffff',
-          primaryColor: '#6366f1',
-          accentColor: '#ec4899',
-          fontFamily: 'Inter',
-        },
+        theme: DEFAULT_QUIZ_THEME,
       })
       .select()
       .single();
 
     if (quizError || !quiz) throw quizError;
 
-    // Kahoot brand colors & shapes
-    const C = ['#e21b3c', '#1368ce', '#d89e00', '#26890c', '#a855f7'];
-    const S = ['triangle', 'diamond', 'circle', 'square', 'star'];
+    const C = ANSWER_MARKS.map((m) => m.color);
+    const S = ANSWER_MARKS.map((m) => m.id);
 
     type TQ = {
       prompt: string;

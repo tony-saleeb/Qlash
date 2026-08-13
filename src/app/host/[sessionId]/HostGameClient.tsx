@@ -25,6 +25,8 @@ import confetti from 'canvas-confetti';
 import QRCode from 'qrcode';
 import { playJoinSound, playTickSound, playRevealSound, playFanfareSound } from '@/lib/sounds';
 import { BrandMark, PinDisplay, StageBadge, playerChipColor } from '@/components/brand/BrandMark';
+import { GameShell, LiveChip, StatBox } from '@/components/brand/GameShell';
+import { QLASH_CONFETTI } from '@/lib/game/theme';
 import { cn } from '@/lib/utils';
 import {
   Dialog,
@@ -36,7 +38,6 @@ import {
 } from '@/components/ui/dialog';
 import { useSessionChannel } from '@/hooks/useSessionChannel';
 import {
-  SHAPES_MAP,
   buildQuestionStartPayload,
   sanitizeAnswers,
   type Player,
@@ -48,9 +49,14 @@ import { maybeShuffle } from '@/lib/game/shuffle';
 import { aggregateTeamScores } from '@/lib/game/teams';
 import { MAX_PLAYERS_PER_SESSION } from '@/lib/game/constants';
 import { remainingSeconds } from '@/lib/game/clock';
+import { answerUsesInk, resolveAnswerColor } from '@/lib/game/marks';
+import { AnswerSwatch } from '@/components/brand/AnswerMark';
 
 const hostCtrl =
   'h-10 gap-1.5 rounded-none border-2 border-white/30 bg-white/10 px-3.5 font-display text-[11px] font-extrabold uppercase tracking-[0.14em] text-white shadow-none hover:border-arena-acid hover:bg-arena-acid hover:text-arena-ink aria-expanded:border-arena-acid aria-expanded:bg-arena-acid aria-expanded:text-arena-ink [&_svg]:text-current';
+
+const hostCta =
+  'h-10 gap-1.5 rounded-none bg-arena-signal px-5 font-display text-[11px] font-extrabold uppercase tracking-[0.14em] text-white shadow-[4px_4px_0_rgba(0,0,0,0.35)] hover:brightness-110';
 
 interface HostGameClientProps {
   initialSession: GameSessionRow;
@@ -155,8 +161,6 @@ export default function HostGameClient({
   const timerRef = useRef<NodeJS.Timeout | null>(null);
   const lastTickSecondRef = useRef<number | null>(null);
   const revealingRef = useRef(false);
-
-  const shapesMap = SHAPES_MAP;
 
   // Debounced activity feed to avoid UI thrash at ~80 players
   const addActivityEntry = useCallback((type: string, message: string) => {
@@ -372,14 +376,14 @@ export default function HostGameClient({
           angle: 60,
           spread: 55,
           origin: { x: 0 },
-          colors: ['#a855f7', '#ec4899', '#3b82f6'],
+          colors: [...QLASH_CONFETTI],
         });
         confetti({
           particleCount: 5,
           angle: 120,
           spread: 55,
           origin: { x: 1 },
-          colors: ['#a855f7', '#ec4899', '#3b82f6'],
+          colors: [...QLASH_CONFETTI],
         });
 
         if (Date.now() < end) {
@@ -662,18 +666,12 @@ export default function HostGameClient({
   const connectedCount = players.filter((p) => p.connected).length;
   const isLastQuestion = activeQuestionIndex === playQuestions.length - 1;
 
-  // BACKGROUND THEME STYLE EXTRACTOR
-  const customStyles = {
-    backgroundColor: (quiz.theme?.bgColor as string) || '#12151c',
-    color: (quiz.theme?.textColor as string) || '#f4f6f8',
-  };
-
   // ==========================================
   // RENDER: LOBBY STATE
   // ==========================================
   if (session.status === 'lobby') {
     return (
-      <div className="arena-stage arena-noise relative flex min-h-screen w-full flex-col justify-between overflow-hidden font-sans">
+      <div className="arena-stage arena-noise relative flex min-h-dvh w-full flex-col justify-between overflow-hidden font-sans">
         <div className="pointer-events-none absolute inset-0 arena-grid opacity-[0.18]" />
         <div className="pointer-events-none absolute -right-16 top-16 h-48 w-48 rotate-[14deg] bg-arena-acid motion-breathe" />
         <div className="pointer-events-none absolute bottom-28 -left-6 h-24 w-24 -rotate-6 bg-arena-signal" />
@@ -814,17 +812,15 @@ export default function HostGameClient({
   // ==========================================
   if (session.status === 'question_active' || session.status === 'question_paused') {
     if (!activeQuestion) return null;
+    const isPaused = session.status === 'question_paused';
     return (
-      <div
-        className="relative min-h-screen w-full flex flex-col justify-between overflow-hidden font-sans p-6"
-        style={customStyles}
-      >
+      <GameShell>
         {/* Title bar / Index + Question Jumper */}
-        <div className="flex items-center justify-between gap-4 z-10">
-          <div className="flex items-center gap-2">
-            <span className="inline-flex h-10 items-center border-2 border-arena-signal bg-arena-signal px-4 font-display text-[11px] font-extrabold uppercase tracking-[0.14em] text-white">
+        <div className="z-10 flex items-center justify-between gap-4">
+          <div className="flex flex-wrap items-center gap-2">
+            <LiveChip>
               Question {activeQuestionIndex + 1} of {playQuestions.length}
-            </span>
+            </LiveChip>
 
             {/* Question Jumper Dropdown */}
             <div className="relative">
@@ -844,55 +840,46 @@ export default function HostGameClient({
                       key={q.id}
                       type="button"
                       onClick={() => handleJumpToQuestion(idx)}
-                      className={`w-full text-left px-3 py-2 rounded-lg text-xs font-semibold transition-colors ${
+                      className={`w-full px-3 py-2 text-left text-xs font-semibold transition-colors ${
                         idx === activeQuestionIndex
                           ? 'bg-arena-signal text-white cursor-default'
                           : 'text-white/80 hover:bg-white/10 hover:text-white'
                       }`}
                     >
                       <span className="font-black">Q{idx + 1}</span>{' '}
-                      <span className="text-white/60 truncate">{q.prompt.slice(0, 30)}{q.prompt.length > 30 ? '...' : ''}</span>
+                      <span className="truncate text-white/60">{q.prompt.slice(0, 30)}{q.prompt.length > 30 ? '...' : ''}</span>
                     </button>
                   ))}
                 </div>
               )}
             </div>
 
-            {/* Multiplier Badge */}
             {isMultiplierActive && (
-              <span className="px-2.5 py-1 rounded-lg bg-amber-500 text-arena-ink text-[10px] font-black uppercase tracking-wider animate-pulse flex items-center gap-1">
-                <Zap className="w-3 h-3" /> 2x Points
+              <span className="inline-flex items-center gap-1 bg-arena-acid px-2.5 py-1 text-[10px] font-black uppercase tracking-wider text-arena-ink motion-pulse-soft">
+                <Zap className="h-3 w-3" /> 2x Points
               </span>
             )}
           </div>
-          <span className="text-white/60 font-semibold text-xs">
-            Qlash Live
-          </span>
+          <BrandMark tone="light" size="sm" wordmark={false} />
         </div>
 
-        {/* Prompt Question */}
-        <div className="my-6 text-center max-w-4xl mx-auto z-10">
-          <h1 className="text-3xl sm:text-4xl lg:text-5xl font-black tracking-tight leading-tight text-white">
+        <div className="z-10 mx-auto my-6 max-w-4xl text-center">
+          <h1 className="font-display text-3xl font-extrabold leading-tight tracking-tight text-white sm:text-4xl lg:text-5xl">
             {activeQuestion.prompt}
           </h1>
         </div>
 
-        {/* Active Question Workspace (Timer / Submissions count / Media) */}
-        <div className="grid md:grid-cols-12 gap-8 items-center justify-center flex-1 max-w-5xl mx-auto w-full z-10">
-          {/* Left: Timer */}
-          <div className="md:col-span-3 flex flex-col items-center justify-center text-center order-2 md:order-1">
-            <div className={`w-32 h-32 rounded-full border-8 ${session.status === 'question_paused' ? 'border-amber-500/40 animate-pulse' : 'border-arena-acid/20'} flex flex-col items-center justify-center bg-arena-stage/60 shadow-2xl relative`}>
-              <span className={`text-4xl font-black ${timeLeft <= 5 && session.status !== 'question_paused' ? 'text-rose-500 animate-ping' : 'text-white'}`}>
-                {timeLeft}
-              </span>
-              <span className="text-[10px] font-bold text-white/50 uppercase tracking-widest mt-0.5">
-                {session.status === 'question_paused' ? 'Paused' : 'Seconds'}
-              </span>
-            </div>
+        <div className="z-10 mx-auto grid w-full max-w-5xl flex-1 items-center justify-center gap-8 md:grid-cols-12">
+          <div className="order-2 flex flex-col items-center justify-center text-center md:order-1 md:col-span-3">
+            <StatBox
+              value={timeLeft}
+              label={isPaused ? 'Paused' : 'Seconds'}
+              tone={timeLeft <= 5 && !isPaused ? 'signal' : 'acid'}
+              pulse={isPaused || timeLeft <= 5}
+            />
           </div>
 
-          {/* Center: Image / Video Media */}
-          <div className="md:col-span-6 flex justify-center items-center h-64 sm:h-80 w-full order-1 md:order-2">
+          <div className="order-1 flex h-64 w-full items-center justify-center sm:h-80 md:order-2 md:col-span-6">
             {activeQuestion.media_url ? (
               activeQuestion.media_type === 'video' ? (
                 <video
@@ -901,38 +888,29 @@ export default function HostGameClient({
                   loop
                   muted
                   playsInline
-                  className="max-h-full max-w-full rounded-2xl shadow-2xl object-contain border border-white/15"
+                  className="max-h-full max-w-full border-2 border-arena-ink object-contain shadow-[8px_8px_0_rgba(0,0,0,0.35)]"
                 />
               ) : (
                 <img
                   // eslint-disable-next-line @next/next/no-img-element
                   src={activeQuestion.media_url}
                   alt="Question Media"
-                  className="max-h-full max-w-full rounded-2xl shadow-2xl object-contain border border-white/15"
+                  className="max-h-full max-w-full border-2 border-arena-ink object-contain shadow-[8px_8px_0_rgba(0,0,0,0.35)]"
                 />
               )
             ) : (
-              // Decorative animated icon placeholder if no media
-              <div className="p-8 bg-white/5 border border-white/15 rounded-3xl w-full h-full flex flex-col items-center justify-center text-center">
-                <Flame className="w-16 h-16 text-arena-acid/40 animate-pulse mb-3" />
-                <span className="text-xs text-white/50 font-bold uppercase tracking-wider">
+              <div className="flex h-full w-full flex-col items-center justify-center border-2 border-white/15 bg-white/[0.04] p-8 text-center">
+                <Flame className="mb-3 h-16 w-16 text-arena-acid/50 motion-pulse-soft" />
+                <span className="font-display text-xs font-extrabold uppercase tracking-[0.22em] text-white/50">
                   Qlash Showdown
                 </span>
               </div>
             )}
           </div>
 
-          {/* Right: Submissions counter */}
-          <div className="md:col-span-3 flex flex-col items-center justify-center text-center order-3">
-            <div className="w-32 h-32 rounded-full border-8 border-emerald-500/20 flex flex-col items-center justify-center bg-arena-stage/60 shadow-2xl">
-              <span className="text-4xl font-black text-emerald-400">
-                {submissionsCount}
-              </span>
-              <span className="text-[10px] font-bold text-white/50 uppercase tracking-widest mt-0.5">
-                Answers
-              </span>
-            </div>
-            <span className="text-xs text-white/60 mt-2 font-medium">
+          <div className="order-3 flex flex-col items-center justify-center text-center md:col-span-3">
+            <StatBox value={submissionsCount} label="Answers" tone="court" />
+            <span className="mt-2 text-xs font-medium text-white/55">
               out of {players.length} players
             </span>
           </div>
@@ -943,12 +921,17 @@ export default function HostGameClient({
           {activeQuestion.answers.map((ans) => (
             <div
               key={ans.id}
-              className="flex items-center gap-3.5 border border-white/10 p-4 rounded-2xl select-none shadow-lg text-white font-bold transition-all text-lg"
-              style={{ backgroundColor: ans.color }}
+              className={`flex items-center gap-3.5 border-2 border-arena-ink p-4 select-none font-bold transition-all text-lg ${
+                answerUsesInk(ans.color) ? 'text-arena-ink' : 'text-white'
+              }`}
+              style={{ backgroundColor: resolveAnswerColor(ans.color) }}
             >
-              <div className="w-10 h-10 rounded-xl bg-white/20 flex items-center justify-center text-xl font-black">
-                {shapesMap[ans.shape] || '■'}
-              </div>
+              <AnswerSwatch
+                shape={ans.shape}
+                color={ans.color}
+                className="h-10 w-10"
+                markClassName="h-5 w-5"
+              />
               <span className="truncate">{ans.text}</span>
             </div>
           ))}
@@ -969,24 +952,24 @@ export default function HostGameClient({
                   </Button>
                 }
               />
-              <DialogContent className="bg-arena-stage border-white/10 text-white max-w-md rounded-2xl shadow-2xl">
+              <DialogContent className="max-w-md rounded-none border-2 border-white/20 bg-arena-stage text-white shadow-[8px_8px_0_rgba(0,0,0,0.45)]">
                 <DialogHeader>
-                  <DialogTitle className="text-xl font-bold flex items-center gap-2 text-white">
-                    <Users className="w-5 h-5 text-arena-acid" /> Manage Session Players
+                  <DialogTitle className="flex items-center gap-2 text-xl font-bold text-white">
+                    <Users className="h-5 w-5 text-arena-acid" /> Manage Session Players
                   </DialogTitle>
-                  <DialogDescription className="text-white/50 text-xs">
+                  <DialogDescription className="text-xs text-white/50">
                     Kick players who are idle, names are inappropriate, or who have disconnected.
                   </DialogDescription>
                 </DialogHeader>
-                <div className="max-h-[50vh] overflow-y-auto space-y-2 mt-4 pr-1">
+                <div className="mt-4 max-h-[50vh] space-y-2 overflow-y-auto pr-1">
                   {players.length === 0 ? (
-                    <p className="text-white/50 text-sm text-center py-4">No players joined yet.</p>
+                    <p className="py-4 text-center text-sm text-white/50">No players joined yet.</p>
                   ) : (
                     players.map((p) => (
-                      <div key={p.id} className="flex items-center justify-between p-3 rounded-xl bg-white/10 border border-white/15">
-                        <div className="flex items-center gap-2 min-w-0">
-                          <span className={`w-2 h-2 rounded-full ${p.connected ? 'bg-emerald-500 animate-pulse' : 'bg-rose-500'}`} />
-                          <span className="font-bold text-sm truncate max-w-[180px]">{p.nickname}</span>
+                      <div key={p.id} className="flex items-center justify-between border border-white/15 bg-white/10 p-3">
+                        <div className="flex min-w-0 items-center gap-2">
+                          <span className={`h-2 w-2 ${p.connected ? 'bg-arena-acid' : 'bg-arena-signal'}`} />
+                          <span className="max-w-[180px] truncate text-sm font-bold">{p.nickname}</span>
                           <span className="text-[10px] text-white/50">({p.score} pts)</span>
                         </div>
                         <Button
@@ -994,9 +977,9 @@ export default function HostGameClient({
                           variant="destructive"
                           disabled={!!kickingId}
                           onClick={() => handleKickPlayer(p.id, p.nickname)}
-                          className="h-8 rounded-lg text-xs bg-rose-600 hover:bg-rose-500 text-white px-3 flex items-center gap-1 font-bold"
+                          className="flex h-8 items-center gap-1 rounded-none bg-arena-signal px-3 text-xs font-bold text-white hover:brightness-110"
                         >
-                          <UserX className="w-3.5 h-3.5" /> Kick
+                          <UserX className="h-3.5 w-3.5" /> Kick
                         </Button>
                       </div>
                     ))
@@ -1014,30 +997,30 @@ export default function HostGameClient({
                   </Button>
                 }
               />
-              <DialogContent className="bg-arena-stage border-white/10 text-white max-w-lg rounded-2xl shadow-2xl">
+              <DialogContent className="max-w-lg rounded-none border-2 border-white/20 bg-arena-stage text-white shadow-[8px_8px_0_rgba(0,0,0,0.45)]">
                 <DialogHeader>
-                  <DialogTitle className="text-xl font-bold flex items-center gap-2 text-white">
-                    <Edit3 className="w-5 h-5 text-arena-acid" /> Live Question Editor
+                  <DialogTitle className="flex items-center gap-2 text-xl font-bold text-white">
+                    <Edit3 className="h-5 w-5 text-arena-acid" /> Live Question Editor
                   </DialogTitle>
-                  <DialogDescription className="text-white/50 text-xs">
+                  <DialogDescription className="text-xs text-white/50">
                     Edit the current question prompt and answers live. Changes broadcast instantly to all players.
                   </DialogDescription>
                 </DialogHeader>
-                <div className="space-y-4 mt-4">
+                <div className="mt-4 space-y-4">
                   <div className="space-y-1.5">
-                    <label className="text-white/60 font-extrabold text-[10px] uppercase tracking-wider">Question Prompt</label>
+                    <label className="text-[10px] font-extrabold uppercase tracking-wider text-white/60">Question Prompt</label>
                     <Textarea
                       value={editPrompt}
                       onChange={(e) => setEditPrompt(e.target.value)}
-                      className="bg-white/10 border-white/15 text-white rounded-xl min-h-[80px] focus-visible:ring-fuchsia-500"
+                      className="min-h-[80px] rounded-none border-white/15 bg-white/10 text-white focus-visible:ring-arena-acid"
                       placeholder="Enter the question..."
                     />
                   </div>
                   <div className="space-y-2">
-                    <label className="text-white/60 font-extrabold text-[10px] uppercase tracking-wider">Answer Options</label>
+                    <label className="text-[10px] font-extrabold uppercase tracking-wider text-white/60">Answer Options</label>
                     {editAnswers.map((ans, idx) => (
                       <div key={ans.id} className="flex items-center gap-2">
-                        <span className="text-[10px] font-black text-white/50 w-5">{idx + 1}.</span>
+                        <span className="w-5 text-[10px] font-black text-white/50">{idx + 1}.</span>
                         <Input
                           value={ans.text}
                           onChange={(e) => {
@@ -1045,14 +1028,14 @@ export default function HostGameClient({
                             updated[idx] = { ...updated[idx], text: e.target.value };
                             setEditAnswers(updated);
                           }}
-                          className="bg-white/10 border-white/15 text-white rounded-lg h-9 text-sm focus-visible:ring-fuchsia-500"
+                          className="h-9 rounded-none border-white/15 bg-white/10 text-sm text-white focus-visible:ring-arena-acid"
                         />
                       </div>
                     ))}
                   </div>
                   <Button
                     onClick={handleSaveQuestionEdit}
-                    className="w-full bg-gradient-to-r from-fuchsia-600 to-violet-600 hover:from-fuchsia-500 hover:to-violet-500 text-white font-bold h-10 rounded-xl text-sm shadow-lg"
+                    className="h-10 w-full rounded-none bg-arena-acid text-sm font-bold text-arena-ink hover:brightness-105"
                   >
                     Save & Broadcast Changes
                   </Button>
@@ -1082,28 +1065,28 @@ export default function HostGameClient({
                   </Button>
                 }
               />
-              <DialogContent className="bg-arena-stage border-white/10 text-white max-w-sm rounded-2xl shadow-2xl">
+              <DialogContent className="max-w-sm rounded-none border-2 border-white/20 bg-arena-stage text-white shadow-[8px_8px_0_rgba(0,0,0,0.45)]">
                 <DialogHeader>
-                  <DialogTitle className="text-lg font-bold flex items-center gap-2 text-white">
-                    <MessageSquare className="w-5 h-5 text-sky-500" /> Broadcast Announcement
+                  <DialogTitle className="flex items-center gap-2 text-lg font-bold text-white">
+                    <MessageSquare className="h-5 w-5 text-arena-acid" /> Broadcast Announcement
                   </DialogTitle>
-                  <DialogDescription className="text-white/50 text-xs">
+                  <DialogDescription className="text-xs text-white/50">
                     Send a message to all player screens instantly.
                   </DialogDescription>
                 </DialogHeader>
-                <div className="space-y-3 mt-3">
+                <div className="mt-3 space-y-3">
                   <Input
                     value={announcementText}
                     onChange={(e) => setAnnouncementText(e.target.value)}
                     placeholder="Type your message..."
                     maxLength={120}
-                    className="bg-white/10 border-white/15 text-white rounded-xl h-11 focus-visible:ring-sky-500"
+                    className="h-11 rounded-none border-white/15 bg-white/10 text-white focus-visible:ring-arena-acid"
                   />
                   <Button
                     onClick={handleSendAnnouncement}
-                    className="w-full bg-sky-600 hover:bg-sky-500 text-white font-bold h-10 rounded-xl text-sm shadow-lg flex items-center justify-center gap-2"
+                    className="flex h-10 w-full items-center justify-center gap-2 rounded-none bg-arena-signal text-sm font-bold text-white hover:brightness-110"
                   >
-                    <Send className="w-4 h-4" /> Send to All Players
+                    <Send className="h-4 w-4" /> Send to All Players
                   </Button>
                 </div>
               </DialogContent>
@@ -1127,7 +1110,7 @@ export default function HostGameClient({
             </Button>
 
             <Button onClick={handleTogglePause} variant="ghost" className={hostCtrl}>
-              {session.status === 'question_paused' ? (
+              {isPaused ? (
                 <>
                   <Play className="h-4 w-4 fill-current" /> Resume
                 </>
@@ -1149,30 +1132,30 @@ export default function HostGameClient({
 
         {/* Activity Feed Panel (collapsible) */}
         {isActivityOpen && (
-          <div className="fixed top-0 right-0 h-full w-80 bg-arena-stage/95 border-l border-white/15 backdrop-blur-xl z-50 flex flex-col shadow-2xl animate-fade-in">
-            <div className="flex items-center justify-between p-4 border-b border-white/15">
-              <h3 className="text-sm font-bold text-white flex items-center gap-1.5">
-                <Activity className="w-4 h-4 text-emerald-400" /> Activity Feed
+          <div className="fixed right-0 top-0 z-50 flex h-full w-80 flex-col border-l-2 border-white/15 bg-arena-stage/95 shadow-[8px_0_0_rgba(0,0,0,0.35)] animate-fade-in">
+            <div className="flex items-center justify-between border-b border-white/15 p-4">
+              <h3 className="flex items-center gap-1.5 text-sm font-bold text-white">
+                <Activity className="h-4 w-4 text-arena-acid" /> Activity Feed
               </h3>
               <button type="button" onClick={() => setIsActivityOpen(false)} className="text-white/50 hover:text-white">
-                <X className="w-4 h-4" />
+                <X className="h-4 w-4" />
               </button>
             </div>
-            <div className="flex-1 overflow-y-auto p-3 space-y-2">
+            <div className="flex-1 space-y-2 overflow-y-auto p-3">
               {activityFeed.length === 0 ? (
-                <p className="text-white/50 text-xs text-center py-8">No activity yet.</p>
+                <p className="py-8 text-center text-xs text-white/50">No activity yet.</p>
               ) : (
                 activityFeed.map((entry) => (
-                  <div key={entry.id} className="flex items-start gap-2 p-2.5 bg-white/5 border border-white/15 rounded-xl">
-                    <span className={`w-1.5 h-1.5 rounded-full mt-1.5 shrink-0 ${
-                      entry.type === 'join' ? 'bg-emerald-500' :
-                      entry.type === 'kick' ? 'bg-rose-500' :
-                      entry.type === 'answer' ? 'bg-sky-500' :
-                      entry.type === 'multiplier' ? 'bg-amber-500' :
-                      entry.type === 'edit' ? 'bg-fuchsia-500' :
+                  <div key={entry.id} className="flex items-start gap-2 border border-white/15 bg-white/5 p-2.5">
+                    <span className={`mt-1.5 h-1.5 w-1.5 shrink-0 ${
+                      entry.type === 'join' ? 'bg-arena-acid' :
+                      entry.type === 'kick' ? 'bg-arena-signal' :
+                      entry.type === 'answer' ? 'bg-[#4a2aff]' :
+                      entry.type === 'multiplier' ? 'bg-arena-acid' :
+                      entry.type === 'edit' ? 'bg-arena-court' :
                       entry.type === 'jump' ? 'bg-arena-signal' :
-                      entry.type === 'announcement' ? 'bg-sky-500' :
-                      'bg-slate-500'
+                      entry.type === 'announcement' ? 'bg-arena-acid' :
+                      'bg-white/40'
                     }`} />
                     <div className="min-w-0">
                       <p className="text-xs text-white/80 font-medium leading-snug">{entry.message}</p>
@@ -1186,7 +1169,7 @@ export default function HostGameClient({
             </div>
           </div>
         )}
-      </div>
+      </GameShell>
     );
   }
 
@@ -1200,104 +1183,94 @@ export default function HostGameClient({
       : 0;
 
     return (
-      <div
-        className="relative min-h-screen w-full flex flex-col justify-between overflow-hidden font-sans p-6"
-        style={customStyles}
-      >
-        <div className="flex items-center justify-between gap-4 z-10">
-          <span className="text-sm font-black bg-emerald-600 px-3 py-1.5 rounded-xl uppercase tracking-wider text-white">
-            Answers Revealed
-          </span>
-          <span className="text-white/60 font-semibold text-xs">
-            Qlash Live
-          </span>
+      <GameShell>
+        <div className="z-10 flex items-center justify-between gap-4">
+          <LiveChip tone="acid">Answers revealed</LiveChip>
+          <BrandMark tone="light" size="sm" wordmark={false} />
         </div>
 
-        <div className="my-6 text-center max-w-4xl mx-auto z-10">
-          <h1 className="text-3xl font-black leading-tight text-white">
+        <div className="z-10 mx-auto my-6 max-w-4xl text-center">
+          <h1 className="font-display text-3xl font-extrabold leading-tight text-white">
             {activeQuestion.prompt}
           </h1>
         </div>
 
-        {/* Chart View */}
-        <div className="flex-1 max-w-4xl mx-auto w-full flex flex-col items-center justify-center gap-8 z-10 py-6">
-          <h3 className="text-xs uppercase font-extrabold tracking-widest text-white/50">
-            Player Answer Choices Distribution
+        <div className="z-10 mx-auto flex w-full max-w-4xl flex-1 flex-col items-center justify-center gap-8 py-6">
+          <h3 className="text-xs font-extrabold uppercase tracking-[0.22em] text-white/50">
+            How the room voted
           </h3>
 
-          {/* Vertical Bar Chart */}
-          <div className="flex items-end justify-center gap-6 h-64 sm:h-80 w-full max-w-2xl px-6 border-b border-white/10 pb-1">
+          <div className="flex h-64 w-full max-w-2xl items-end justify-center gap-6 border-b-2 border-white/15 px-6 pb-1 sm:h-80">
             {activeQuestion.answers.map((ans) => {
               const votes = revealData?.optionCounts[ans.id] || 0;
               const ratio = totalVotes > 0 ? votes / totalVotes : 0;
-              const heightPercent = `${Math.max(5, ratio * 90)}%`; // minimum 5% height to show empty bars
+              const heightPercent = `${Math.max(5, ratio * 90)}%`;
 
               return (
-                <div key={ans.id} className="flex-1 flex flex-col items-center gap-2 group h-full justify-end">
-                  <span className="font-mono text-sm font-black text-white bg-white/10 px-2 py-0.5 rounded border border-white/15">
+                <div key={ans.id} className="group flex h-full flex-1 flex-col items-center justify-end gap-2">
+                  <span className="border border-white/20 bg-black/40 px-2 py-0.5 font-mono text-sm font-black text-white">
                     {votes}
                   </span>
                   <div
-                    className="w-full rounded-t-xl transition-all duration-500 shadow-lg relative flex items-center justify-center"
+                    className="relative flex w-full items-center justify-center shadow-[4px_0_0_rgba(0,0,0,0.25)] transition-all duration-500"
                     style={{
                       height: heightPercent,
-                      backgroundColor: ans.color,
+                      backgroundColor: resolveAnswerColor(ans.color),
                     }}
                   >
-                    {/* Visual checkmark inside correct choice bars */}
                     {ans.is_correct && (
-                      <CheckCircle2 className="w-6 h-6 text-white bg-emerald-500 rounded-full border-2 border-white absolute top-[-12px]" />
+                      <CheckCircle2 className="absolute top-[-12px] h-6 w-6 border-2 border-arena-ink bg-arena-acid text-arena-ink" />
                     )}
                   </div>
-                  <div
-                    className="w-8 h-8 rounded-lg flex items-center justify-center text-white text-xs font-black"
-                    style={{ backgroundColor: ans.color }}
-                  >
-                    {shapesMap[ans.shape] || '■'}
-                  </div>
+                  <AnswerSwatch
+                    shape={ans.shape}
+                    color={ans.color}
+                    className="h-8 w-8"
+                    markClassName="h-4 w-4"
+                  />
                 </div>
               );
             })}
           </div>
         </div>
 
-        {/* Choices grid highlighting correct answer */}
-        <div className="grid sm:grid-cols-2 gap-4 max-w-5xl w-full mx-auto mt-6 z-10">
+        <div className="z-10 mx-auto mt-6 grid w-full max-w-5xl gap-4 sm:grid-cols-2">
           {activeQuestion.answers.map((ans) => {
             const isCorrect = ans.is_correct;
             return (
               <div
                 key={ans.id}
-                className={`flex items-center gap-3.5 border p-4 rounded-2xl select-none shadow-lg text-white font-bold text-lg transition-all ${
+                className={`flex select-none items-center gap-3.5 border-2 p-4 text-lg font-bold transition-all ${
+                  answerUsesInk(ans.color) ? 'text-arena-ink' : 'text-white'
+                } ${
                   isCorrect
-                    ? 'border-emerald-500 ring-4 ring-emerald-500/20 scale-100'
-                    : 'opacity-30 border-white/10'
+                    ? 'border-arena-acid ring-4 ring-arena-acid/30'
+                    : 'border-arena-ink opacity-30'
                 }`}
-                style={{ backgroundColor: ans.color }}
+                style={{ backgroundColor: resolveAnswerColor(ans.color) }}
               >
-                <div className="w-10 h-10 rounded-xl bg-white/20 flex items-center justify-center text-xl font-black">
-                  {shapesMap[ans.shape] || '■'}
-                </div>
-                <span className="truncate flex-1">{ans.text}</span>
-                {isCorrect && <CheckCircle2 className="w-6 h-6 text-emerald-300" />}
+                <AnswerSwatch
+                  shape={ans.shape}
+                  color={ans.color}
+                  className="h-10 w-10"
+                  markClassName="h-5 w-5"
+                />
+                <span className="flex-1 truncate">{ans.text}</span>
+                {isCorrect && <CheckCircle2 className="h-6 w-6 text-arena-acid" />}
               </div>
             );
           })}
         </div>
 
-        {/* Reveal controls footer */}
-        <div className="flex items-center justify-between border-t border-white/10 pt-4 mt-6 z-10">
-          <span className="text-white/50 text-xs font-semibold">
-            Room PIN: {session.pin}
+        <div className="z-10 mt-6 flex items-center justify-between border-t border-white/10 pt-4">
+          <span className="text-xs font-semibold text-white/50">
+            PIN {session.pin}
           </span>
-          <Button
-            onClick={handleShowLeaderboard}
-            className="bg-arena-signal hover:bg-arena-signal/90 font-bold rounded-xl text-xs h-10 px-5 shadow-lg shadow-black/10 flex items-center gap-1.5 text-white"
-          >
-            Show Leaderboard <ArrowRight className="w-4 h-4" />
+          <Button onClick={handleShowLeaderboard} className={hostCta}>
+            Show Leaderboard <ArrowRight className="h-4 w-4" />
           </Button>
         </div>
-      </div>
+      </GameShell>
     );
   }
 
@@ -1309,38 +1282,30 @@ export default function HostGameClient({
     const teamRows = teamMode ? aggregateTeamScores(players).slice(0, 5) : [];
 
     return (
-      <div
-        className="relative min-h-screen w-full flex flex-col justify-between overflow-hidden font-sans p-6"
-        style={customStyles}
-      >
-        <div className="flex items-center justify-between gap-4 z-10">
-          <span className="text-sm font-black bg-arena-court px-3 py-1.5 rounded-xl uppercase tracking-wider text-white">
-            Scoreboard
-          </span>
-          <span className="text-white/60 font-semibold text-xs">
-            Qlash Live
-          </span>
+      <GameShell>
+        <div className="z-10 flex items-center justify-between gap-4">
+          <LiveChip tone="court">Scoreboard</LiveChip>
+          <BrandMark tone="light" size="sm" wordmark={false} />
         </div>
 
-        <div className="my-4 text-center z-10">
-          <h1 className="text-4xl font-extrabold text-white tracking-tight">
+        <div className="z-10 my-4 text-center">
+          <h1 className="font-display text-4xl font-extrabold tracking-tight text-white">
             {teamMode ? 'Team Leaderboard' : 'Leaderboard'}
           </h1>
-          <p className="text-white/50 text-xs mt-1">
-            {teamMode ? 'Combined team scores' : 'Top players for this round'}
+          <p className="mt-1 text-xs text-white/50">
+            {teamMode ? 'Combined team scores' : 'Top players this round'}
           </p>
         </div>
 
-        {/* Scoreboard List */}
-        <div className="flex-1 max-w-xl mx-auto w-full flex flex-col justify-center gap-4 z-10 py-6">
+        <div className="z-10 mx-auto flex w-full max-w-xl flex-1 flex-col justify-center gap-3 py-6">
           {teamMode
             ? teamRows.map((team, rank) => (
                 <div
                   key={team.team_name}
-                  className="flex items-center justify-between p-4 bg-white/5 border border-white/15 rounded-2xl shadow-xl"
+                  className="flex items-center justify-between border-2 border-white/15 bg-white/[0.05] p-4 shadow-[4px_4px_0_rgba(0,0,0,0.25)]"
                 >
                   <div className="flex items-center gap-3">
-                    <span className="w-8 text-center font-black text-white/60">#{rank + 1}</span>
+                    <span className="w-8 text-center font-display text-lg font-extrabold text-arena-acid">#{rank + 1}</span>
                     <div>
                       <p className="font-bold text-white">{team.team_name}</p>
                       <p className="text-xs text-white/50">
@@ -1348,7 +1313,7 @@ export default function HostGameClient({
                       </p>
                     </div>
                   </div>
-                  <span className="font-black text-arena-acid">{team.score}</span>
+                  <span className="font-display font-black text-arena-acid">{team.score}</span>
                 </div>
               ))
             : leaderboardPlayers.map((playerRecord, rank) => {
@@ -1357,9 +1322,12 @@ export default function HostGameClient({
             return (
               <div
                 key={playerRecord.id}
-                className="flex items-center justify-between p-4 bg-white/5 border border-white/15 rounded-2xl shadow-xl hover:border-white/25 transition-colors duration-300"
+                className={cn(
+                  'flex items-center justify-between border-2 bg-white/[0.05] p-4 shadow-[4px_4px_0_rgba(0,0,0,0.25)]',
+                  isTop3 ? 'border-arena-acid/50' : 'border-white/15'
+                )}
               >
-                <div className="flex items-center gap-4 min-w-0">
+                <div className="flex min-w-0 items-center gap-4">
                   <span
                     className={`w-8 text-center font-display text-lg font-extrabold ${
                       isTop3 ? 'text-arena-acid' : 'text-white/50'
@@ -1367,16 +1335,16 @@ export default function HostGameClient({
                   >
                     {rank + 1}
                   </span>
-                  <span className="font-extrabold text-lg text-white truncate max-w-[200px] sm:max-w-xs">
+                  <span className="max-w-[200px] truncate font-extrabold text-lg text-white sm:max-w-xs">
                     {playerRecord.nickname}
                   </span>
                   {playerRecord.streak > 1 && (
-                    <span className="text-xs px-2.5 py-0.5 rounded-full border border-amber-500/20 bg-amber-950/20 text-amber-500 font-extrabold flex items-center gap-1">
-                      <Flame className="w-3.5 h-3.5 fill-current" /> {playerRecord.streak}
+                    <span className="flex items-center gap-1 border-2 border-arena-acid bg-arena-acid px-2.5 py-0.5 text-xs font-extrabold text-arena-ink">
+                      <Flame className="h-3.5 w-3.5 fill-current" /> {playerRecord.streak}
                     </span>
                   )}
                 </div>
-                <span className="font-black text-xl text-arena-acid font-mono">
+                <span className="font-display text-xl font-black tabular-nums text-arena-acid">
                   {playerRecord.score.toLocaleString()}
                 </span>
               </div>
@@ -1384,28 +1352,21 @@ export default function HostGameClient({
           })}
         </div>
 
-        {/* Leaderboard navigation footer */}
-        <div className="flex items-center justify-between border-t border-white/10 pt-4 mt-6 z-10">
-          <span className="text-white/50 text-xs font-semibold">
-            Room PIN: {session.pin}
+        <div className="z-10 mt-6 flex items-center justify-between border-t border-white/10 pt-4">
+          <span className="text-xs font-semibold text-white/50">
+            PIN {session.pin}
           </span>
           {isLastQuestion ? (
-            <Button
-              onClick={handleShowPodium}
-              className="bg-gradient-to-r from-arena-signal to-[#c21828] hover:brightness-110 text-white font-bold rounded-xl text-xs h-10 px-5 shadow-lg shadow-black/10 flex items-center gap-1.5"
-            >
-              Show Final Podium <Trophy className="w-4 h-4 text-amber-300" />
+            <Button onClick={handleShowPodium} className={hostCta}>
+              Show Final Podium <Trophy className="h-4 w-4 text-arena-acid" />
             </Button>
           ) : (
-            <Button
-              onClick={handleNextQuestion}
-              className="bg-arena-signal hover:bg-arena-signal/90 font-bold rounded-xl text-xs h-10 px-5 shadow-lg shadow-black/10 flex items-center gap-1.5 text-white"
-            >
-              Next Question <ArrowRight className="w-4 h-4" />
+            <Button onClick={handleNextQuestion} className={hostCta}>
+              Next Question <ArrowRight className="h-4 w-4" />
             </Button>
           )}
         </div>
-      </div>
+      </GameShell>
     );
   }
 
@@ -1420,100 +1381,84 @@ export default function HostGameClient({
     const thirdPlace = podiumWinners[2];
 
     return (
-      <div
-        className="relative min-h-screen w-full flex flex-col justify-between overflow-hidden font-sans p-6 bg-arena-stage"
-      >
-        {/* Glow */}
-        <div className="absolute top-[-20%] left-[-20%] w-[60%] h-[60%] rounded-full bg-transparent blur-[150px] pointer-events-none" />
-        <div className="absolute bottom-[-20%] right-[-20%] w-[60%] h-[60%] rounded-full bg-transparent blur-[150px] pointer-events-none" />
-
-        <div className="flex items-center justify-between gap-4 z-10">
-          <span className="text-sm font-black bg-amber-600 px-3 py-1.5 rounded-xl uppercase tracking-wider text-white">
-            Final Standings
-          </span>
-          <div className="flex items-center gap-2">
-            <Trophy className="w-5 h-5 text-amber-500 animate-bounce" />
-            <span className="text-white/60 font-bold text-sm">Game Over</span>
-          </div>
+      <GameShell>
+        <div className="z-10 flex items-center justify-between gap-4">
+          <LiveChip tone="acid">Final standings</LiveChip>
+          <BrandMark tone="light" size="sm" />
         </div>
 
-        <div className="my-4 text-center z-10">
-          <h1 className="text-4xl sm:text-5xl font-black text-arena-acid tracking-tight leading-none font-display">
-            Final podium
+        <div className="z-10 my-4 text-center">
+          <h1 className="font-display text-4xl font-extrabold leading-none tracking-tight text-white sm:text-5xl">
+            Final <span className="text-arena-acid">podium</span>
           </h1>
-          <p className="text-white/50 text-xs mt-2">
-            Celebrating the champions of {quiz.title}!
+          <p className="mt-2 text-xs text-white/50">
+            Champions of {quiz.title}
           </p>
         </div>
 
-        {/* 3D Podium Layout */}
-        <div className="flex-1 max-w-3xl mx-auto w-full flex items-end justify-center gap-4 sm:gap-6 z-10 py-12">
-          {/* 2nd Place Block (Left) */}
+        <div className="z-10 mx-auto flex w-full max-w-3xl flex-1 items-end justify-center gap-4 py-12 sm:gap-6">
           {secondPlace && (
-            <div className="flex flex-col items-center gap-3 w-1/4 min-w-[80px]">
-              <div className="text-center w-full min-w-0">
+            <div className="flex w-1/4 min-w-[80px] flex-col items-center gap-3">
+              <div className="w-full min-w-0 text-center">
                 <span className="font-display text-sm font-bold text-white/50">2nd</span>
-                <h3 className="font-extrabold text-sm sm:text-base text-white truncate w-full mt-1">
+                <h3 className="mt-1 w-full truncate text-sm font-extrabold text-white sm:text-base">
                   {secondPlace.nickname}
                 </h3>
-                <span className="font-mono text-xs text-arena-acid font-bold">
+                <span className="font-display text-xs font-bold tabular-nums text-arena-acid">
                   {secondPlace.score.toLocaleString()}
                 </span>
               </div>
-              <div className="bg-white/10 border-x border-t border-white/15 rounded-t-2xl w-full h-36 flex flex-col items-center justify-center shadow-xl">
-                <span className="font-black text-4xl text-white/50">2</span>
+              <div className="flex h-36 w-full flex-col items-center justify-center border-2 border-white/20 bg-[#4a2aff] shadow-[6px_6px_0_rgba(0,0,0,0.35)]">
+                <span className="font-display text-4xl font-black text-white">2</span>
               </div>
             </div>
           )}
 
-          {/* 1st Place Block (Center - Highest) */}
           {firstPlace && (
-            <div className="flex flex-col items-center gap-3 w-1/3 min-w-[100px] z-10">
-              <div className="text-center w-full min-w-0 flex flex-col items-center">
-                <Trophy className="w-8 h-8 text-amber-400 fill-amber-400 animate-pulse" />
-                <h3 className="font-black text-base sm:text-lg text-white truncate w-full mt-1.5">
+            <div className="z-10 flex w-1/3 min-w-[100px] flex-col items-center gap-3">
+              <div className="flex w-full min-w-0 flex-col items-center text-center">
+                <Trophy className="h-8 w-8 fill-arena-acid text-arena-acid" />
+                <h3 className="mt-1.5 w-full truncate text-base font-black text-white sm:text-lg">
                   {firstPlace.nickname}
                 </h3>
-                <span className="font-mono text-sm text-arena-acid font-bold">
+                <span className="font-display text-sm font-bold tabular-nums text-arena-acid">
                   {firstPlace.score.toLocaleString()}
                 </span>
               </div>
-              <div className="bg-white/10/90 border-x border-t border-white/25/60 rounded-t-2xl w-full h-48 flex flex-col items-center justify-center shadow-2xl relative">
-                <div className="absolute top-0 inset-x-0 h-1 bg-gradient-to-r from-violet-500 via-fuchsia-500 to-rose-500 rounded-t-full" />
-                <span className="font-black text-5xl text-amber-500">1</span>
+              <div className="relative flex h-48 w-full flex-col items-center justify-center border-2 border-arena-ink bg-arena-signal shadow-[8px_8px_0_rgba(200,245,66,0.35)]">
+                <div className="absolute inset-x-0 top-0 h-1.5 bg-arena-acid" />
+                <span className="font-display text-5xl font-black text-white">1</span>
               </div>
             </div>
           )}
 
-          {/* 3rd Place Block (Right) */}
           {thirdPlace && (
-            <div className="flex flex-col items-center gap-3 w-1/4 min-w-[80px]">
-              <div className="text-center w-full min-w-0">
+            <div className="flex w-1/4 min-w-[80px] flex-col items-center gap-3">
+              <div className="w-full min-w-0 text-center">
                 <span className="font-display text-sm font-bold text-white/50">3rd</span>
-                <h3 className="font-extrabold text-sm sm:text-base text-white truncate w-full mt-1">
+                <h3 className="mt-1 w-full truncate text-sm font-extrabold text-white sm:text-base">
                   {thirdPlace.nickname}
                 </h3>
-                <span className="font-mono text-xs text-arena-acid font-bold">
+                <span className="font-display text-xs font-bold tabular-nums text-arena-acid">
                   {thirdPlace.score.toLocaleString()}
                 </span>
               </div>
-              <div className="bg-white/10 border-x border-t border-white/15 rounded-t-2xl w-full h-24 flex flex-col items-center justify-center shadow-xl">
-                <span className="font-black text-4xl text-amber-700">3</span>
+              <div className="flex h-24 w-full flex-col items-center justify-center border-2 border-white/20 bg-arena-court shadow-[6px_6px_0_rgba(0,0,0,0.35)]">
+                <span className="font-display text-4xl font-black text-white">3</span>
               </div>
             </div>
           )}
         </div>
 
-        {/* Podium exit footer */}
-        <div className="flex items-center justify-center border-t border-white/10 pt-4 mt-6 z-10 w-full">
+        <div className="z-10 mt-6 flex w-full items-center justify-center border-t border-white/10 pt-4">
           <Button
             onClick={handleCloseSession}
-            className="bg-white/10 hover:bg-slate-800 border border-white/15 font-bold rounded-xl text-xs h-12 px-6 flex items-center gap-2 text-white"
+            className="flex h-12 items-center gap-2 rounded-none border-2 border-white/30 bg-white/10 px-6 text-xs font-bold text-white hover:border-arena-acid hover:bg-arena-acid hover:text-arena-ink"
           >
-            <Home className="w-4 h-4 text-arena-acid" /> Return to Host Dashboard
+            <Home className="h-4 w-4" /> Return to Host Dashboard
           </Button>
         </div>
-      </div>
+      </GameShell>
     );
   }
 

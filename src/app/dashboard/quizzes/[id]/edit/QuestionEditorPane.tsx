@@ -14,7 +14,7 @@ import {
   SelectValue,
 } from '@/components/ui/select';
 import { CheckCircle, Clock, Award, Trash2 } from 'lucide-react';
-import { SHAPES_MAP } from '@/lib/game/types';
+import { AnswerSwatch } from '@/components/brand/AnswerMark';
 import type { Question } from './quizEditorModel';
 
 interface QuestionEditorPaneProps {
@@ -240,12 +240,12 @@ export default function QuestionEditorPane({
                   className="relative flex items-center gap-3 bg-arena-mist/30 border border-arena-line p-3.5 rounded-2xl hover:border-arena-line transition-colors"
                 >
                   {/* Shape visual box matching color */}
-                  <div
-                    className="w-10 h-10 rounded-xl flex items-center justify-center text-arena-ink text-lg font-black shrink-0 shadow-lg"
-                    style={{ backgroundColor: ans.color }}
-                  >
-                    {SHAPES_MAP[ans.shape] || '■'}
-                  </div>
+                  <AnswerSwatch
+                    shape={ans.shape}
+                    color={ans.color}
+                    className="h-10 w-10 shrink-0"
+                    markClassName="h-5 w-5"
+                  />
 
                   {/* Text Input */}
                   <Input

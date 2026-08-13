@@ -1,3 +1,5 @@
+import { resolveAnswerColor, resolveMarkId } from '@/lib/game/marks';
+
 export type GameStatus =
   | 'lobby'
   | 'question_active'
@@ -74,21 +76,12 @@ export interface GameSessionRow {
   active_multiplier?: number;
 }
 
-export const SHAPES_MAP: Record<string, string> = {
-  triangle: '▲',
-  diamond: '◆',
-  circle: '●',
-  square: '■',
-  star: '★',
-  hexagon: '⬢',
-};
-
 export function sanitizeAnswers(answers: AnswerOption[]): PublicAnswerOption[] {
   return answers.map((ans) => ({
     id: ans.id,
     text: ans.text,
-    color: ans.color,
-    shape: ans.shape,
+    color: resolveAnswerColor(ans.color),
+    shape: resolveMarkId(ans.shape),
   }));
 }
 
