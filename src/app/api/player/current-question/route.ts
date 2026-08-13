@@ -20,34 +20,25 @@ export async function POST(request: Request) {
 
     const admin = createAdminClient();
 
-    const { data: tokenRow } = await admin
-      .from('player_tokens')
-      .select('client_token')
-      .eq('player_id', playerId)
-      .maybeSingle();
+    const [{ data: tokenRow }, { data: player }, { data: session }] = await Promise.all([
+      admin.from('player_tokens').select('client_token').eq('player_id', playerId).maybeSingle(),
+      admin.from('players').select('id').eq('id', playerId).eq('session_id', sessionId).maybeSingle(),
+      admin
+        .from('game_sessions')
+        .select(
+          'status, current_question_index, question_started_at, quiz_id, active_multiplier, question_order'
+        )
+        .eq('id', sessionId)
+        .single(),
+    ]);
 
     if (!tokenRow || tokenRow.client_token !== token) {
       return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
     }
 
-    const { data: player } = await admin
-      .from('players')
-      .select('id, session_id')
-      .eq('id', playerId)
-      .eq('session_id', sessionId)
-      .maybeSingle();
-
     if (!player) {
       return NextResponse.json({ error: 'Player not found.' }, { status: 404 });
     }
-
-    const { data: session } = await admin
-      .from('game_sessions')
-      .select(
-        'status, current_question_index, question_started_at, quiz_id, active_multiplier, question_order'
-      )
-      .eq('id', sessionId)
-      .single();
 
     if (!session) {
       return NextResponse.json({ error: 'Session not found.' }, { status: 404 });

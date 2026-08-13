@@ -171,11 +171,9 @@ export default function LandingPage() {
 
       <main className="relative z-20 grid min-h-[calc(100vh-5.5rem)] lg:grid-cols-12">
         <section className="flex flex-col justify-center px-6 pb-10 pt-4 lg:col-span-6 lg:px-10 lg:pb-20 lg:pt-6 xl:col-span-5">
-          <p className="motion-rise arena-chip mb-6 w-fit bg-arena-acid">The live quiz arena</p>
-          <h1 className="motion-rise font-display text-[clamp(3.25rem,8vw,5.75rem)] font-extrabold leading-[0.88] tracking-[-0.04em] text-arena-ink">
-            Quiz
-            <br />
-            Arena
+          <p className="motion-rise arena-chip mb-6 w-fit bg-arena-acid">Pin. Lock. Clash.</p>
+          <h1 className="motion-rise font-display text-[clamp(3.25rem,8vw,5.75rem)] font-extrabold leading-[0.88] tracking-[-0.05em] text-arena-ink">
+            Qlash
           </h1>
           <p className="motion-rise-delay mt-6 max-w-sm text-lg font-medium leading-snug text-arena-ink/65">
             Pin in. Lock answers. Own the board — built for the classroom rush.
@@ -270,7 +268,7 @@ export default function LandingPage() {
                       disabled={playLoading}
                       className="h-13 mt-2 h-12 w-full rounded-none bg-arena-signal font-display text-base font-extrabold text-white hover:bg-arena-signal/90"
                     >
-                      {playLoading ? 'Entering…' : 'Enter the arena'}
+                      {playLoading ? 'Entering…' : 'Jump in'}
                     </Button>
                   </form>
                 ) : currentHost ? (
@@ -372,6 +370,7 @@ export default function LandingPage() {
           {Array.from({ length: 2 }).map((_, i) => (
             <span key={i} className="flex gap-12 px-6">
               <span>Pin · Play · Score</span>
+              <span>Qlash</span>
               <span>80 players</span>
               <span>Projector ready</span>
               <span>Lock answers fast</span>

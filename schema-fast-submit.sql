@@ -51,8 +51,7 @@ begin
 
   select * into v_player
   from public.players
-  where id = p_player_id and session_id = p_session_id
-  for update;
+  where id = p_player_id and session_id = p_session_id;
 
   if not found then
     raise exception 'UNAUTHORIZED';

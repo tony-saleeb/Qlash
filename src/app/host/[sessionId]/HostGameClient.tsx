@@ -47,6 +47,7 @@ import {
 import { maybeShuffle } from '@/lib/game/shuffle';
 import { aggregateTeamScores } from '@/lib/game/teams';
 import { MAX_PLAYERS_PER_SESSION } from '@/lib/game/constants';
+import { remainingSeconds } from '@/lib/game/clock';
 
 const hostCtrl =
   'h-10 gap-1.5 rounded-none border-2 border-white/30 bg-white/10 px-3.5 font-display text-[11px] font-extrabold uppercase tracking-[0.14em] text-white shadow-none hover:border-arena-acid hover:bg-arena-acid hover:text-arena-ink aria-expanded:border-arena-acid aria-expanded:bg-arena-acid aria-expanded:text-arena-ink [&_svg]:text-current';
@@ -74,7 +75,7 @@ export default function HostGameClient({
 }: HostGameClientProps) {
   const router = useRouter();
   const supabase = createClient();
-  const { send: sendSessionEvent, ready: channelReady } = useSessionChannel(initialSession.id, { supabase });
+  const { send: sendSessionEvent } = useSessionChannel(initialSession.id, { supabase });
 
   // Core game states
   const [session, setSession] = useState(initialSession);
@@ -152,6 +153,7 @@ export default function HostGameClient({
     ? (playQuestions[activeQuestionIndex] || playQuestions[0])
     : null;
   const timerRef = useRef<NodeJS.Timeout | null>(null);
+  const lastTickSecondRef = useRef<number | null>(null);
   const revealingRef = useRef(false);
 
   const shapesMap = SHAPES_MAP;
@@ -193,19 +195,13 @@ export default function HostGameClient({
         .filter((ans) => ans.is_correct)
         .map((ans) => ans.id);
 
-      const broadcast = await sendSessionEvent('question:reveal', {
+      void sendSessionEvent('question:reveal', {
         correct_answer_ids: correctOptionIds,
         leaderboard: results.leaderboard,
         option_counts: results.optionCounts,
       });
 
-      if (!broadcast.ok) {
-        toast.warning('Scores saved, but some players may need to refresh for results.', {
-          id: loadingToast,
-        });
-      } else {
-        toast.success('Results calculated!', { id: loadingToast });
-      }
+      toast.success('Results calculated!', { id: loadingToast });
     } catch (err) {
       toast.error(err instanceof Error ? err.message : 'Failed to reveal results.', { id: loadingToast });
     } finally {
@@ -330,6 +326,7 @@ export default function HostGameClient({
 
     const startTimer = () => {
       if (timerRef.current) clearInterval(timerRef.current);
+      lastTickSecondRef.current = null;
 
       const timeLimit = activeQuestion.time_limit_seconds;
       const startedAt = new Date(session.question_started_at!).getTime();
@@ -339,7 +336,8 @@ export default function HostGameClient({
         const remaining = Math.max(0, Math.ceil(timeLimit - elapsed));
         setTimeLeft(remaining);
 
-        if (remaining <= 5 && remaining > 0) {
+        if (remaining <= 5 && remaining > 0 && remaining !== lastTickSecondRef.current) {
+          lastTickSecondRef.current = remaining;
           playTickSound();
         }
 
@@ -349,8 +347,8 @@ export default function HostGameClient({
         }
       };
 
-      updateTimer(); // run once immediately
-      timerRef.current = setInterval(updateTimer, 1000);
+      updateTimer();
+      timerRef.current = setInterval(updateTimer, 200);
     };
 
     startTimer();
@@ -411,10 +409,22 @@ export default function HostGameClient({
     const isPaused = session.status === 'question_paused';
     try {
       if (isPaused) {
-        await resumeGameSession(session.id);
+        const { serverStartedAt } = await resumeGameSession(session.id);
+        void sendSessionEvent('timer:sync', {
+          status: 'question_active',
+          server_started_at: serverStartedAt,
+          remaining_seconds: activeQuestion
+            ? remainingSeconds(serverStartedAt, activeQuestion.time_limit_seconds)
+            : timeLeft,
+        });
         toast.success('Game resumed!');
       } else {
+        const remaining = timeLeft;
         await pauseGameSession(session.id);
+        void sendSessionEvent('timer:sync', {
+          status: 'question_paused',
+          remaining_seconds: remaining,
+        });
         toast.success('Game paused!');
       }
     } catch (err) {
@@ -422,12 +432,17 @@ export default function HostGameClient({
     }
   };
 
-  // Add +10 seconds to the clock
   const handleAddTime = async () => {
     if (!session.question_started_at) return;
     try {
-      await addQuestionTime(session.id, 10);
-      setTimeLeft((prev) => prev + 10);
+      const { serverStartedAt } = await addQuestionTime(session.id, 10);
+      const remaining = timeLeft + 10;
+      setTimeLeft(remaining);
+      void sendSessionEvent('timer:sync', {
+        status: session.status,
+        server_started_at: serverStartedAt,
+        remaining_seconds: remaining,
+      });
       toast.success('Added 10 seconds to the clock!');
     } catch (err) {
       toast.error(err instanceof Error ? err.message : 'Failed to add time.');
@@ -457,11 +472,6 @@ export default function HostGameClient({
     }
 
     try {
-      if (!channelReady) {
-        // Brief wait so first broadcast isn't dropped before subscribe completes
-        await new Promise((r) => setTimeout(r, 300));
-      }
-
       const ordered = maybeShuffle(questions, randomizeQuestions).map(prepareQuestionForPlay);
       setPlayQuestions(ordered);
 
@@ -473,20 +483,13 @@ export default function HostGameClient({
       revealingRef.current = false;
 
       const firstQ = ordered[0];
-      const broadcast = await sendSessionEvent(
-        'question:start',
-        buildQuestionStartPayload(firstQ, 0, serverStartedAt)
-      );
+      void sendSessionEvent('question:start', buildQuestionStartPayload(firstQ, 0, serverStartedAt));
 
-      if (!broadcast.ok) {
-        toast.warning('Game started — if players miss the question, ask them to refresh.');
-      } else {
-        toast.success(
-          randomizeQuestions
-            ? 'Game started! Question order randomized.'
-            : 'Game started! Broadcasting first question.'
-        );
-      }
+      toast.success(
+        randomizeQuestions
+          ? 'Game started! Question order randomized.'
+          : 'Game started! Broadcasting first question.'
+      );
     } catch (err) {
       toast.error(err instanceof Error ? err.message : 'Failed to start game.');
     }
@@ -519,7 +522,7 @@ export default function HostGameClient({
       setIsMultiplierActive(false);
       revealingRef.current = false;
 
-      await sendSessionEvent('question:start', buildQuestionStartPayload(nextQ, nextIndex, serverStartedAt));
+      void sendSessionEvent('question:start', buildQuestionStartPayload(nextQ, nextIndex, serverStartedAt));
 
       toast.success('Loading next question.');
     } catch (err) {
@@ -629,7 +632,7 @@ export default function HostGameClient({
       setIsJumperOpen(false);
       revealingRef.current = false;
 
-      await sendSessionEvent(
+      void sendSessionEvent(
         'question:start',
         buildQuestionStartPayload(targetQ, targetIndex, serverStartedAt)
       );
@@ -699,7 +702,7 @@ export default function HostGameClient({
                 <span className="mt-1 block text-arena-acid">the PIN</span>
               </h2>
               <p className="mx-auto mt-4 max-w-sm text-sm font-medium text-white/50 lg:mx-0">
-                Open QuizArena → Player. No accounts. Instant board presence.
+                Open Qlash → Player. No accounts. Instant board presence.
               </p>
             </div>
 
@@ -863,7 +866,7 @@ export default function HostGameClient({
             )}
           </div>
           <span className="text-white/60 font-semibold text-xs">
-            QuizArena Live Game
+            Qlash Live
           </span>
         </div>
 
@@ -913,7 +916,7 @@ export default function HostGameClient({
               <div className="p-8 bg-white/5 border border-white/15 rounded-3xl w-full h-full flex flex-col items-center justify-center text-center">
                 <Flame className="w-16 h-16 text-arena-acid/40 animate-pulse mb-3" />
                 <span className="text-xs text-white/50 font-bold uppercase tracking-wider">
-                  QuizArena Showdown
+                  Qlash Showdown
                 </span>
               </div>
             )}
@@ -1206,7 +1209,7 @@ export default function HostGameClient({
             Answers Revealed
           </span>
           <span className="text-white/60 font-semibold text-xs">
-            QuizArena Live Game
+            Qlash Live
           </span>
         </div>
 
@@ -1315,7 +1318,7 @@ export default function HostGameClient({
             Scoreboard
           </span>
           <span className="text-white/60 font-semibold text-xs">
-            QuizArena Live Game
+            Qlash Live
           </span>
         </div>
 

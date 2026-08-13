@@ -15,7 +15,7 @@ async function sleep(ms: number) {
 
 /**
  * Long-lived Supabase broadcast channel for a game session.
- * Subscribe once; send with short retries so 80-player rooms don't drop events.
+ * ack:false so send() does not wait a full RTT; retries happen in the background.
  */
 export function useSessionChannel(
   sessionId: string,
@@ -35,7 +35,7 @@ export function useSessionChannel(
     if (!sessionId) return;
 
     const channel = supabase.channel(`session_channel_${sessionId}`, {
-      config: { broadcast: { ack: true } },
+      config: { broadcast: { ack: false } },
     });
     channelRef.current = channel;
     setReady(false);
@@ -67,28 +67,35 @@ export function useSessionChannel(
   }, [supabase, sessionId]);
 
   const send = useCallback(async (event: string, payload: SessionBroadcastPayload) => {
-    const maxAttempts = 5;
-    for (let attempt = 1; attempt <= maxAttempts; attempt++) {
-      if (!readyRef.current || !channelRef.current) {
-        await sleep(100 * attempt);
-        continue;
-      }
-
-      const result = await channelRef.current.send({
+    const trySend = async () => {
+      if (!channelRef.current) return 'error' as const;
+      return channelRef.current.send({
         type: 'broadcast',
         event,
         payload,
       });
+    };
 
-      if (result === 'ok') {
-        return { ok: true as const };
+    if (!readyRef.current) {
+      for (let i = 0; i < 8 && !readyRef.current; i++) {
+        await sleep(25);
       }
-
-      await sleep(80 * attempt);
     }
 
-    console.warn(`session channel failed to send ${event} after retries`);
-    return { ok: false as const };
+    const first = await trySend();
+    if (first === 'ok') {
+      return { ok: true as const };
+    }
+
+    void (async () => {
+      for (let attempt = 1; attempt <= 4; attempt++) {
+        await sleep(40 * attempt);
+        if ((await trySend()) === 'ok') return;
+      }
+      console.warn(`session channel failed to send ${event} after retries`);
+    })();
+
+    return { ok: Boolean(channelRef.current) };
   }, []);
 
   return { ready, send, supabase };

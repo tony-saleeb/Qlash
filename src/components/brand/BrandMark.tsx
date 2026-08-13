@@ -1,7 +1,35 @@
 import type { ReactNode } from 'react';
 import { cn } from '@/lib/utils';
 
-/** Iconic Q mark — court geometry, not a flame glyph */
+export const BRAND_NAME = 'Qlash';
+
+/** Square-Q with a clash slash — reads at favicon size and on a projector. */
+export function BrandLogo({
+  className,
+  slashClassName,
+}: {
+  className?: string;
+  slashClassName?: string;
+}) {
+  return (
+    <svg viewBox="0 0 32 32" className={className} fill="none" aria-hidden>
+      <path
+        fill="currentColor"
+        fillRule="evenodd"
+        d="M6 6h16v16H6V6Zm4.25 4.25h7.5v7.5h-7.5v-7.5Z"
+      />
+      <path
+        className={slashClassName}
+        d="M16.8 18.4 25.6 27.2l2.8-2.8-8.8-8.8-2.8 2.8Z"
+      />
+      <path
+        className={slashClassName}
+        d="M21.2 15.6 29.2 23.6 31 21.8 23 13.8 21.2 15.6Z"
+      />
+    </svg>
+  );
+}
+
 export function BrandMark({
   className,
   tone = 'ink',
@@ -26,24 +54,21 @@ export function BrandMark({
         )}
         aria-hidden
       >
-        <span className="absolute inset-0 opacity-30">
-          <span className="absolute left-0 top-0 h-1/2 w-1/2 bg-black/10" />
-          <span className="absolute bottom-0 right-0 h-1/2 w-1/2 bg-white/20" />
-        </span>
-        <svg viewBox="0 0 32 32" className="relative h-[58%] w-[58%]" fill="none">
-          <circle cx="15" cy="15" r="9" stroke="currentColor" strokeWidth="3.2" />
-          <path d="M21 21 L27 27" stroke="currentColor" strokeWidth="3.2" strokeLinecap="square" />
-        </svg>
+        <span className="pointer-events-none absolute inset-x-0 top-0 h-1/3 bg-gradient-to-b from-white/25 to-transparent" />
+        <BrandLogo
+          className="relative h-[70%] w-[70%]"
+          slashClassName={tone === 'light' ? 'fill-arena-signal' : 'fill-arena-acid'}
+        />
       </span>
       {wordmark && (
         <span
           className={cn(
-            'font-display font-extrabold tracking-tight',
+            'font-display font-extrabold tracking-[-0.04em]',
             word,
             tone === 'light' ? 'text-white' : 'text-arena-ink'
           )}
         >
-          QuizArena
+          {BRAND_NAME}
         </span>
       )}
     </div>

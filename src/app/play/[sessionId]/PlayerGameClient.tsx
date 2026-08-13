@@ -17,6 +17,7 @@ import {
   type Player,
   type PublicQuestionPayload,
 } from '@/lib/game/types';
+import { remainingFromPausedElapsed, remainingSeconds, startedAtFromRemaining } from '@/lib/game/clock';
 import { aggregateTeamScores } from '@/lib/game/teams';
 
 type ActiveQuestionPayload = PublicQuestionPayload;
@@ -56,11 +57,19 @@ export default function PlayerGameClient({
     optionCounts?: Record<string, number>;
   } | null>(null);
   const [timeLeft, setTimeLeft] = useState<number>(0);
+  const [clockStartedAt, setClockStartedAt] = useState<string | null>(null);
   const [finalRank, setFinalRank] = useState<number | null>(null);
   const [activeMultiplier, setActiveMultiplier] = useState<number>(1);
 
   const playerRef = React.useRef<Player | null>(null);
   const activeQuestionRef = React.useRef<ActiveQuestionPayload | null>(null);
+  const lastSubmitRef = React.useRef<{
+    questionId: string;
+    selected: string[];
+    isCorrect: boolean | null;
+    pointsAwarded: number;
+  } | null>(null);
+  const revealAppliedRef = React.useRef<string | null>(null);
 
   React.useEffect(() => {
     playerRef.current = player;
@@ -84,12 +93,14 @@ export default function PlayerGameClient({
       status?: string
     ) => {
       setActiveQuestion(question);
+      lastSubmitRef.current = null;
+      revealAppliedRef.current = null;
 
       if (serverStartedAt && question.time_limit_seconds) {
-        const started = new Date(serverStartedAt).getTime();
-        const elapsedSec = Math.floor((Date.now() - started) / 1000);
-        setTimeLeft(Math.max(0, question.time_limit_seconds - elapsedSec));
+        setClockStartedAt(serverStartedAt);
+        setTimeLeft(remainingSeconds(serverStartedAt, question.time_limit_seconds));
       } else {
+        setClockStartedAt(null);
         setTimeLeft(question.time_limit_seconds);
       }
 
@@ -128,58 +139,92 @@ export default function PlayerGameClient({
     [sessionId, applyQuestionPayload]
   );
 
-  const fetchRoundResults = useCallback(
-    async (
-      playerId: string,
-      correctAnswerIds: string[],
-      optionCounts?: Record<string, number>
-    ) => {
-      const currentActiveQuestion = activeQuestionRef.current;
-      if (!currentActiveQuestion) return;
-
+  const syncOfficialScore = useCallback(
+    async (playerId: string, questionId: string) => {
       const token = localStorage.getItem(`quizarena_token_${sessionId}`) || '';
-
       try {
         const res = await fetch('/api/player/round-result', {
           method: 'POST',
           headers: { 'Content-Type': 'application/json' },
-          body: JSON.stringify({
-            sessionId,
-            playerId,
-            token,
-            questionId: currentActiveQuestion.id,
-          }),
+          body: JSON.stringify({ sessionId, playerId, token, questionId }),
         });
         const data = await res.json();
-
+        if (!res.ok) return;
         if (data.player) {
           setPlayer((prev) =>
             prev ? { ...prev, score: data.player.score, streak: data.player.streak } : null
           );
         }
-
-        const isCorrect = data.submission?.is_correct ?? false;
-        if (isCorrect) playCorrectSound();
-        else playIncorrectSound();
-
-        setRoundResult({
-          isCorrect,
-          pointsAwarded: data.submission?.points_awarded ?? 0,
-          correctAnswerIds,
-          optionCounts,
-        });
+        if (data.submission) {
+          setRoundResult((prev) =>
+            prev
+              ? {
+                  ...prev,
+                  isCorrect: data.submission.is_correct ?? prev.isCorrect,
+                  pointsAwarded: data.submission.points_awarded ?? prev.pointsAwarded,
+                }
+              : prev
+          );
+        }
       } catch (err) {
-        console.error('Failed to fetch round result', err);
-        setRoundResult({
-          isCorrect: false,
-          pointsAwarded: 0,
-          correctAnswerIds,
-          optionCounts,
-        });
+        console.error('Failed to sync official score', err);
       }
-      setSubmissionState('idle');
     },
     [sessionId]
+  );
+
+  const applyRevealInstant = useCallback(
+    (correctAnswerIds: string[], optionCounts?: Record<string, number>) => {
+      const currentQ = activeQuestionRef.current;
+      const qid = currentQ?.id;
+      if (qid && revealAppliedRef.current === qid) {
+        if (correctAnswerIds.length) {
+          setRoundResult((prev) =>
+            prev
+              ? {
+                  ...prev,
+                  correctAnswerIds,
+                  optionCounts: optionCounts ?? prev.optionCounts,
+                }
+              : prev
+          );
+        }
+        return;
+      }
+      if (qid) revealAppliedRef.current = qid;
+      const submit = lastSubmitRef.current;
+      const selected =
+        submit?.questionId === currentQ?.id ? submit.selected : [];
+
+      let isCorrect = false;
+      let pointsAwarded = 0;
+      if (submit?.questionId === currentQ?.id && submit.isCorrect !== null) {
+        isCorrect = submit.isCorrect;
+        pointsAwarded = submit.pointsAwarded;
+      } else if (currentQ?.type !== 'poll' && selected.length > 0) {
+        const sel = [...selected].sort();
+        const cor = [...correctAnswerIds].sort();
+        isCorrect = sel.length === cor.length && sel.every((id, i) => id === cor[i]);
+      }
+
+      if (isCorrect) playCorrectSound();
+      else playIncorrectSound();
+
+      setRoundResult({
+        isCorrect,
+        pointsAwarded,
+        correctAnswerIds,
+        optionCounts,
+      });
+      setSessionStatus('question_reveal');
+      setSubmissionState('idle');
+
+      const playerId = playerRef.current?.id;
+      if (playerId && currentQ) {
+        void syncOfficialScore(playerId, currentQ.id);
+      }
+    },
+    [syncOfficialScore]
   );
 
   useSessionChannel(sessionId, {
@@ -205,11 +250,29 @@ export default function PlayerGameClient({
         setActiveMultiplier(1);
       },
       'question:reveal': (msg) => {
-        const playerId = playerRef.current?.id;
-        if (!playerId) return;
         const correctIds = (msg.payload.correct_answer_ids as string[]) || [];
         const optionCounts = msg.payload.option_counts as Record<string, number> | undefined;
-        fetchRoundResults(playerId, correctIds, optionCounts);
+        applyRevealInstant(correctIds, optionCounts);
+      },
+      'timer:sync': (msg) => {
+        const status = msg.payload.status as string | undefined;
+        const startedAt = msg.payload.server_started_at as string | undefined;
+        const remaining = msg.payload.remaining_seconds as number | undefined;
+        const limit = activeQuestionRef.current?.time_limit_seconds;
+        if (status) setSessionStatus(status);
+        if (typeof remaining === 'number') {
+          setTimeLeft(Math.max(0, remaining));
+          if (status === 'question_active' && limit) {
+            setClockStartedAt(startedAtFromRemaining(limit, remaining));
+          }
+        } else if (startedAt && limit) {
+          if (status === 'question_paused') {
+            setTimeLeft(remainingFromPausedElapsed(startedAt, limit));
+          } else {
+            setClockStartedAt(startedAt);
+            setTimeLeft(remainingSeconds(startedAt, limit));
+          }
+        }
       },
       'question:update': (msg) => {
         setActiveQuestion((prev) => {
@@ -329,11 +392,28 @@ export default function PlayerGameClient({
             setActiveMultiplier(payload.new.active_multiplier);
           }
 
+          const startedAt = payload.new.question_started_at as string | null;
+          const limit = activeQuestionRef.current?.time_limit_seconds;
+
           if (newStatus === 'question_active' || newStatus === 'question_paused') {
-            // Hydrate if we somehow missed the start broadcast
             if (!activeQuestionRef.current) {
               hydrateCurrentQuestion(playerId);
+            } else if (startedAt && limit) {
+              if (newStatus === 'question_paused') {
+                setTimeLeft(remainingFromPausedElapsed(startedAt, limit));
+              } else {
+                setClockStartedAt(startedAt);
+                setTimeLeft(remainingSeconds(startedAt, limit));
+              }
             }
+          } else if (newStatus === 'question_reveal') {
+            const q = activeQuestionRef.current;
+            revealFallbackTimer = window.setTimeout(() => {
+              if (q && revealAppliedRef.current !== q.id) {
+                applyRevealInstant([]);
+              }
+            }, 250);
+          }
           } else if (newStatus === 'leaderboard') {
             setRoundResult(null);
           } else if (newStatus === 'finished') {
@@ -357,7 +437,7 @@ export default function PlayerGameClient({
       }
     };
 
-    let connectionTimer: ReturnType<typeof setTimeout> | null = null;
+    let revealFallbackTimer: ReturnType<typeof setTimeout> | null = null;
     const handleVisibilityChange = () => {
       const isVisible = document.visibilityState === 'visible';
       setOnline(isVisible);
@@ -380,28 +460,28 @@ export default function PlayerGameClient({
 
     return () => {
       if (connectionTimer) clearTimeout(connectionTimer);
+      if (revealFallbackTimer) clearTimeout(revealFallbackTimer);
       supabase.removeChannel(playerChannel);
       supabase.removeChannel(sessionChannel);
       window.removeEventListener('visibilitychange', handleVisibilityChange);
     };
-  }, [supabase, player?.id, sessionId, router, hydrateCurrentQuestion]);
+  }, [supabase, player?.id, sessionId, router, hydrateCurrentQuestion, applyRevealInstant]);
 
-  // Countdown timer logic for player client
+  // Countdown anchored to server start — never decrement independently
   useEffect(() => {
-    if (sessionStatus !== 'question_active' || !activeQuestion || timeLeft <= 0) return;
+    if (sessionStatus !== 'question_active' || !activeQuestion || !clockStartedAt) return;
 
-    const interval = setInterval(() => {
-      setTimeLeft((prev) => {
-        if (prev <= 1) {
-          clearInterval(interval);
-          return 0;
-        }
-        return prev - 1;
-      });
-    }, 1000);
+    const limit = activeQuestion.time_limit_seconds;
+    const started = new Date(clockStartedAt).getTime();
+    if (!Number.isFinite(started) || !limit) return;
 
-    return () => clearInterval(interval);
-  }, [sessionStatus, activeQuestion, timeLeft]);
+    const tick = () => {
+      setTimeLeft(Math.max(0, Math.ceil(limit - (Date.now() - started) / 1000)));
+    };
+    tick();
+    const id = window.setInterval(tick, 200);
+    return () => window.clearInterval(id);
+  }, [sessionStatus, activeQuestion, clockStartedAt]);
 
   // 3. Trigger confetti and fanfare upon game completion (finished podium)
   useEffect(() => {
@@ -441,7 +521,13 @@ export default function PlayerGameClient({
 
     const token = localStorage.getItem(`quizarena_token_${sessionId}`) || '';
     setSelectedAnswerIds(answersToSubmit);
-    setSubmissionState('submitted'); // optimistic — Kahoot-style instant feedback
+    setSubmissionState('submitted');
+    lastSubmitRef.current = {
+      questionId: activeQuestion.id,
+      selected: answersToSubmit,
+      isCorrect: null,
+      pointsAwarded: 0,
+    };
 
     try {
       const response = await fetch('/api/submit-answer', {
@@ -461,8 +547,15 @@ export default function PlayerGameClient({
       if (!response.ok) {
         throw new Error(data.error || 'Failed to submit answer.');
       }
+      lastSubmitRef.current = {
+        questionId: activeQuestion.id,
+        selected: answersToSubmit,
+        isCorrect: Boolean(data.isCorrect),
+        pointsAwarded: typeof data.pointsAwarded === 'number' ? data.pointsAwarded : 0,
+      };
     } catch (err: unknown) {
       console.error(err);
+      lastSubmitRef.current = null;
       setSubmissionState('idle');
       toast.error(err instanceof Error ? err.message : 'Failed to submit — tap again.');
     }
@@ -557,7 +650,7 @@ export default function PlayerGameClient({
           </div>
         </main>
 
-        <footer className="relative z-10 py-4 text-[10px] text-white/40">QuizArena</footer>
+        <footer className="relative z-10 py-4 text-[10px] text-white/40">Qlash</footer>
       </div>
     );
   }
@@ -769,7 +862,7 @@ export default function PlayerGameClient({
 
         <div className="my-2 text-center z-10">
           <h1 className="text-3xl font-black text-transparent bg-clip-text bg-gradient-to-r from-white via-arena-acid to-white tracking-tight leading-none">
-            QuizArena Podium
+            Qlash Podium
           </h1>
           <p className="text-white/50 text-[10px] mt-1.5">
             Celebrating the game champions!

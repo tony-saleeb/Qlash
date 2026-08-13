@@ -5,7 +5,17 @@ import { SupabaseClient } from '@supabase/supabase-js';
 
 async function getAuthUser() {
   const supabase = createClient();
-  const { data: { user }, error } = await supabase.auth.getUser();
+  // Cookie JWT — no Auth HTTP round-trip. RLS + host_id still authorize writes.
+  const {
+    data: { session },
+  } = await supabase.auth.getSession();
+  if (session?.user) {
+    return { supabase, user: session.user };
+  }
+  const {
+    data: { user },
+    error,
+  } = await supabase.auth.getUser();
   if (error || !user) {
     throw new Error('Unauthorized. Please log in.');
   }
@@ -188,18 +198,7 @@ export async function setSessionMultiplier(sessionId: string, multiplier: 1 | 2)
 
 export async function revealQuestionResults(sessionId: string, questionId: string) {
   try {
-    const { supabase, user } = await getAuthUser();
-
-    const { data: session, error: sessionError } = await supabase
-      .from('game_sessions')
-      .select('id')
-      .eq('id', sessionId)
-      .eq('host_id', user.id)
-      .single();
-
-    if (sessionError || !session) {
-      throw new Error('Unauthorized or session not found.');
-    }
+    const { supabase } = await getAuthUser();
 
     const { data, error } = await supabase.rpc('apply_question_scores_and_reveal', {
       p_session_id: sessionId,

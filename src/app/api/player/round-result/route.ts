@@ -14,41 +14,30 @@ export async function POST(request: Request) {
 
     const admin = createAdminClient();
 
-    const { data: tokenRow } = await admin
-      .from('player_tokens')
-      .select('client_token')
-      .eq('player_id', playerId)
-      .maybeSingle();
+    const [{ data: tokenRow }, { data: session }] = await Promise.all([
+      admin.from('player_tokens').select('client_token').eq('player_id', playerId).maybeSingle(),
+      admin.from('game_sessions').select('status').eq('id', sessionId).single(),
+    ]);
 
     if (!tokenRow || tokenRow.client_token !== token) {
       return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
     }
 
-    const { data: session } = await admin
-      .from('game_sessions')
-      .select('status')
-      .eq('id', sessionId)
-      .single();
-
-    // Only expose correctness/points after reveal (or later phases)
     const allowed = ['question_reveal', 'leaderboard', 'finished'].includes(session?.status || '');
     if (!allowed) {
       return NextResponse.json({ error: 'Results not available yet.' }, { status: 403 });
     }
 
-    const { data: submission } = await admin
-      .from('answers_submitted')
-      .select('points_awarded, is_correct')
-      .eq('session_id', sessionId)
-      .eq('question_id', questionId)
-      .eq('player_id', playerId)
-      .maybeSingle();
-
-    const { data: player } = await admin
-      .from('players')
-      .select('score, streak')
-      .eq('id', playerId)
-      .single();
+    const [{ data: submission }, { data: player }] = await Promise.all([
+      admin
+        .from('answers_submitted')
+        .select('points_awarded, is_correct')
+        .eq('session_id', sessionId)
+        .eq('question_id', questionId)
+        .eq('player_id', playerId)
+        .maybeSingle(),
+      admin.from('players').select('score, streak').eq('id', playerId).single(),
+    ]);
 
     return NextResponse.json({
       success: true,

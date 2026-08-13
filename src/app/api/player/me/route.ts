@@ -24,12 +24,15 @@ export async function POST(request: Request) {
       return NextResponse.json({ error: 'Invalid token.' }, { status: 401 });
     }
 
-    const { data: player, error: playerError } = await admin
-      .from('players')
-      .select('id, session_id, nickname, team_name, score, streak, connected, joined_at')
-      .eq('id', tokenRow.player_id)
-      .eq('session_id', sessionId)
-      .maybeSingle();
+    const [{ data: player, error: playerError }, { data: session }] = await Promise.all([
+      admin
+        .from('players')
+        .select('id, session_id, nickname, team_name, score, streak, connected, joined_at')
+        .eq('id', tokenRow.player_id)
+        .eq('session_id', sessionId)
+        .maybeSingle(),
+      admin.from('game_sessions').select('status').eq('id', sessionId).single(),
+    ]);
 
     if (playerError || !player) {
       return NextResponse.json({ error: 'Player not found in this session.' }, { status: 404 });
@@ -39,17 +42,11 @@ export async function POST(request: Request) {
       return NextResponse.json({ error: 'Nickname does not match this device session.' }, { status: 403 });
     }
 
-    const { data: session } = await admin
-      .from('game_sessions')
-      .select('status')
-      .eq('id', sessionId)
-      .single();
-
     if (!session || session.status === 'finished') {
       return NextResponse.json({ error: 'Game session is not available.' }, { status: 403 });
     }
 
-    await admin.from('players').update({ connected: true }).eq('id', player.id);
+    void admin.from('players').update({ connected: true }).eq('id', player.id);
 
     return NextResponse.json({
       success: true,
