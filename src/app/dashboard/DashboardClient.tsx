@@ -4,14 +4,6 @@ import React, { useState } from 'react';
 import { useRouter } from 'next/navigation';
 import { User } from '@supabase/supabase-js';
 import { createClient } from '@/lib/supabase/client';
-import {
-  Card,
-  CardContent,
-  CardDescription,
-  CardFooter,
-  CardHeader,
-  CardTitle,
-} from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
@@ -31,18 +23,8 @@ import {
   createTemplateQuiz,
 } from '@/app/actions/quizzes';
 import { createGameSession } from '@/app/actions/game';
-import {
-  Flame,
-  Plus,
-  Play,
-  Edit,
-  Copy,
-  Trash2,
-  Calendar,
-  Layers,
-  LogOut,
-  BookTemplate,
-} from 'lucide-react';
+import { Plus, Play, Edit, Copy, Trash2, LogOut, BookTemplate } from 'lucide-react';
+import { BrandMark } from '@/components/brand/BrandMark';
 
 interface Quiz {
   id: string;
@@ -59,34 +41,26 @@ interface DashboardClientProps {
   user: User;
 }
 
-export default function DashboardClient({
-  initialQuizzes,
-  user,
-}: DashboardClientProps) {
+export default function DashboardClient({ initialQuizzes, user }: DashboardClientProps) {
   const router = useRouter();
   const supabase = createClient();
   const [quizzes, setQuizzes] = useState<Quiz[]>(initialQuizzes);
-
-  // Dialog & Form State
   const [createDialogOpen, setCreateDialogOpen] = useState(false);
   const [title, setTitle] = useState('');
   const [description, setDescription] = useState('');
   const [actionLoading, setActionLoading] = useState(false);
 
-  // Logout Handler
   const handleLogout = async () => {
     try {
       await supabase.auth.signOut();
-      toast.success('Logged out successfully.');
+      toast.success('Signed out.');
       router.push('/');
       router.refresh();
-    } catch (err) {
-      console.error('Logout error:', err);
-      toast.error('Failed to log out.');
+    } catch {
+      toast.error('Failed to sign out.');
     }
   };
 
-  // Create Quiz Handler
   const handleCreateQuiz = async (e: React.FormEvent) => {
     e.preventDefault();
     if (!title.trim()) {
@@ -94,306 +68,256 @@ export default function DashboardClient({
       return;
     }
     setActionLoading(true);
-
     try {
       const newQuiz = await createQuiz(title.trim(), description.trim());
-      toast.success('Quiz template created successfully!');
-      
-      // Update state and close dialog
+      toast.success('Quiz created.');
       setQuizzes([newQuiz, ...quizzes]);
       setCreateDialogOpen(false);
       setTitle('');
       setDescription('');
-      
-      // Navigate straight to the editor
       router.push(`/dashboard/quizzes/${newQuiz.id}/edit`);
     } catch (err: unknown) {
-      const message = err instanceof Error ? err.message : 'Failed to create quiz.';
-      toast.error(message);
+      toast.error(err instanceof Error ? err.message : 'Failed to create quiz.');
     } finally {
       setActionLoading(false);
     }
   };
 
-  // Create Template Quiz Handler
   const handleCreateTemplate = async () => {
-    const loadingToast = toast.loading('Creating template quiz with 30 questions...');
+    const loadingToast = toast.loading('Creating template quiz…');
     try {
       const newQuiz = await createTemplateQuiz();
-      toast.success('Template quiz created with 30 questions!', { id: loadingToast });
+      toast.success('Template ready.', { id: loadingToast });
       setQuizzes([newQuiz, ...quizzes]);
     } catch (err: unknown) {
-      const message = err instanceof Error ? err.message : 'Failed to create template quiz.';
-      toast.error(message, { id: loadingToast });
+      toast.error(err instanceof Error ? err.message : 'Failed to create template.', { id: loadingToast });
     }
   };
 
-  // Clone Quiz Handler
   const handleCloneQuiz = async (quizId: string) => {
-    const loadingToast = toast.loading('Cloning quiz...');
+    const loadingToast = toast.loading('Duplicating…');
     try {
       const cloned = await cloneQuiz(quizId);
-      toast.success('Quiz duplicated successfully!', { id: loadingToast });
+      toast.success('Quiz duplicated.', { id: loadingToast });
       setQuizzes([cloned, ...quizzes]);
     } catch (err: unknown) {
-      const message = err instanceof Error ? err.message : 'Failed to clone quiz.';
-      toast.error(message, { id: loadingToast });
+      toast.error(err instanceof Error ? err.message : 'Failed to clone.', { id: loadingToast });
     }
   };
 
-  // Delete Quiz Handler
   const handleDeleteQuiz = async (quizId: string) => {
-    if (!confirm('Are you sure you want to delete this quiz? This will delete all its questions permanentely.')) {
-      return;
-    }
-    const loadingToast = toast.loading('Deleting quiz...');
+    if (!confirm('Delete this quiz and all its questions?')) return;
+    const loadingToast = toast.loading('Deleting…');
     try {
       await deleteQuiz(quizId);
-      toast.success('Quiz deleted.', { id: loadingToast });
+      toast.success('Deleted.', { id: loadingToast });
       setQuizzes(quizzes.filter((q) => q.id !== quizId));
     } catch (err: unknown) {
-      const message = err instanceof Error ? err.message : 'Failed to delete quiz.';
-      toast.error(message, { id: loadingToast });
+      toast.error(err instanceof Error ? err.message : 'Failed to delete.', { id: loadingToast });
     }
   };
 
-  // Host Game Handler (creates live lobby)
   const handleHostGame = async (quizId: string) => {
-    const loadingToast = toast.loading('Creating live game room...');
+    const loadingToast = toast.loading('Opening live lobby…');
     try {
       const session = await createGameSession(quizId);
-      toast.success('Game lobby created! Redirecting...', { id: loadingToast });
+      toast.success('Lobby ready.', { id: loadingToast });
       router.push(`/host/${session.id}`);
     } catch (err: unknown) {
-      const message = err instanceof Error ? err.message : 'Failed to start game.';
-      toast.error(message, { id: loadingToast });
+      toast.error(err instanceof Error ? err.message : 'Failed to start game.', { id: loadingToast });
     }
   };
 
   return (
-    <div className="relative min-h-screen bg-slate-950 font-sans text-slate-100 flex flex-col justify-between">
-      {/* Background Decorative Gradients */}
-      <div className="absolute top-[-10%] left-[-10%] w-[50%] h-[50%] rounded-full bg-violet-900/10 blur-[120px] pointer-events-none" />
-      <div className="absolute bottom-[-10%] right-[-10%] w-[50%] h-[50%] rounded-full bg-rose-900/10 blur-[120px] pointer-events-none" />
+    <div className="arena-noise relative min-h-screen bg-arena-canvas">
+      <div className="pointer-events-none absolute inset-0 arena-grid opacity-40" />
 
-      {/* Header */}
-      <header className="border-b border-slate-900 bg-slate-950/60 backdrop-blur-xl sticky top-0 z-20">
-        <div className="container mx-auto px-6 py-4 flex items-center justify-between">
-          <div className="flex items-center gap-2 cursor-pointer" onClick={() => router.push('/')}>
-            <div className="bg-gradient-to-tr from-violet-600 to-fuchsia-600 p-2 rounded-xl flex items-center justify-center">
-              <Flame className="w-5 h-5 text-white" />
-            </div>
-            <span className="font-extrabold text-xl tracking-tight bg-gradient-to-r from-violet-400 via-fuchsia-400 to-rose-400 bg-clip-text text-transparent">
-              QuizArena
-            </span>
-          </div>
-
-          <div className="flex items-center gap-4">
-            <div className="hidden sm:flex flex-col text-right">
-              <span className="text-xs text-slate-500 font-medium">Logged in as</span>
-              <span className="text-sm font-semibold text-slate-300">{user.email}</span>
+      <header className="sticky top-0 z-20 border-b-2 border-arena-ink bg-white/90 backdrop-blur-md">
+        <div className="mx-auto flex max-w-6xl items-center justify-between px-6 py-4">
+          <button type="button" onClick={() => router.push('/')}>
+            <BrandMark size="sm" />
+          </button>
+          <div className="flex items-center gap-3">
+            <div className="hidden text-right sm:block">
+              <p className="text-[10px] font-bold uppercase tracking-[0.18em] text-arena-ink/40">Host</p>
+              <p className="max-w-[180px] truncate text-sm font-semibold text-arena-ink">{user.email}</p>
             </div>
             <Button
               variant="ghost"
               size="icon"
-              className="text-slate-400 hover:text-rose-400 hover:bg-rose-950/20 border border-slate-900 rounded-xl"
+              className="rounded-none border-2 border-arena-ink text-arena-ink/60 hover:bg-arena-ink hover:text-white"
               onClick={handleLogout}
-              title="Sign Out"
+              title="Sign out"
             >
-              <LogOut className="w-4 h-4" />
+              <LogOut className="h-4 w-4" />
             </Button>
           </div>
         </div>
       </header>
 
-      {/* Main Body */}
-      <main className="container mx-auto px-6 py-10 flex-1 z-10">
-        {/* Title and Action bar */}
-        <div className="flex flex-col sm:flex-row items-start sm:items-center justify-between gap-4 mb-8">
+      <main className="relative z-10 mx-auto max-w-6xl px-6 py-10">
+        <div className="mb-10 flex flex-col gap-5 sm:flex-row sm:items-end sm:justify-between">
           <div>
-            <h1 className="text-3xl font-black tracking-tight text-white flex items-center gap-2">
-              <Layers className="w-8 h-8 text-violet-500" /> Quiz Library
-            </h1>
-            <p className="text-slate-400 text-sm mt-1">
-              Manage your reusable quiz templates and host interactive live rooms.
+            <p className="arena-chip mb-3 bg-arena-acid">Your library</p>
+            <h1 className="font-display text-5xl font-extrabold tracking-[-0.03em] text-arena-ink">Quizzes</h1>
+            <p className="mt-2 max-w-md text-sm font-medium text-arena-ink/55">
+              Build once. Host live. Keep the room under control.
             </p>
           </div>
-          <div className="flex items-center gap-3">
+          <div className="flex flex-wrap gap-2">
             <Button
               onClick={handleCreateTemplate}
-              className="bg-gradient-to-r from-amber-600 to-orange-600 hover:from-amber-500 hover:to-orange-500 text-white font-bold h-11 px-5 rounded-xl shadow-lg shadow-amber-500/20 flex items-center gap-2"
+              className="h-11 rounded-none border-2 border-arena-ink bg-transparent font-bold text-arena-ink hover:bg-arena-ink hover:text-white"
             >
-              <BookTemplate className="w-4 h-4" /> Use Template
+              <BookTemplate className="mr-1.5 h-4 w-4" /> Template
             </Button>
             <Button
               onClick={() => setCreateDialogOpen(true)}
-              className="bg-gradient-to-r from-violet-600 to-fuchsia-600 hover:from-violet-500 hover:to-fuchsia-500 text-white font-bold h-11 px-5 rounded-xl shadow-lg shadow-violet-500/20 flex items-center gap-2"
+              className="h-11 rounded-none bg-arena-signal font-display font-extrabold text-white hover:bg-arena-signal/90"
             >
-              <Plus className="w-4 h-4" /> Create New Quiz
+              <Plus className="mr-1.5 h-4 w-4" /> New quiz
             </Button>
           </div>
         </div>
 
-        {/* Quizzes Grid */}
         {quizzes.length === 0 ? (
-          <div className="flex flex-col items-center justify-center p-12 bg-slate-900/40 border border-slate-900 rounded-2xl text-center max-w-lg mx-auto mt-12">
-            <div className="p-4 bg-slate-950/60 border border-slate-800 rounded-2xl mb-4">
-              <Layers className="w-12 h-12 text-slate-600" />
-            </div>
-            <h3 className="text-lg font-bold text-slate-200">No quizzes created yet</h3>
-            <p className="text-slate-500 text-sm mt-1 max-w-sm">
-              Create your first customizable quiz to host live multiplayer rooms for your audience.
-            </p>
+          <div className="mx-auto max-w-md border-2 border-dashed border-arena-ink/30 bg-white px-8 py-14 text-center shadow-[8px_8px_0_rgba(10,12,16,0.08)]">
+            <h3 className="font-display text-xl font-bold text-arena-ink">No quizzes yet</h3>
+            <p className="mt-2 text-sm text-arena-ink/55">Create your first set and open a live lobby.</p>
             <Button
               onClick={() => setCreateDialogOpen(true)}
-              className="mt-6 bg-violet-600 hover:bg-violet-500 text-white font-semibold rounded-xl"
+              className="mt-6 h-11 rounded-none bg-arena-ink font-bold text-white"
             >
-              Get Started
+              Create quiz
             </Button>
           </div>
         ) : (
-          <div className="grid sm:grid-cols-2 lg:grid-cols-3 gap-6">
-            {quizzes.map((quiz) => {
+          <ul className="grid gap-5 sm:grid-cols-2 lg:grid-cols-3">
+            {quizzes.map((quiz, index) => {
               const questionCount = quiz.questions?.[0]?.count ?? 0;
-              const accentColor = (typeof quiz.theme?.accentColor === 'string' ? quiz.theme.accentColor : null) || '#ec4899';
-              
+              const stripe = ['bg-arena-signal', 'bg-arena-court', 'bg-arena-acid', 'bg-arena-ink'][index % 4];
+
               return (
-                <Card
+                <li
                   key={quiz.id}
-                  className="bg-slate-900/50 border-slate-900/80 hover:border-slate-800 hover:bg-slate-900/80 transition-all rounded-2xl overflow-hidden flex flex-col justify-between group shadow-xl"
+                  className="arena-panel flex flex-col overflow-hidden transition hover:-translate-x-0.5 hover:-translate-y-0.5 hover:shadow-[10px_10px_0_rgba(10,12,16,0.14)]"
                 >
-                  <CardHeader className="p-5 pb-3">
-                    <div className="flex items-center justify-between gap-2 mb-2">
-                      <span className="text-xs px-2.5 py-0.5 rounded-full border border-violet-500/30 bg-violet-950/40 text-violet-300 font-semibold tracking-wide flex items-center gap-1">
-                        {questionCount} {questionCount === 1 ? 'Question' : 'Questions'}
-                      </span>
-                      <span
-                        className="w-3.5 h-3.5 rounded-full border border-black/20"
-                        style={{ backgroundColor: accentColor }}
-                        title="Theme Accent Color"
-                      />
-                    </div>
-                    <CardTitle className="text-xl font-bold text-white group-hover:text-violet-400 transition-colors line-clamp-1">
+                  <div className={`h-2.5 w-full ${stripe}`} />
+                  <div className="flex flex-1 flex-col p-5">
+                    <p className="text-[11px] font-bold uppercase tracking-[0.16em] text-arena-ink/40">
+                      {questionCount} {questionCount === 1 ? 'question' : 'questions'}
+                    </p>
+                    <h2 className="mt-1 line-clamp-1 font-display text-xl font-extrabold tracking-tight text-arena-ink">
                       {quiz.title}
-                    </CardTitle>
-                    <CardDescription className="text-slate-400 text-xs line-clamp-2 mt-1 min-h-[2rem]">
-                      {quiz.description || 'No description provided.'}
-                    </CardDescription>
-                  </CardHeader>
+                    </h2>
+                    <p className="mt-1 min-h-[2.5rem] text-sm text-arena-ink/55 line-clamp-2">
+                      {quiz.description || 'No description'}
+                    </p>
+                    <p className="mt-3 text-xs text-arena-ink/35">
+                      {new Date(quiz.created_at).toLocaleDateString()}
+                    </p>
 
-                  <CardContent className="p-5 pt-0 pb-3 flex flex-col gap-2 text-xs text-slate-500">
-                    <div className="flex items-center gap-1.5">
-                      <Calendar className="w-3.5 h-3.5" />
-                      <span>Created {new Date(quiz.created_at).toLocaleDateString()}</span>
+                    <div className="mt-5 flex items-center gap-2 border-t-2 border-arena-ink/10 pt-4">
+                      <Button
+                        onClick={() => handleHostGame(quiz.id)}
+                        className="h-10 flex-1 rounded-none bg-arena-ink font-display font-extrabold text-white hover:bg-arena-ink/90"
+                      >
+                        <Play className="mr-1 h-3.5 w-3.5 fill-current" /> Host
+                      </Button>
+                      <Button
+                        variant="ghost"
+                        size="icon"
+                        className="rounded-none border-2 border-arena-ink/20"
+                        onClick={() => router.push(`/dashboard/quizzes/${quiz.id}/edit`)}
+                        title="Edit"
+                      >
+                        <Edit className="h-4 w-4" />
+                      </Button>
+                      <Button
+                        variant="ghost"
+                        size="icon"
+                        className="rounded-none border-2 border-arena-ink/20"
+                        onClick={() => handleCloneQuiz(quiz.id)}
+                        title="Duplicate"
+                      >
+                        <Copy className="h-4 w-4" />
+                      </Button>
+                      <Button
+                        variant="ghost"
+                        size="icon"
+                        className="rounded-none border-2 border-arena-ink/20 text-arena-signal hover:bg-arena-signal/10"
+                        onClick={() => handleDeleteQuiz(quiz.id)}
+                        title="Delete"
+                      >
+                        <Trash2 className="h-4 w-4" />
+                      </Button>
                     </div>
-                  </CardContent>
-
-                  <CardFooter className="p-5 pt-3 border-t border-slate-950 bg-slate-900/30 flex items-center justify-between gap-2">
-                    <Button
-                      onClick={() => handleHostGame(quiz.id)}
-                      className="flex-1 bg-violet-600 hover:bg-violet-500 text-white font-bold rounded-xl h-10 gap-1.5 shadow-md shadow-violet-500/10 text-xs"
-                    >
-                      <Play className="w-3.5 h-3.5 fill-current" /> Host Live
-                    </Button>
-                    <Button
-                      variant="ghost"
-                      size="icon"
-                      className="border border-slate-800 hover:bg-slate-950 hover:text-white rounded-xl text-slate-400"
-                      onClick={() => router.push(`/dashboard/quizzes/${quiz.id}/edit`)}
-                      title="Edit Quiz & Questions"
-                    >
-                      <Edit className="w-4 h-4" />
-                    </Button>
-                    <Button
-                      variant="ghost"
-                      size="icon"
-                      className="border border-slate-800 hover:bg-slate-950 hover:text-white rounded-xl text-slate-400"
-                      onClick={() => handleCloneQuiz(quiz.id)}
-                      title="Duplicate Quiz"
-                    >
-                      <Copy className="w-4 h-4" />
-                    </Button>
-                    <Button
-                      variant="ghost"
-                      size="icon"
-                      className="border border-slate-800 hover:bg-rose-950/20 hover:text-rose-400 rounded-xl text-slate-400"
-                      onClick={() => handleDeleteQuiz(quiz.id)}
-                      title="Delete Quiz"
-                    >
-                      <Trash2 className="w-4 h-4" />
-                    </Button>
-                  </CardFooter>
-                </Card>
+                  </div>
+                </li>
               );
             })}
-          </div>
+          </ul>
         )}
       </main>
 
-      {/* Dialog for creating a new quiz */}
       <Dialog open={createDialogOpen} onOpenChange={setCreateDialogOpen}>
-        <DialogContent className="bg-slate-900 border-slate-800 text-slate-100 rounded-2xl max-w-md">
+        <DialogContent className="max-w-md rounded-2xl border-arena-line bg-white text-arena-ink">
           <form onSubmit={handleCreateQuiz}>
             <DialogHeader>
-              <DialogTitle className="text-xl font-bold text-white">Create New Quiz</DialogTitle>
-              <DialogDescription className="text-slate-400 text-sm">
-                Name your quiz template. You will customize themes and add questions next.
+              <DialogTitle className="font-display text-xl font-extrabold">New quiz</DialogTitle>
+              <DialogDescription className="text-arena-ink/55">
+                Name it now — add questions in the editor next.
               </DialogDescription>
             </DialogHeader>
-            <div className="space-y-4 my-6">
-              <div className="space-y-2">
-                <Label htmlFor="quizTitle" className="text-slate-300 text-xs font-semibold">
-                  QUIZ TITLE
+            <div className="my-5 space-y-3">
+              <div>
+                <Label htmlFor="quizTitle" className="text-[11px] font-bold uppercase tracking-wider text-arena-ink/50">
+                  Title
                 </Label>
                 <Input
                   id="quizTitle"
-                  placeholder="e.g. World History Trivia"
+                  placeholder="World History Trivia"
                   value={title}
                   onChange={(e) => setTitle(e.target.value)}
-                  className="bg-slate-950 border-slate-800 h-11 focus-visible:ring-violet-500 rounded-xl"
+                  className="mt-1.5 h-11 rounded-xl border-2 border-arena-ink/15"
                   maxLength={50}
                   required
                 />
               </div>
-              <div className="space-y-2">
-                <Label htmlFor="quizDesc" className="text-slate-300 text-xs font-semibold">
-                  DESCRIPTION (OPTIONAL)
+              <div>
+                <Label htmlFor="quizDesc" className="text-[11px] font-bold uppercase tracking-wider text-arena-ink/50">
+                  Description
                 </Label>
                 <Input
                   id="quizDesc"
-                  placeholder="e.g. 10 questions on general history trivia"
+                  placeholder="Optional"
                   value={description}
                   onChange={(e) => setDescription(e.target.value)}
-                  className="bg-slate-950 border-slate-800 h-11 focus-visible:ring-violet-500 rounded-xl"
+                  className="mt-1.5 h-11 rounded-xl border-2 border-arena-ink/15"
                   maxLength={150}
                 />
               </div>
             </div>
-            <DialogFooter>
+            <DialogFooter className="gap-2">
               <Button
                 type="button"
                 variant="ghost"
                 onClick={() => setCreateDialogOpen(false)}
-                className="border border-slate-800 hover:bg-slate-950 text-slate-400 rounded-xl"
+                className="rounded-xl border border-arena-line"
               >
                 Cancel
               </Button>
               <Button
                 type="submit"
                 disabled={actionLoading}
-                className="bg-violet-600 hover:bg-violet-500 text-white font-semibold rounded-xl"
+                className="rounded-xl bg-arena-signal font-bold text-white hover:bg-arena-signal/90"
               >
-                {actionLoading ? 'Creating...' : 'Create & Edit'}
+                {actionLoading ? 'Creating…' : 'Create & edit'}
               </Button>
             </DialogFooter>
           </form>
         </DialogContent>
       </Dialog>
-
-      {/* Footer */}
-      <footer className="container mx-auto px-6 py-6 border-t border-slate-900 text-slate-500 text-xs z-10 text-center">
-        <div>&copy; {new Date().getFullYear()} QuizArena. All rights reserved.</div>
-      </footer>
     </div>
   );
 }

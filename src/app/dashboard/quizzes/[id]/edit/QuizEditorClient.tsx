@@ -307,7 +307,7 @@ export default function QuizEditorClient({
   };
 
   return (
-    <div className="min-h-screen bg-slate-950 text-slate-100 flex flex-col font-sans">
+    <div className="min-h-screen bg-white text-arena-ink flex flex-col font-sans">
       <QuizEditorHeader
         title={title}
         questionCount={questions.length}

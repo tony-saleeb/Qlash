@@ -43,17 +43,17 @@ export default function QuestionEditorPane({
   return (
     <main className="md:col-span-9 p-6 overflow-y-auto max-h-[calc(100vh-73px)] space-y-6">
       {/* Question Meta Row */}
-      <div className="grid grid-cols-1 sm:grid-cols-4 gap-4 bg-slate-900/40 p-4 border border-slate-900 rounded-2xl items-center">
+      <div className="grid grid-cols-1 sm:grid-cols-4 gap-4 bg-arena-mist/40 p-4 border border-arena-line rounded-2xl items-center">
         {/* Question Type */}
         <div className="space-y-1.5">
-          <Label className="text-slate-500 text-[10px] uppercase font-bold tracking-wider">
+          <Label className="text-arena-ink/45 text-[10px] uppercase font-bold tracking-wider">
             Question Type
           </Label>
           <Select value={activeQuestion.type} onValueChange={(val) => { if (val) onTypeChange(val); }}>
-            <SelectTrigger className="bg-slate-950 border-slate-800 h-9 text-xs rounded-xl">
+            <SelectTrigger className="bg-white border-arena-line h-9 text-xs rounded-xl">
               <SelectValue placeholder="Select type" />
             </SelectTrigger>
-            <SelectContent className="bg-slate-900 border-slate-800 text-slate-100">
+            <SelectContent className="bg-arena-mist border-arena-line text-arena-ink">
               <SelectItem value="mcq">Multiple Choice</SelectItem>
               <SelectItem value="true_false">True / False</SelectItem>
               <SelectItem value="multi_select">Multi-Select</SelectItem>
@@ -65,14 +65,14 @@ export default function QuestionEditorPane({
 
         {/* Time Limit */}
         <div className="space-y-1.5">
-          <Label className="text-slate-500 text-[10px] uppercase font-bold tracking-wider flex items-center justify-between pr-2">
+          <Label className="text-arena-ink/45 text-[10px] uppercase font-bold tracking-wider flex items-center justify-between pr-2">
             <span>Time Limit</span>
-            <span className="font-mono text-violet-400 font-bold">
+            <span className="font-mono text-arena-court font-bold">
               {activeQuestion.time_limit_seconds}s
             </span>
           </Label>
           <div className="flex items-center gap-3">
-            <Clock className="w-4 h-4 text-slate-500 shrink-0" />
+            <Clock className="w-4 h-4 text-arena-ink/45 shrink-0" />
             <Slider
               min={5}
               max={120}
@@ -89,14 +89,14 @@ export default function QuestionEditorPane({
 
         {/* Points Value */}
         <div className="space-y-1.5">
-          <Label className="text-slate-500 text-[10px] uppercase font-bold tracking-wider flex items-center justify-between pr-2">
+          <Label className="text-arena-ink/45 text-[10px] uppercase font-bold tracking-wider flex items-center justify-between pr-2">
             <span>Base Points</span>
-            <span className="font-mono text-violet-400 font-bold">
+            <span className="font-mono text-arena-court font-bold">
               {activeQuestion.points_base}
             </span>
           </Label>
           <div className="flex items-center gap-3">
-            <Award className="w-4 h-4 text-slate-500 shrink-0" />
+            <Award className="w-4 h-4 text-arena-ink/45 shrink-0" />
             <Slider
               min={0}
               max={2000}
@@ -114,7 +114,7 @@ export default function QuestionEditorPane({
 
         {/* Scoring Decay Type */}
         <div className="space-y-1.5">
-          <Label className="text-slate-500 text-[10px] uppercase font-bold tracking-wider">
+          <Label className="text-arena-ink/45 text-[10px] uppercase font-bold tracking-wider">
             Scoring Curve
           </Label>
           <Select
@@ -122,10 +122,10 @@ export default function QuestionEditorPane({
             value={activeQuestion.scoring_type}
             onValueChange={(val) => { if (val) onUpdate({ scoring_type: val as Question['scoring_type'] }); }}
           >
-            <SelectTrigger className="bg-slate-950 border-slate-800 h-9 text-xs rounded-xl">
+            <SelectTrigger className="bg-white border-arena-line h-9 text-xs rounded-xl">
               <SelectValue placeholder="Select type" />
             </SelectTrigger>
-            <SelectContent className="bg-slate-900 border-slate-800 text-slate-100">
+            <SelectContent className="bg-arena-mist border-arena-line text-arena-ink">
               <SelectItem value="linear">Linear Decay (Speed Bonus)</SelectItem>
               <SelectItem value="flat">Flat points (No Speed Bonus)</SelectItem>
               <SelectItem value="none">No points round</SelectItem>
@@ -137,15 +137,15 @@ export default function QuestionEditorPane({
       {/* Prompt Entry Box */}
       <div className="space-y-2">
         <div className="flex items-center justify-between">
-          <Label className="text-slate-400 text-xs font-semibold">
+          <Label className="text-arena-ink/55 text-xs font-semibold">
             Question Prompt
           </Label>
-          <div className="flex items-center gap-4 text-xs font-semibold text-violet-400">
+          <div className="flex items-center gap-4 text-xs font-semibold text-arena-court">
             <label className="flex items-center gap-1.5 cursor-pointer">
               <Switch
                 checked={isDoublePointsRound}
                 onCheckedChange={onToggleDoublePoints}
-                className="data-[state=checked]:bg-violet-600 scale-75"
+                className="data-[state=checked]:bg-arena-signal scale-75"
               />
               Double Points Round (2x)
             </label>
@@ -155,14 +155,14 @@ export default function QuestionEditorPane({
           placeholder="Type your question prompt here..."
           value={activeQuestion.prompt}
           onChange={(e) => onUpdate({ prompt: e.target.value })}
-          className="bg-slate-900/50 border-slate-900 h-24 text-base focus-visible:ring-violet-500 rounded-2xl p-4 font-semibold resize-none"
+          className="bg-arena-mist/60 border-arena-line h-24 text-base focus-visible:ring-arena-court rounded-2xl p-4 font-semibold resize-none"
           maxLength={150}
         />
       </div>
 
       {/* Media attachment input */}
       <div className="space-y-2">
-        <Label className="text-slate-400 text-xs font-semibold">
+        <Label className="text-arena-ink/55 text-xs font-semibold">
           Media Attachment (Optional Image/GIF/Video URL)
         </Label>
         <div className="flex gap-2">
@@ -174,17 +174,17 @@ export default function QuestionEditorPane({
               const type = url.match(/\.(mp4|webm|ogg)$/i) ? 'video' : url ? 'image' : null;
               onUpdate({ media_url: url || null, media_type: type });
             }}
-            className="bg-slate-900/50 border-slate-900 h-10 focus-visible:ring-violet-500 rounded-xl flex-1"
+            className="bg-arena-mist/60 border-arena-line h-10 focus-visible:ring-arena-court rounded-xl flex-1"
           />
           {activeQuestion.media_url && (
             <Select
               value={activeQuestion.media_type || 'image'}
               onValueChange={(val) => { if (val) onUpdate({ media_type: val as Question['media_type'] }); }}
             >
-              <SelectTrigger className="bg-slate-900 border-slate-900 w-28 h-10 text-xs rounded-xl">
+              <SelectTrigger className="bg-arena-mist border-arena-line w-28 h-10 text-xs rounded-xl">
                 <SelectValue />
               </SelectTrigger>
-              <SelectContent className="bg-slate-900 border-slate-800 text-slate-100">
+              <SelectContent className="bg-arena-mist border-arena-line text-arena-ink">
                 <SelectItem value="image">Image / GIF</SelectItem>
                 <SelectItem value="video">Short Video</SelectItem>
               </SelectContent>
@@ -196,7 +196,7 @@ export default function QuestionEditorPane({
       {/* Answers Design Section */}
       <div className="space-y-4">
         <div className="flex items-center justify-between">
-          <Label className="text-slate-400 text-xs font-semibold">
+          <Label className="text-arena-ink/55 text-xs font-semibold">
             Answer Options & Correct Key Configuration
           </Label>
           {(activeQuestion.type === 'mcq' ||
@@ -206,7 +206,7 @@ export default function QuestionEditorPane({
               variant="ghost"
               onClick={onAddAnswer}
               disabled={activeQuestion.answers.length >= 6}
-              className="text-xs hover:bg-slate-900 text-violet-400 hover:text-violet-300 font-bold border border-slate-900 rounded-xl h-8 px-3"
+              className="text-xs hover:bg-arena-mist text-arena-court hover:text-arena-court font-bold border border-arena-line rounded-xl h-8 px-3"
             >
               + Add Option
             </Button>
@@ -215,11 +215,11 @@ export default function QuestionEditorPane({
 
         {activeQuestion.type === 'type_answer' ? (
           // Type the Answer Workspace
-          <div className="p-5 bg-slate-900/40 border border-slate-900 rounded-2xl space-y-3">
-            <Label htmlFor="correctText" className="text-slate-300 text-xs font-bold">
+          <div className="p-5 bg-arena-mist/40 border border-arena-line rounded-2xl space-y-3">
+            <Label htmlFor="correctText" className="text-arena-ink/80 text-xs font-bold">
               Correct Text Options (Fuzzy-matched, case-insensitive)
             </Label>
-            <p className="text-slate-500 text-xs leading-normal">
+            <p className="text-arena-ink/45 text-xs leading-normal">
               Type the exact expected word/words. Separate alternative acceptable answers with semicolons (e.g. <code>Washington; George Washington; George</code>).
             </p>
             <Input
@@ -227,7 +227,7 @@ export default function QuestionEditorPane({
               placeholder="e.g. Earth; the earth"
               value={activeQuestion.answers[0]?.text || ''}
               onChange={(e) => onUpdateAnswer(0, e.target.value)}
-              className="bg-slate-950 border-slate-800 h-12 text-lg font-bold focus-visible:ring-violet-500 rounded-xl"
+              className="bg-white border-arena-line h-12 text-lg font-bold focus-visible:ring-arena-court rounded-xl"
             />
           </div>
         ) : (
@@ -237,11 +237,11 @@ export default function QuestionEditorPane({
               return (
                 <div
                   key={ans.id}
-                  className="relative flex items-center gap-3 bg-slate-900/30 border border-slate-900 p-3.5 rounded-2xl hover:border-slate-800 transition-colors"
+                  className="relative flex items-center gap-3 bg-arena-mist/30 border border-arena-line p-3.5 rounded-2xl hover:border-arena-line transition-colors"
                 >
                   {/* Shape visual box matching color */}
                   <div
-                    className="w-10 h-10 rounded-xl flex items-center justify-center text-white text-lg font-black shrink-0 shadow-lg"
+                    className="w-10 h-10 rounded-xl flex items-center justify-center text-arena-ink text-lg font-black shrink-0 shadow-lg"
                     style={{ backgroundColor: ans.color }}
                   >
                     {SHAPES_MAP[ans.shape] || '■'}
@@ -265,8 +265,8 @@ export default function QuestionEditorPane({
                         onClick={() => onToggleCorrect(ansIdx)}
                         className={`w-7 h-7 rounded-xl border flex items-center justify-center transition-all ${
                           ans.is_correct
-                            ? 'bg-emerald-500 border-emerald-400 text-white shadow-md shadow-emerald-500/20'
-                            : 'border-slate-800 hover:border-slate-700 bg-slate-950 text-transparent'
+                            ? 'bg-emerald-500 border-emerald-400 text-arena-ink shadow-md shadow-emerald-500/20'
+                            : 'border-arena-line hover:border-arena-ink/25 bg-white text-transparent'
                         }`}
                         title="Mark as Correct answer"
                       >
@@ -281,7 +281,7 @@ export default function QuestionEditorPane({
                         <button
                           type="button"
                           onClick={() => onRemoveAnswer(ansIdx)}
-                          className="text-slate-500 hover:text-rose-400 transition-colors"
+                          className="text-arena-ink/45 hover:text-rose-400 transition-colors"
                           title="Remove option"
                         >
                           <Trash2 className="w-4 h-4" />

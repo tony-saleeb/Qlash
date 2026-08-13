@@ -1,5 +1,3 @@
-@import "tw-animate-css";
-@import "shadcn/tailwind.css";
 @tailwind base;
 @tailwind components;
 @tailwind utilities;
@@ -11,84 +9,239 @@
 }
 
 @layer base {
-  .theme {
-    --font-heading: var(--font-sans);
-    --font-sans: var(--font-sans);
-  }
   :root {
-    --background: oklch(1 0 0);
-    --foreground: oklch(0.145 0 0);
-    --card: oklch(1 0 0);
-    --card-foreground: oklch(0.145 0 0);
-    --popover: oklch(1 0 0);
-    --popover-foreground: oklch(0.145 0 0);
-    --primary: oklch(0.205 0 0);
-    --primary-foreground: oklch(0.985 0 0);
-    --secondary: oklch(0.97 0 0);
-    --secondary-foreground: oklch(0.205 0 0);
-    --muted: oklch(0.97 0 0);
-    --muted-foreground: oklch(0.556 0 0);
-    --accent: oklch(0.97 0 0);
-    --accent-foreground: oklch(0.205 0 0);
-    --destructive: oklch(0.577 0.245 27.325);
-    --border: oklch(0.922 0 0);
-    --input: oklch(0.922 0 0);
-    --ring: oklch(0.708 0 0);
-    --chart-1: oklch(0.87 0 0);
-    --chart-2: oklch(0.556 0 0);
-    --chart-3: oklch(0.439 0 0);
-    --chart-4: oklch(0.371 0 0);
-    --chart-5: oklch(0.269 0 0);
-    --radius: 0.625rem;
-    --sidebar: oklch(0.985 0 0);
-    --sidebar-foreground: oklch(0.145 0 0);
-    --sidebar-primary: oklch(0.205 0 0);
-    --sidebar-primary-foreground: oklch(0.985 0 0);
-    --sidebar-accent: oklch(0.97 0 0);
-    --sidebar-accent-foreground: oklch(0.205 0 0);
-    --sidebar-border: oklch(0.922 0 0);
-    --sidebar-ring: oklch(0.708 0 0);
+    --arena-canvas: #eef1f4;
+    --arena-ink: #0a0c10;
+    --arena-signal: #e11d2e;
+    --arena-court: #0a6b5c;
+    --arena-acid: #c8f542;
+    --arena-mist: #e2e7ed;
+    --arena-stage: #0c0e14;
+    --arena-line: #d4dae3;
+
+    --background: #eef1f4;
+    --foreground: #0a0c10;
+    --card: #ffffff;
+    --card-foreground: #0a0c10;
+    --popover: #ffffff;
+    --popover-foreground: #0a0c10;
+    --primary: #e11d2e;
+    --primary-foreground: #ffffff;
+    --secondary: #e2e7ed;
+    --secondary-foreground: #0a0c10;
+    --muted: #e2e7ed;
+    --muted-foreground: #5a6572;
+    --accent: #c8f542;
+    --accent-foreground: #0a0c10;
+    --destructive: #e11d2e;
+    --border: #d4dae3;
+    --input: #d4dae3;
+    --ring: #0a6b5c;
+    --radius: 0.5rem;
+
+    --font-heading: var(--font-display);
   }
-  .dark {
-    --background: oklch(0.145 0 0);
-    --foreground: oklch(0.985 0 0);
-    --card: oklch(0.205 0 0);
-    --card-foreground: oklch(0.985 0 0);
-    --popover: oklch(0.205 0 0);
-    --popover-foreground: oklch(0.985 0 0);
-    --primary: oklch(0.922 0 0);
-    --primary-foreground: oklch(0.205 0 0);
-    --secondary: oklch(0.269 0 0);
-    --secondary-foreground: oklch(0.985 0 0);
-    --muted: oklch(0.269 0 0);
-    --muted-foreground: oklch(0.708 0 0);
-    --accent: oklch(0.269 0 0);
-    --accent-foreground: oklch(0.985 0 0);
-    --destructive: oklch(0.704 0.191 22.216);
-    --border: oklch(1 0 0 / 10%);
-    --input: oklch(1 0 0 / 15%);
-    --ring: oklch(0.556 0 0);
-    --chart-1: oklch(0.87 0 0);
-    --chart-2: oklch(0.556 0 0);
-    --chart-3: oklch(0.439 0 0);
-    --chart-4: oklch(0.371 0 0);
-    --chart-5: oklch(0.269 0 0);
-    --sidebar: oklch(0.205 0 0);
-    --sidebar-foreground: oklch(0.985 0 0);
-    --sidebar-primary: oklch(0.488 0.243 264.376);
-    --sidebar-primary-foreground: oklch(0.985 0 0);
-    --sidebar-accent: oklch(0.269 0 0);
-    --sidebar-accent-foreground: oklch(0.985 0 0);
-    --sidebar-border: oklch(1 0 0 / 10%);
-    --sidebar-ring: oklch(0.556 0 0);
-  }
+
   * {
     @apply border-border;
   }
+
   body {
-    @apply bg-background text-foreground;
+    @apply bg-background text-foreground antialiased;
+    background-color: var(--arena-canvas);
   }
+
   html {
     @apply font-sans;
+  }
+
+  h1,
+  h2,
+  h3,
+  .font-display {
+    font-family: var(--font-display), var(--font-sans), system-ui, sans-serif;
+  }
+
+  ::selection {
+    background: var(--arena-acid);
+    color: var(--arena-ink);
+  }
+}
+
+@layer components {
+  .arena-noise {
+    position: relative;
+  }
+
+  .arena-noise::after {
+    content: "";
+    pointer-events: none;
+    position: absolute;
+    inset: 0;
+    opacity: 0.045;
+    mix-blend-mode: multiply;
+    background-image: url("data:image/svg+xml,%3Csvg viewBox='0 0 200 200' xmlns='http://www.w3.org/2000/svg'%3E%3Cfilter id='n'%3E%3CfeTurbulence type='fractalNoise' baseFrequency='0.85' numOctaves='4' stitchTiles='stitch'/%3E%3C/filter%3E%3Crect width='100%25' height='100%25' filter='url(%23n)'/%3E%3C/svg%3E");
+  }
+
+  .arena-grid {
+    background-image:
+      linear-gradient(rgba(10, 12, 16, 0.05) 1px, transparent 1px),
+      linear-gradient(90deg, rgba(10, 12, 16, 0.05) 1px, transparent 1px);
+    background-size: 40px 40px;
+  }
+
+  .arena-stage {
+    background-color: var(--arena-stage);
+    background-image:
+      radial-gradient(ellipse 90% 55% at 50% -15%, rgba(200, 245, 66, 0.16), transparent 55%),
+      radial-gradient(ellipse 50% 40% at 100% 100%, rgba(225, 29, 46, 0.14), transparent 50%),
+      radial-gradient(ellipse 40% 30% at 0% 80%, rgba(10, 107, 92, 0.12), transparent 45%);
+    color: #f4f6f8;
+  }
+
+  .arena-pin {
+    @apply font-display font-black tabular-nums;
+  }
+
+  .arena-cta {
+    @apply inline-flex items-center justify-center gap-2 bg-[var(--arena-signal)] px-6 py-3.5 text-sm font-bold text-white transition;
+    box-shadow: 0 1px 0 rgba(255, 255, 255, 0.22) inset, 4px 4px 0 rgba(10, 12, 16, 0.18);
+  }
+
+  .arena-cta:hover {
+    filter: brightness(1.06);
+    transform: translate(-1px, -1px);
+    box-shadow: 0 1px 0 rgba(255, 255, 255, 0.22) inset, 5px 5px 0 rgba(10, 12, 16, 0.2);
+  }
+
+  .arena-cta:active {
+    transform: translate(2px, 2px);
+    box-shadow: 0 1px 0 rgba(255, 255, 255, 0.22) inset, 1px 1px 0 rgba(10, 12, 16, 0.18);
+  }
+
+  .arena-cta-secondary {
+    @apply inline-flex items-center justify-center gap-2 border-2 border-[var(--arena-ink)] bg-transparent px-6 py-3.5 text-sm font-bold text-[var(--arena-ink)] transition;
+  }
+
+  .arena-cta-secondary:hover {
+    background: var(--arena-ink);
+    color: white;
+  }
+
+  .arena-panel {
+    @apply border-2 border-[var(--arena-ink)] bg-white;
+    box-shadow: 8px 8px 0 rgba(10, 12, 16, 0.12);
+  }
+
+  .arena-chip {
+    @apply inline-flex items-center gap-1.5 border-2 border-[var(--arena-ink)] bg-white px-2.5 py-1 text-[10px] font-bold uppercase tracking-wider text-[var(--arena-ink)];
+  }
+
+  .arena-shape-tile {
+    box-shadow: 6px 6px 0 rgba(10, 12, 16, 0.35);
+  }
+
+  .arena-answer {
+    box-shadow: 0 1px 0 rgba(255, 255, 255, 0.28) inset, 0 -4px 0 rgba(0, 0, 0, 0.22) inset, 4px 4px 0 rgba(0, 0, 0, 0.18);
+  }
+
+  .arena-answer:hover {
+    filter: brightness(1.05);
+  }
+
+  .motion-rise {
+    animation: arena-rise 0.75s cubic-bezier(0.22, 1, 0.36, 1) both;
+  }
+
+  .motion-rise-delay {
+    animation: arena-rise 0.75s cubic-bezier(0.22, 1, 0.36, 1) 0.1s both;
+  }
+
+  .motion-rise-delay-2 {
+    animation: arena-rise 0.75s cubic-bezier(0.22, 1, 0.36, 1) 0.2s both;
+  }
+
+  .motion-pulse-soft {
+    animation: arena-pulse-soft 2.6s ease-in-out infinite;
+  }
+
+  .motion-slide-x {
+    animation: arena-slide-x 16s linear infinite;
+  }
+
+  .motion-tile-1 {
+    animation: arena-tile-pop 0.7s cubic-bezier(0.22, 1, 0.36, 1) 0.05s both;
+  }
+  .motion-tile-2 {
+    animation: arena-tile-pop 0.7s cubic-bezier(0.22, 1, 0.36, 1) 0.14s both;
+  }
+  .motion-tile-3 {
+    animation: arena-tile-pop 0.7s cubic-bezier(0.22, 1, 0.36, 1) 0.23s both;
+  }
+  .motion-tile-4 {
+    animation: arena-tile-pop 0.7s cubic-bezier(0.22, 1, 0.36, 1) 0.32s both;
+  }
+
+  .motion-breathe {
+    animation: arena-breathe 3.2s ease-in-out infinite;
+  }
+
+  .animate-fade-in {
+    animation: arena-rise 0.35s ease-out both;
+  }
+
+  .animate-scale-in {
+    animation: arena-tile-pop 0.4s cubic-bezier(0.22, 1, 0.36, 1) both;
+  }
+}
+
+@keyframes arena-rise {
+  from {
+    opacity: 0;
+    transform: translateY(18px);
+  }
+  to {
+    opacity: 1;
+    transform: translateY(0);
+  }
+}
+
+@keyframes arena-pulse-soft {
+  0%,
+  100% {
+    transform: scale(1);
+  }
+  50% {
+    transform: scale(1.04);
+  }
+}
+
+@keyframes arena-slide-x {
+  from {
+    transform: translateX(0);
+  }
+  to {
+    transform: translateX(-50%);
+  }
+}
+
+@keyframes arena-tile-pop {
+  from {
+    opacity: 0;
+    transform: translateY(24px) scale(0.92);
+  }
+  to {
+    opacity: 1;
+    transform: translateY(0) scale(1);
+  }
+}
+
+@keyframes arena-breathe {
+  0%,
+  100% {
+    box-shadow: 0 0 0 0 rgba(200, 245, 66, 0.35);
+  }
+  50% {
+    box-shadow: 0 0 0 12px rgba(200, 245, 66, 0);
   }
 }

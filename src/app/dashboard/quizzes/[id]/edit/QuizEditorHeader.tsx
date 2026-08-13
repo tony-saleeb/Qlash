@@ -2,6 +2,7 @@
 
 import { Button } from '@/components/ui/button';
 import { ArrowLeft, Upload, Settings2, Save } from 'lucide-react';
+import { BrandMark } from '@/components/brand/BrandMark';
 
 interface QuizEditorHeaderProps {
   title: string;
@@ -23,22 +24,25 @@ export default function QuizEditorHeader({
   onSave,
 }: QuizEditorHeaderProps) {
   return (
-    <header className="border-b border-slate-900 bg-slate-950/80 backdrop-blur sticky top-0 z-10 px-6 py-4 flex items-center justify-between">
+    <header className="sticky top-0 z-10 flex items-center justify-between border-b border-arena-line bg-white/90 px-6 py-4 backdrop-blur-md">
       <div className="flex items-center gap-3">
         <Button
           variant="ghost"
           size="icon"
-          className="border border-slate-800 rounded-xl text-slate-400 hover:text-white"
+          className="rounded-xl border border-arena-line text-arena-ink/60 hover:bg-arena-mist hover:text-arena-ink"
           onClick={onBack}
         >
-          <ArrowLeft className="w-4 h-4" />
+          <ArrowLeft className="h-4 w-4" />
         </Button>
-        <div>
-          <h2 className="font-extrabold text-white text-lg leading-tight line-clamp-1">
-            Editing: {title}
+        <div className="hidden sm:block">
+          <BrandMark size="sm" />
+        </div>
+        <div className="border-l border-arena-line pl-3">
+          <h2 className="line-clamp-1 font-display text-lg font-extrabold leading-tight text-arena-ink">
+            {title}
           </h2>
-          <p className="text-slate-500 text-xs mt-0.5">
-            {questionCount} {questionCount === 1 ? 'Question' : 'Questions'}
+          <p className="mt-0.5 text-xs text-arena-ink/45">
+            {questionCount} {questionCount === 1 ? 'question' : 'questions'}
           </p>
         </div>
       </div>
@@ -47,23 +51,23 @@ export default function QuizEditorHeader({
         <Button
           variant="ghost"
           onClick={onImport}
-          className="border border-slate-800 hover:bg-slate-900 rounded-xl flex items-center gap-1.5 text-xs text-slate-300"
+          className="hidden rounded-xl border border-arena-line text-xs font-semibold text-arena-ink/70 hover:bg-arena-mist sm:flex"
         >
-          <Upload className="w-3.5 h-3.5" /> Import
+          <Upload className="mr-1.5 h-3.5 w-3.5" /> Import
         </Button>
         <Button
           variant="ghost"
           onClick={onSettings}
-          className="border border-slate-800 hover:bg-slate-900 rounded-xl flex items-center gap-1.5 text-xs text-slate-300"
+          className="rounded-xl border border-arena-line text-xs font-semibold text-arena-ink/70 hover:bg-arena-mist"
         >
-          <Settings2 className="w-3.5 h-3.5" /> Quiz Settings
+          <Settings2 className="mr-1.5 h-3.5 w-3.5" /> Settings
         </Button>
         <Button
           onClick={onSave}
           disabled={saving}
-          className="bg-emerald-600 hover:bg-emerald-500 text-white font-bold rounded-xl flex items-center gap-1.5 h-10 px-5"
+          className="h-10 rounded-xl bg-arena-court px-5 font-bold text-white hover:bg-arena-court/90"
         >
-          <Save className="w-4 h-4" /> {saving ? 'Saving...' : 'Save Quiz'}
+          <Save className="mr-1.5 h-4 w-4" /> {saving ? 'Saving…' : 'Save'}
         </Button>
       </div>
     </header>

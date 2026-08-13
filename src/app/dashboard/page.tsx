@@ -17,10 +17,10 @@ export default async function DashboardPage() {
     redirect('/');
   }
 
-  // Fetch quizzes for the logged-in host
+  // Lean select — avoid pulling unused columns on every library open
   const { data: quizzes, error: quizzesError } = await supabase
     .from('quizzes')
-    .select('*, questions(count)')
+    .select('id, title, description, cover_image_url, theme, created_at, questions(count)')
     .eq('host_id', user.id)
     .order('created_at', { ascending: false });
 
