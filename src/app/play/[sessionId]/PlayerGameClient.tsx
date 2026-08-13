@@ -194,11 +194,11 @@ export default function PlayerGameClient({
       if (qid) revealAppliedRef.current = qid;
       const submit = lastSubmitRef.current;
       const selected =
-        submit?.questionId === currentQ?.id ? submit.selected : [];
+        submit && submit.questionId === currentQ?.id ? submit.selected : [];
 
       let isCorrect = false;
       let pointsAwarded = 0;
-      if (submit?.questionId === currentQ?.id && submit.isCorrect !== null) {
+      if (submit && submit.questionId === currentQ?.id && submit.isCorrect !== null) {
         isCorrect = submit.isCorrect;
         pointsAwarded = submit.pointsAwarded;
       } else if (currentQ?.type !== 'poll' && selected.length > 0) {
@@ -408,12 +408,11 @@ export default function PlayerGameClient({
             }
           } else if (newStatus === 'question_reveal') {
             const q = activeQuestionRef.current;
-            revealFallbackTimer = window.setTimeout(() => {
+            revealFallbackTimer = setTimeout(() => {
               if (q && revealAppliedRef.current !== q.id) {
                 applyRevealInstant([]);
               }
             }, 250);
-          }
           } else if (newStatus === 'leaderboard') {
             setRoundResult(null);
           } else if (newStatus === 'finished') {
@@ -438,6 +437,7 @@ export default function PlayerGameClient({
     };
 
     let revealFallbackTimer: ReturnType<typeof setTimeout> | null = null;
+    let connectionTimer: ReturnType<typeof setTimeout> | null = null;
     const handleVisibilityChange = () => {
       const isVisible = document.visibilityState === 'visible';
       setOnline(isVisible);
