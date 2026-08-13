@@ -27,6 +27,9 @@ export const metadata: Metadata = {
   title: "QuizArena — Live classroom quiz, built for the rush",
   description:
     "Host up to 80 players in a real-time quiz arena. Instant join, sharp scoring, projector-ready control.",
+  icons: {
+    icon: [{ url: "/favicon.svg", type: "image/svg+xml" }],
+  },
 };
 
 export default function RootLayout({

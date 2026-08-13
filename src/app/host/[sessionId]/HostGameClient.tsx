@@ -686,8 +686,8 @@ export default function HostGameClient({
           </StageBadge>
         </header>
 
-        <main className="relative z-10 mx-auto grid w-full max-w-6xl flex-1 grid-cols-1 items-center gap-10 px-6 py-10 lg:grid-cols-12">
-          <div className="flex flex-col justify-center gap-8 text-center lg:col-span-5 lg:text-left">
+        <main className="relative z-10 mx-auto grid w-full max-w-6xl flex-1 grid-cols-1 items-center gap-8 px-6 py-10 lg:grid-cols-12">
+          <div className="flex flex-col justify-center gap-8 text-center lg:col-span-4 lg:text-left">
             <div>
               <p className="text-[11px] font-bold uppercase tracking-[0.28em] text-arena-acid">Join on your phone</p>
               <h2 className="mt-3 font-display text-5xl font-extrabold leading-[0.9] tracking-[-0.03em] text-white sm:text-6xl">
@@ -699,23 +699,26 @@ export default function HostGameClient({
               </p>
             </div>
 
-            <div className="mx-auto flex w-full max-w-lg flex-col items-center gap-5 sm:flex-row lg:mx-0">
-              <div className="w-full flex-1 border-2 border-arena-ink bg-white p-5 text-center shadow-[8px_8px_0_rgba(0,0,0,0.35)]">
-                <p className="text-[10px] font-bold uppercase tracking-[0.22em] text-arena-ink/40">Room PIN</p>
-                <div className="mt-3">
-                  <PinDisplay pin={session.pin} large />
-                </div>
+            <div className="mx-auto w-full max-w-md border-2 border-arena-ink bg-white p-5 text-center shadow-[8px_8px_0_rgba(0,0,0,0.35)] lg:mx-0">
+              <p className="text-[10px] font-bold uppercase tracking-[0.22em] text-arena-ink/40">Room PIN</p>
+              <div className="mt-3">
+                <PinDisplay pin={session.pin} large />
               </div>
-              {qrDataUrl && (
-                <div className="flex h-44 w-44 shrink-0 flex-col items-center justify-center border-2 border-arena-acid bg-white p-3 shadow-[6px_6px_0_rgba(200,245,66,0.35)]">
-                  <img src={qrDataUrl} alt="Lobby QR Code" className="h-32 w-32" />
-                  <span className="mt-1 text-[9px] font-black uppercase tracking-[0.2em] text-arena-ink/45">Scan</span>
-                </div>
-              )}
             </div>
           </div>
 
-          <div className="flex min-h-[48vh] flex-col gap-4 self-stretch border border-white/12 bg-white/[0.04] p-6 backdrop-blur-[2px] lg:col-span-7">
+          <div className="relative z-20 flex items-center justify-center lg:col-span-3">
+            <div className="flex h-52 w-52 shrink-0 flex-col items-center justify-center border-2 border-arena-acid bg-white p-3 shadow-[6px_6px_0_rgba(200,245,66,0.35)]">
+              {qrDataUrl ? (
+                <img src={qrDataUrl} alt="Lobby QR Code" className="h-40 w-40 object-contain" />
+              ) : (
+                <div className="h-40 w-40 animate-pulse bg-arena-mist" aria-hidden />
+              )}
+              <span className="mt-1 text-[9px] font-black uppercase tracking-[0.2em] text-arena-ink/45">Scan</span>
+            </div>
+          </div>
+
+          <div className="relative z-10 flex min-h-[48vh] flex-col gap-4 self-stretch border border-white/12 bg-white/[0.04] p-6 backdrop-blur-[2px] lg:col-span-5">
             <div className="flex items-center justify-between border-b border-white/10 pb-3">
               <span className="flex items-center gap-2 text-xs font-bold uppercase tracking-[0.2em] text-white/55">
                 <Users className="h-4 w-4 text-arena-acid" /> Players
