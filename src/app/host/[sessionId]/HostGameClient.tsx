@@ -25,6 +25,7 @@ import confetti from 'canvas-confetti';
 import QRCode from 'qrcode';
 import { playJoinSound, playTickSound, playRevealSound, playFanfareSound } from '@/lib/sounds';
 import { BrandMark, PinDisplay, StageBadge, playerChipColor } from '@/components/brand/BrandMark';
+import { cn } from '@/lib/utils';
 import {
   Dialog,
   DialogContent,
@@ -46,6 +47,9 @@ import {
 import { maybeShuffle } from '@/lib/game/shuffle';
 import { aggregateTeamScores } from '@/lib/game/teams';
 import { MAX_PLAYERS_PER_SESSION } from '@/lib/game/constants';
+
+const hostCtrl =
+  'h-10 gap-1.5 rounded-none border-2 border-white/30 bg-white/10 px-3.5 font-display text-[11px] font-extrabold uppercase tracking-[0.14em] text-white shadow-none hover:border-arena-acid hover:bg-arena-acid hover:text-arena-ink aria-expanded:border-arena-acid aria-expanded:bg-arena-acid aria-expanded:text-arena-ink [&_svg]:text-current';
 
 interface HostGameClientProps {
   initialSession: GameSessionRow;
@@ -815,23 +819,23 @@ export default function HostGameClient({
         {/* Title bar / Index + Question Jumper */}
         <div className="flex items-center justify-between gap-4 z-10">
           <div className="flex items-center gap-2">
-            <span className="text-sm font-black bg-arena-signal px-3 py-1.5 rounded-xl uppercase tracking-wider text-white">
+            <span className="inline-flex h-10 items-center border-2 border-arena-signal bg-arena-signal px-4 font-display text-[11px] font-extrabold uppercase tracking-[0.14em] text-white">
               Question {activeQuestionIndex + 1} of {playQuestions.length}
             </span>
 
             {/* Question Jumper Dropdown */}
             <div className="relative">
               <Button
-                variant="outline"
+                variant="ghost"
                 onClick={() => setIsJumperOpen(!isJumperOpen)}
-                className="border-white/15 hover:bg-white/10 text-white/80 gap-1 h-8 rounded-lg text-[10px] px-2.5"
+                className={cn(hostCtrl, isJumperOpen && 'border-arena-acid bg-arena-acid text-arena-ink')}
               >
-                <SkipForward className="w-3.5 h-3.5 text-arena-acid" />
+                <SkipForward className="h-3.5 w-3.5" />
                 Jump
-                {isJumperOpen ? <ChevronUp className="w-3 h-3" /> : <ChevronDown className="w-3 h-3" />}
+                {isJumperOpen ? <ChevronUp className="h-3 w-3" /> : <ChevronDown className="h-3 w-3" />}
               </Button>
               {isJumperOpen && (
-                <div className="absolute top-full left-0 mt-1 w-48 max-h-60 overflow-y-auto bg-arena-stage border border-white/15 rounded-xl shadow-2xl z-50 p-1.5 animate-fade-in">
+                <div className="absolute top-full left-0 z-50 mt-1 max-h-60 w-56 overflow-y-auto border-2 border-white/20 bg-arena-stage p-1.5 shadow-[6px_6px_0_rgba(0,0,0,0.45)] animate-fade-in">
                   {playQuestions.map((q, idx) => (
                     <button
                       key={q.id}
@@ -948,17 +952,17 @@ export default function HostGameClient({
         </div>
 
         {/* Host controls footer */}
-        <div className="flex items-center justify-between border-t border-white/10 pt-4 mt-6 z-10 flex-wrap gap-2">
-          <span className="text-white/50 text-xs font-semibold">
+        <div className="z-10 mt-6 flex flex-wrap items-center justify-between gap-3 border-t border-white/10 pt-4">
+          <span className="text-xs font-semibold text-white/50">
             PIN: {session.pin} | Live submissions tracking
           </span>
-          <div className="flex items-center gap-2 flex-wrap">
+          <div className="flex flex-wrap items-center gap-2">
             {/* Manage Players Dialog */}
             <Dialog open={isManagePlayersOpen} onOpenChange={setIsManagePlayersOpen}>
               <DialogTrigger
                 render={
-                  <Button variant="outline" className="border-white/15 hover:bg-white/10 text-white/80 gap-1.5 h-10 rounded-xl text-xs">
-                    <Settings className="w-4 h-4 text-arena-acid" /> Players ({players.length})
+                  <Button variant="ghost" className={hostCtrl}>
+                    <Settings className="h-4 w-4" /> Players ({players.length})
                   </Button>
                 }
               />
@@ -1002,8 +1006,8 @@ export default function HostGameClient({
             <Dialog open={isEditorOpen} onOpenChange={setIsEditorOpen}>
               <DialogTrigger
                 render={
-                  <Button variant="outline" onClick={handleOpenEditor} className="border-white/15 hover:bg-white/10 text-white/80 gap-1.5 h-10 rounded-xl text-xs">
-                    <Edit3 className="w-4 h-4 text-arena-acid" /> Edit
+                  <Button variant="ghost" onClick={handleOpenEditor} className={hostCtrl}>
+                    <Edit3 className="h-4 w-4" /> Edit
                   </Button>
                 }
               />
@@ -1056,23 +1060,22 @@ export default function HostGameClient({
             {/* Multiplier Toggle */}
             <Button
               onClick={handleToggleMultiplier}
-              variant="outline"
-              className={`gap-1.5 h-10 rounded-xl text-xs font-bold transition-all ${
-                isMultiplierActive
-                  ? 'border-amber-500 bg-amber-500/10 text-amber-400 hover:bg-amber-500/20'
-                  : 'border-white/15 hover:bg-white/10 text-slate-350'
-              }`}
+              variant="ghost"
+              className={cn(
+                hostCtrl,
+                isMultiplierActive && 'border-amber-400 bg-amber-400 text-arena-ink hover:border-amber-300 hover:bg-amber-300'
+              )}
             >
-              <Zap className={`w-4 h-4 ${isMultiplierActive ? 'text-amber-400 fill-amber-400' : 'text-white/50'}`} />
-              {isMultiplierActive ? '2x ON' : '2x'}
+              <Zap className={cn('h-4 w-4', isMultiplierActive && 'fill-current')} />
+              {isMultiplierActive ? '2x On' : '2x'}
             </Button>
 
             {/* Host Announcement */}
             <Dialog open={isAnnouncementOpen} onOpenChange={setIsAnnouncementOpen}>
               <DialogTrigger
                 render={
-                  <Button variant="outline" className="border-white/15 hover:bg-white/10 text-white/80 gap-1.5 h-10 rounded-xl text-xs">
-                    <MessageSquare className="w-4 h-4 text-sky-400" />
+                  <Button variant="ghost" className={hostCtrl}>
+                    <MessageSquare className="h-4 w-4" /> Chat
                   </Button>
                 }
               />
@@ -1106,45 +1109,37 @@ export default function HostGameClient({
             {/* Activity Feed Toggle */}
             <Button
               onClick={() => setIsActivityOpen(!isActivityOpen)}
-              variant="outline"
-              className={`gap-1.5 h-10 rounded-xl text-xs ${isActivityOpen ? 'border-emerald-500 bg-emerald-500/10 text-emerald-400' : 'border-white/15 hover:bg-white/10 text-white/80'}`}
+              variant="ghost"
+              className={cn(
+                hostCtrl,
+                isActivityOpen && 'border-arena-acid bg-arena-acid text-arena-ink'
+              )}
             >
-              <Activity className={`w-4 h-4 ${isActivityOpen ? 'text-emerald-400' : 'text-white/50'}`} />
+              <Activity className="h-4 w-4" />
               Feed
             </Button>
 
-            {/* Add Time Button */}
-            <Button
-              onClick={handleAddTime}
-              variant="outline"
-              className="border-white/15 hover:bg-white/10 text-slate-350 gap-1.5 h-10 rounded-xl text-xs"
-            >
-              <Clock className="w-4 h-4 text-emerald-400" /> +10s
+            <Button onClick={handleAddTime} variant="ghost" className={hostCtrl}>
+              <Clock className="h-4 w-4" /> +10s
             </Button>
 
-            {/* Pause / Resume Button */}
-            <Button
-              onClick={handleTogglePause}
-              variant="outline"
-              className="border-white/15 hover:bg-white/10 text-slate-350 gap-1.5 h-10 rounded-xl text-xs"
-            >
+            <Button onClick={handleTogglePause} variant="ghost" className={hostCtrl}>
               {session.status === 'question_paused' ? (
                 <>
-                  <Play className="w-4 h-4 text-emerald-400 fill-emerald-400/20" /> Resume
+                  <Play className="h-4 w-4 fill-current" /> Resume
                 </>
               ) : (
                 <>
-                  <Pause className="w-4 h-4 text-amber-400 fill-amber-400/20" /> Pause
+                  <Pause className="h-4 w-4" /> Pause
                 </>
               )}
             </Button>
 
-            {/* Skip Button */}
             <Button
               onClick={handleRevealAnswer}
-              className="bg-arena-signal hover:bg-arena-signal/90 font-bold rounded-xl text-xs h-10 px-5 shadow-lg shadow-black/10 flex items-center gap-1.5 text-white"
+              className="h-10 gap-1.5 rounded-none border-2 border-arena-signal bg-arena-signal px-5 font-display text-[11px] font-extrabold uppercase tracking-[0.14em] text-white shadow-none hover:brightness-110"
             >
-              Skip Question <ArrowRight className="w-4 h-4" />
+              Skip Question <ArrowRight className="h-4 w-4" />
             </Button>
           </div>
         </div>
