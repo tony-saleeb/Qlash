@@ -2,12 +2,6 @@
 @tailwind components;
 @tailwind utilities;
 
-@layer utilities {
-  .text-balance {
-    text-wrap: balance;
-  }
-}
-
 @layer base {
   :root {
     --arena-canvas: #eef1f4;
@@ -97,10 +91,6 @@
       radial-gradient(ellipse 50% 40% at 100% 100%, rgba(225, 29, 46, 0.14), transparent 50%),
       radial-gradient(ellipse 40% 30% at 0% 80%, rgba(10, 107, 92, 0.12), transparent 45%);
     color: #f4f6f8;
-  }
-
-  .arena-pin {
-    @apply font-display font-black tabular-nums;
   }
 
   .arena-cta {

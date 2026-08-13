@@ -46,25 +46,6 @@ async function getAuthUser() {
   return { supabase, user };
 }
 
-// 1. Get all quizzes for the logged-in host
-export async function getQuizzes() {
-  try {
-    const { supabase, user } = await getAuthUser();
-    const { data, error } = await supabase
-      .from('quizzes')
-      .select('*, questions(count)')
-      .eq('host_id', user.id)
-      .order('created_at', { ascending: false });
-
-    if (error) throw error;
-    return data;
-  } catch (err: unknown) {
-    console.error('getQuizzes error:', err);
-    throw new Error(err instanceof Error ? err.message : 'Failed to fetch quizzes.');
-  }
-}
-
-// 2. Create a new empty quiz
 export async function createQuiz(title: string, description: string = '') {
   try {
     const { supabase, user } = await getAuthUser();
@@ -88,7 +69,6 @@ export async function createQuiz(title: string, description: string = '') {
   }
 }
 
-// 3. Delete a quiz
 export async function deleteQuiz(quizId: string) {
   try {
     const { supabase, user } = await getAuthUser();
@@ -107,7 +87,6 @@ export async function deleteQuiz(quizId: string) {
   }
 }
 
-// 4. Clone / Duplicate a quiz along with all its questions
 export async function cloneQuiz(quizId: string) {
   try {
     const { supabase, user } = await getAuthUser();
@@ -180,36 +159,6 @@ export async function cloneQuiz(quizId: string) {
   }
 }
 
-// 5. Fetch a quiz and its questions for editing
-export async function getQuizForEdit(quizId: string) {
-  try {
-    const { supabase, user } = await getAuthUser();
-
-    const { data: quiz, error: quizError } = await supabase
-      .from('quizzes')
-      .select('*')
-      .eq('id', quizId)
-      .eq('host_id', user.id)
-      .single();
-
-    if (quizError || !quiz) throw new Error('Quiz not found.');
-
-    const { data: questions, error: questionsError } = await supabase
-      .from('questions')
-      .select('*')
-      .eq('quiz_id', quizId)
-      .order('order_index', { ascending: true });
-
-    if (questionsError) throw questionsError;
-
-    return { quiz, questions: (questions || []) as unknown as QuestionInput[] };
-  } catch (err: unknown) {
-    console.error('getQuizForEdit error:', err);
-    throw new Error(err instanceof Error ? err.message : 'Failed to load quiz details.');
-  }
-}
-
-// 6. Batch save quiz settings and questions
 export async function saveQuizData(
   quizId: string,
   settings: QuizSettingsInput,
@@ -296,7 +245,6 @@ export async function saveQuizData(
   }
 }
 
-// 7. Create a pre-made template quiz with 30 questions
 export async function createTemplateQuiz() {
   try {
     const { supabase, user } = await getAuthUser();

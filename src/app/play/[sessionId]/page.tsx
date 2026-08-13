@@ -1,4 +1,3 @@
-// Force TS cache refresh
 import { redirect } from 'next/navigation';
 import { createClient } from '@/lib/supabase/server';
 import PlayerGameClient from '@/app/play/[sessionId]/PlayerGameClient';
@@ -15,7 +14,6 @@ export default async function PlayerSessionPage({ params }: PlayerSessionPagePro
   const { sessionId } = params;
   const supabase = createClient();
 
-  // Fetch session and associated quiz theme
   const { data: session, error } = await supabase
     .from('game_sessions')
     .select('*, quizzes(team_mode)')

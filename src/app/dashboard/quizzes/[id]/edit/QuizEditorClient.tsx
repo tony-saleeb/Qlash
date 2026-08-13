@@ -4,6 +4,7 @@ import React, { useState } from 'react';
 import { useRouter } from 'next/navigation';
 import { toast } from 'sonner';
 import { saveQuizData } from '@/app/actions/quizzes';
+import { DEFAULT_QUIZ_THEME } from '@/lib/game/theme';
 import {
   DEFAULT_ANSWERS,
   createDefaultQuestion,
@@ -29,7 +30,6 @@ export default function QuizEditorClient({
   const [randomizeQs, setRandomizeQs] = useState(quiz.randomize_questions);
   const [randomizeAs, setRandomizeAs] = useState(quiz.randomize_answers);
   const [teamMode, setTeamMode] = useState(quiz.team_mode);
-  const [theme, setTheme] = useState(quiz.theme || {});
   const [doublePointsRounds, setDoublePointsRounds] = useState<string[]>(
     quiz.double_points_rounds || []
   );
@@ -288,7 +288,7 @@ export default function QuizEditorClient({
         {
           title: title.trim(),
           description: description.trim(),
-          theme,
+          theme: quiz.theme || DEFAULT_QUIZ_THEME,
           randomize_questions: randomizeQs,
           randomize_answers: randomizeAs,
           team_mode: teamMode,
@@ -349,13 +349,11 @@ export default function QuizEditorClient({
         onOpenChange={setSettingsOpen}
         title={title}
         description={description}
-        theme={theme}
         randomizeQs={randomizeQs}
         randomizeAs={randomizeAs}
         teamMode={teamMode}
         onTitleChange={setTitle}
         onDescriptionChange={setDescription}
-        onThemeChange={setTheme}
         onRandomizeQsChange={setRandomizeQs}
         onRandomizeAsChange={setRandomizeAs}
         onTeamModeChange={setTeamMode}

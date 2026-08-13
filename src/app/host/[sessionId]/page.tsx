@@ -1,4 +1,3 @@
-// Force TS cache refresh
 import { redirect } from 'next/navigation';
 import { createClient } from '@/lib/supabase/server';
 import HostGameClient from '@/app/host/[sessionId]/HostGameClient';

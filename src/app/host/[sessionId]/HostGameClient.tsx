@@ -61,10 +61,7 @@ const hostCta =
 interface HostGameClientProps {
   initialSession: GameSessionRow;
   quiz: {
-    id: string;
     title: string;
-    description: string;
-    theme: Record<string, unknown>;
     randomize_questions?: boolean;
     randomize_answers?: boolean;
     team_mode?: boolean;

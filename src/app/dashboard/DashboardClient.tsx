@@ -30,8 +30,6 @@ interface Quiz {
   id: string;
   title: string;
   description: string;
-  cover_image_url: string | null;
-  theme: Record<string, unknown> | null;
   created_at: string;
   questions?: { count: number }[];
 }

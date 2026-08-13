@@ -19,13 +19,11 @@ interface QuizSettingsDialogProps {
   onOpenChange: (open: boolean) => void;
   title: string;
   description: string;
-  theme: Record<string, unknown>;
   randomizeQs: boolean;
   randomizeAs: boolean;
   teamMode: boolean;
   onTitleChange: (value: string) => void;
   onDescriptionChange: (value: string) => void;
-  onThemeChange: (theme: Record<string, unknown>) => void;
   onRandomizeQsChange: (value: boolean) => void;
   onRandomizeAsChange: (value: boolean) => void;
   onTeamModeChange: (value: boolean) => void;
