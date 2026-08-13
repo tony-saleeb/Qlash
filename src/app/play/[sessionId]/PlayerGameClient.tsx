@@ -664,7 +664,7 @@ export default function PlayerGameClient({
           isCorrect ? 'bg-arena-acid text-arena-ink' : 'bg-arena-signal text-white'
         }`}
       >
-        <BrandMark tone={isCorrect ? 'ink' : 'light'} size="sm" wordmark={false} />
+        <div />
 
         <div className="w-full max-w-sm space-y-4 animate-scale-in">
           <div className="flex justify-center">
@@ -675,7 +675,7 @@ export default function PlayerGameClient({
             )}
           </div>
           <h1 className="font-display text-4xl font-extrabold uppercase tracking-tight sm:text-5xl">
-            {isCorrect ? 'Locked in' : 'Missed'}
+            {isCorrect ? 'Correct' : 'Missed'}
           </h1>
           <p className={`font-display text-xl font-bold ${isCorrect ? 'text-arena-ink/80' : 'text-white/85'}`}>
             {isCorrect ? `+${points.toLocaleString()} pts` : '+0 pts'}
