@@ -1,4 +1,4 @@
-/** Hard ceiling for any live room (Pro / Org). */
+/** Hard ceiling for any live room. */
 export const MAX_PLAYERS_PER_SESSION = 80;
 
 export const NICKNAME_MIN_LEN = 1;
@@ -6,8 +6,9 @@ export const NICKNAME_MAX_LEN = 20;
 
 export type HostPlan = 'free' | 'pro' | 'org';
 
+/** Live seats are 80 on every plan until we turn Free=30 back on. */
 export const PLAN_LIMITS: Record<HostPlan, { maxLivePlayers: number; maxQuizzes: number }> = {
-  free: { maxLivePlayers: 30, maxQuizzes: 5 },
+  free: { maxLivePlayers: 80, maxQuizzes: 5 },
   pro: { maxLivePlayers: 80, maxQuizzes: Number.POSITIVE_INFINITY },
   org: { maxLivePlayers: 80, maxQuizzes: Number.POSITIVE_INFINITY },
 };

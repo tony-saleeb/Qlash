@@ -38,7 +38,7 @@ export const viewport: Viewport = {
 export const metadata: Metadata = {
   title: "Qlash — Live classroom quiz, built for the rush",
   description:
-    "Host up to 80 players on Pro (30 on Free). Instant join, sharp scoring, projector-ready control.",
+    "Host up to 80 players in a live classroom quiz. Instant join, sharp scoring, projector-ready control.",
   icons: {
     icon: [{ url: "/favicon.svg", type: "image/svg+xml" }],
   },

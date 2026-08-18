@@ -1,6 +1,6 @@
 # Qlash
 
-Live classroom quiz for Arabic / church / school rooms. Hosts sign in. Players join with a PIN — no account. Cap is **80** on Pro, **30** on Free.
+Live classroom quiz for Arabic / church / school rooms. Hosts sign in. Players join with a PIN — no account. Live rooms cap at **80**.
 
 Stack: Next.js 14, Supabase (Auth, Postgres, Realtime), pnpm, Vitest.
 
@@ -68,7 +68,7 @@ Set `hosts.plan` in the database when a teacher is blocked:
 
 | Plan | Live seats | Saved quizzes |
 |---|---|---|
-| `free` (default) | 30 | 5 |
+| `free` (default) | 80 | 5 |
 | `pro` | 80 | unlimited |
 | `org` | 80 | unlimited |
 
@@ -80,4 +80,4 @@ Stripe Checkout comes after someone asks to pay.
 
 ## Deploy
 
-Vercel, this repo, env vars above. After deploy, run one real class of 40–80 on Pro (or 30 on Free) and fix whatever the room shows you.
+Vercel, this repo, env vars above. After deploy, run one real class of 40–80 and fix whatever the room shows you.

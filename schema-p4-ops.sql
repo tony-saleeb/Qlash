@@ -74,16 +74,8 @@ declare
   v_cap int := 80;
 begin
   perform pg_advisory_xact_lock(hashtext(NEW.session_id::text));
-  select case coalesce(h.plan, 'free')
-    when 'free' then 30
-    else 80
-  end
-    into v_cap
-  from public.game_sessions s
-  left join public.hosts h on h.id = s.host_id
-  where s.id = NEW.session_id;
-
-  v_cap := coalesce(v_cap, 80);
+  -- Live cap is 80 for every plan until Free=30 is turned back on.
+  v_cap := 80;
   select count(*) into n from public.players where session_id = NEW.session_id;
   if n >= v_cap then
     raise exception 'ROOM_FULL' using errcode = 'P0001';
