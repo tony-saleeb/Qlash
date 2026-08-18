@@ -14,25 +14,36 @@ export function LocaleToggle({
   tone?: 'ink' | 'light';
   className?: string;
 }) {
-  const border = tone === 'light' ? 'border-white/35 text-white' : 'border-arena-ink text-arena-ink';
+  const track =
+    tone === 'light'
+      ? 'border-white/50 bg-black/35 text-white'
+      : 'border-arena-ink bg-white text-arena-ink';
   const active = tone === 'light' ? 'bg-white text-arena-ink' : 'bg-arena-ink text-white';
-  const idle = tone === 'light' ? 'text-white/70 hover:text-white' : 'text-arena-ink/55 hover:text-arena-ink';
+  const idle = tone === 'light' ? 'text-white hover:bg-white/15' : 'text-arena-ink/70 hover:text-arena-ink';
 
   return (
-    <div className={cn('inline-flex overflow-hidden border-2 text-[11px] font-extrabold uppercase tracking-wider', border, className)}>
+    <div
+      className={cn(
+        'inline-flex overflow-hidden border-2 text-[11px] font-extrabold tracking-wider',
+        track,
+        className
+      )}
+    >
       <button
         type="button"
         onClick={() => onChange('en')}
-        className={cn('h-8 px-2.5', locale === 'en' ? active : idle)}
+        className={cn('h-8 min-w-8 px-2.5', locale === 'en' ? active : idle)}
         aria-pressed={locale === 'en'}
+        aria-label="English"
       >
         EN
       </button>
       <button
         type="button"
         onClick={() => onChange('ar')}
-        className={cn('h-8 px-2.5', locale === 'ar' ? active : idle)}
+        className={cn('h-8 min-w-8 px-2.5 font-black', locale === 'ar' ? active : idle)}
         aria-pressed={locale === 'ar'}
+        aria-label="العربية"
       >
         ع
       </button>

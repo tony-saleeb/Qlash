@@ -165,7 +165,7 @@ export default function LandingPage() {
             <button
               type="button"
               onClick={() => setPanel('host')}
-              className="min-h-11 px-2 text-sm font-bold text-arena-ink/60 underline-offset-4 hover:text-arena-ink hover:underline"
+              className="inline-flex h-11 min-h-11 items-center border-2 border-arena-ink bg-white px-4 text-sm font-bold text-arena-ink transition hover:bg-arena-ink hover:text-white"
             >
               {t('hostSignIn')}
             </button>
