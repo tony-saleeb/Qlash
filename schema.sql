@@ -54,6 +54,7 @@ create table public.game_sessions (
   active_multiplier int default 1 not null check (active_multiplier in (1, 2)),
   scores_applied_question_id uuid references public.questions(id) on delete set null,
   question_order jsonb, -- ordered question UUIDs for this live session
+  late_join_through_index int not null default 2 check (late_join_through_index >= -1), -- -1 lobby only; 2 = through Q3
   created_at timestamptz default now()
 );
 

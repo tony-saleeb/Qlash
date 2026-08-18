@@ -36,8 +36,9 @@ Run these in the Supabase SQL editor, in order, on a new project:
 6. `schema-p3-live-hardening.sql`
 7. `schema-p4-ops.sql`
 8. `schema-media.sql`
+9. `schema-p5-classroom.sql`
 
-Existing projects that already have the live loop: run **5–8** (re-run fast-submit, then p3, p4, media).
+Existing projects that already have the live loop: run **5–9** (re-run fast-submit, then p3, p4, media, p5).
 
 ## Production URL + Google login
 

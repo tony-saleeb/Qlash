@@ -74,6 +74,8 @@ export interface GameSessionRow {
   question_started_at: string | null;
   quiz_id: string;
   active_multiplier?: number;
+  question_order?: string[] | null;
+  late_join_through_index?: number | null;
 }
 
 export function sanitizeAnswers(answers: AnswerOption[]): PublicAnswerOption[] {

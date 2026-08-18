@@ -1,5 +1,5 @@
 import { describe, expect, it, vi } from 'vitest';
-import { maybeSeededShuffle, maybeShuffle, seededShuffle, shuffle } from '@/lib/game/shuffle';
+import { maybeSeededShuffle, maybeShuffle, questionsInPlayOrder, seededShuffle, shuffle } from '@/lib/game/shuffle';
 
 describe('shuffle', () => {
   it('preserves elements and returns a new array', () => {
@@ -43,5 +43,13 @@ describe('seededShuffle', () => {
     expect(first).toEqual(second);
     expect([...first].sort()).toEqual([...input].sort());
     expect(maybeSeededShuffle(input, false, 'sess-1:q1')).toEqual(input);
+  });
+});
+
+describe('questionsInPlayOrder', () => {
+  it('follows persisted ids and appends leftovers', () => {
+    const questions = [{ id: 'a' }, { id: 'b' }, { id: 'c' }];
+    expect(questionsInPlayOrder(questions, ['c', 'a']).map((q) => q.id)).toEqual(['c', 'a', 'b']);
+    expect(questionsInPlayOrder(questions, null)).toEqual(questions);
   });
 });

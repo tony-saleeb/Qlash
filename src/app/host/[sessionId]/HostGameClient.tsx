@@ -20,8 +20,9 @@ import {
   pauseGameSession,
   resumeGameSession,
   addQuestionTime,
+  setLateJoinThroughIndex,
 } from '@/app/actions/game';
-import { Flame, Users, Play, Pause, UserX, AlertCircle, Trophy, ArrowRight, Home, CheckCircle2, Clock, Settings, Edit3, Zap, SkipForward, Send, Activity, ChevronDown, ChevronUp, MessageSquare, X, ClipboardList } from 'lucide-react';
+import { Flame, Users, Play, Pause, UserX, AlertCircle, Trophy, ArrowRight, Home, CheckCircle2, Clock, Settings, Edit3, Zap, SkipForward, Send, Activity, ChevronDown, ChevronUp, MessageSquare, X, ClipboardList, Smartphone } from 'lucide-react';
 import confetti from 'canvas-confetti';
 import QRCode from 'qrcode';
 import { bindAudioUnlock, playJoinSound, playTickSound, playRevealSound, playFanfareSound, unlockGameAudio } from '@/lib/sounds';
@@ -46,12 +47,20 @@ import {
   type Question,
   type GameSessionRow,
 } from '@/lib/game/types';
-import { maybeSeededShuffle, maybeShuffle } from '@/lib/game/shuffle';
+import { maybeSeededShuffle, questionsInPlayOrder } from '@/lib/game/shuffle';
 import { aggregateTeamScores } from '@/lib/game/teams';
 import { MAX_PLAYERS_PER_SESSION } from '@/lib/game/constants';
 import { remainingSeconds } from '@/lib/game/clock';
 import { answerUsesInk, resolveAnswerColor } from '@/lib/game/marks';
 import { AnswerSwatch } from '@/components/brand/AnswerMark';
+import { Switch } from '@/components/ui/switch';
+import {
+  DEFAULT_LATE_JOIN_THROUGH_INDEX,
+  LATE_JOIN_LOBBY_ONLY,
+  hostClickerPath,
+  isLateJoinEnabled,
+} from '@/lib/game/lateJoin';
+import { waitingPlayers } from '@/lib/game/waitingPlayers';
 
 const hostCtrl =
   'h-10 gap-1.5 rounded-none border-2 border-white/30 bg-white/10 px-3.5 font-display text-[11px] font-extrabold uppercase tracking-[0.14em] text-white shadow-none hover:border-arena-acid hover:bg-arena-acid hover:text-arena-ink aria-expanded:border-arena-acid aria-expanded:bg-arena-acid aria-expanded:text-arena-ink [&_svg]:text-current';
@@ -90,16 +99,19 @@ export default function HostGameClient({
   const playersRef = useRef(players);
   playersRef.current = players;
   /** Session play order (may be shuffled once at start). */
-  const [playQuestions, setPlayQuestions] = useState<Question[]>(questions);
+  const [playQuestions, setPlayQuestions] = useState<Question[]>(() =>
+    questionsInPlayOrder(questions, initialSession.question_order)
+  );
   const randomizeQuestions = Boolean(quiz.randomize_questions);
   const randomizeAnswers = Boolean(quiz.randomize_answers);
   const teamMode = Boolean(quiz.team_mode);
   const [kickingId, setKickingId] = useState<string | null>(null);
   const [isManagePlayersOpen, setIsManagePlayersOpen] = useState(false);
+  const [isWaitingOpen, setIsWaitingOpen] = useState(false);
 
   // Active question loop variables
   const [timeLeft, setTimeLeft] = useState<number>(20);
-  const [submissionsCount, setSubmissionsCount] = useState<number>(0);
+  const [answeredIds, setAnsweredIds] = useState<Set<string>>(new Set());
   const [revealData, setRevealData] = useState<{
     optionCounts: Record<string, number>;
     leaderboard: LeaderboardPlayer[];
@@ -163,6 +175,10 @@ export default function HostGameClient({
     : null;
   const activeQuestionRef = useRef(activeQuestion);
   activeQuestionRef.current = activeQuestion;
+  const submissionsCount = answeredIds.size;
+  const waiting = waitingPlayers(players, answeredIds);
+  const lateJoinOn = isLateJoinEnabled(session.late_join_through_index);
+  const orderKey = Array.isArray(session.question_order) ? session.question_order.join(',') : '';
   const timerRef = useRef<NodeJS.Timeout | null>(null);
   const lastTickSecondRef = useRef<number | null>(null);
   const displayedSecondRef = useRef<number | null>(null);
@@ -294,8 +310,14 @@ export default function HostGameClient({
         (payload) => {
           const question = activeQuestionRef.current;
           if (question && payload.new.question_id === question.id) {
-            setSubmissionsCount((prev) => prev + 1);
-            const answerer = playersRef.current.find((p) => p.id === payload.new.player_id);
+            const playerId = payload.new.player_id as string;
+            setAnsweredIds((prev) => {
+              if (prev.has(playerId)) return prev;
+              const next = new Set(prev);
+              next.add(playerId);
+              return next;
+            });
+            const answerer = playersRef.current.find((p) => p.id === playerId);
             if (answerer) addActivityEntry('answer', `${answerer.nickname} submitted an answer`);
           }
         }
@@ -312,25 +334,39 @@ export default function HostGameClient({
   }, [supabase, session.id, addActivityEntry]);
 
   useEffect(() => {
-    if (session.status !== 'question_active') {
-      setSubmissionsCount(0);
+    const questionId = activeQuestion?.id;
+    if (!questionId) {
+      setAnsweredIds(new Set());
       return;
     }
-    const questionId = activeQuestion?.id;
-    if (!questionId) return;
     let cancelled = false;
+    setAnsweredIds(new Set());
     void supabase
       .from('answers_submitted')
-      .select('id', { count: 'exact', head: true })
+      .select('player_id')
       .eq('session_id', session.id)
       .eq('question_id', questionId)
-      .then(({ count }) => {
-        if (!cancelled) setSubmissionsCount(count || 0);
+      .then(({ data }) => {
+        if (cancelled || !data) return;
+        setAnsweredIds(new Set(data.map((row) => row.player_id as string)));
       });
     return () => {
       cancelled = true;
     };
-  }, [supabase, session.id, session.status, activeQuestion?.id]);
+  }, [supabase, session.id, activeQuestion?.id]);
+
+  useEffect(() => {
+    if (session.status !== 'question_reveal' || !activeQuestion) return;
+    let cancelled = false;
+    void revealQuestionResults(session.id, activeQuestion.id)
+      .then((results) => {
+        if (!cancelled) setRevealData(results);
+      })
+      .catch(() => {});
+    return () => {
+      cancelled = true;
+    };
+  }, [session.status, session.id, activeQuestion?.id]);
 
   useEffect(() => {
     if (session.status !== 'question_active' || !session.question_started_at || !activeQuestion) {
@@ -476,6 +512,13 @@ export default function HostGameClient({
     [randomizeAnswers, session.id]
   );
 
+  useEffect(() => {
+    if (!orderKey) return;
+    setPlayQuestions(
+      questionsInPlayOrder(questions, session.question_order).map(prepareQuestionForPlay)
+    );
+  }, [orderKey, questions, prepareQuestionForPlay, session.question_order]);
+
   // Start Game
   const handleStartGame = async () => {
     void unlockGameAudio();
@@ -489,7 +532,9 @@ export default function HostGameClient({
     }
 
     try {
-      const ordered = maybeShuffle(questions, randomizeQuestions).map(prepareQuestionForPlay);
+      const ordered = maybeSeededShuffle(questions, randomizeQuestions, `${session.id}:order`).map(
+        prepareQuestionForPlay
+      );
       setPlayQuestions(ordered);
 
       const { serverStartedAt } = await startGameSession(
@@ -818,17 +863,57 @@ export default function HostGameClient({
           </div>
         </main>
 
-        <footer className="relative z-10 flex flex-col items-center justify-between gap-4 border-t border-white/10 bg-black/20 px-6 py-5 sm:flex-row">
-          <p className="text-center text-xs uppercase tracking-[0.14em] text-white/40 sm:text-left">
-            Keep this screen visible · PIN <strong className="text-white">{session.pin}</strong>
-          </p>
-          <Button
-            onClick={handleStartGame}
-            disabled={players.length === 0 || !questions || questions.length === 0}
-            className="h-14 w-full rounded-none bg-arena-acid px-10 font-display text-lg font-extrabold text-arena-ink shadow-[6px_6px_0_rgba(200,245,66,0.25)] hover:brightness-105 sm:w-auto"
-          >
-            <Play className="mr-2 h-5 w-5 fill-current" /> Start game
-          </Button>
+        <footer className="relative z-10 flex flex-col items-stretch justify-between gap-4 border-t border-white/10 bg-black/20 px-6 py-5 sm:flex-row sm:items-center">
+          <div className="flex flex-col gap-3 sm:max-w-md">
+            <p className="text-center text-xs uppercase tracking-[0.14em] text-white/40 sm:text-left">
+              Keep this screen visible · PIN <strong className="text-white">{session.pin}</strong>
+            </p>
+            <label className="flex items-center justify-between gap-3 border border-white/15 bg-white/5 px-3 py-2">
+              <span className="text-xs font-bold text-white/80">Late join through question 3</span>
+              <Switch
+                checked={lateJoinOn}
+                onCheckedChange={(enabled) => {
+                  const value = enabled ? DEFAULT_LATE_JOIN_THROUGH_INDEX : LATE_JOIN_LOBBY_ONLY;
+                  void setLateJoinThroughIndex(session.id, value)
+                    .then((result) => {
+                      setSession((prev) => ({
+                        ...prev,
+                        late_join_through_index: result.late_join_through_index,
+                      }));
+                    })
+                    .catch((err: unknown) => {
+                      toast.error(err instanceof Error ? err.message : 'Could not update late join.');
+                    });
+                }}
+                className="data-checked:bg-arena-acid"
+              />
+            </label>
+          </div>
+          <div className="flex w-full flex-col gap-2 sm:w-auto sm:flex-row sm:items-center">
+            <Button
+              type="button"
+              variant="ghost"
+              className={hostCtrl}
+              onClick={async () => {
+                const url = `${window.location.origin}${hostClickerPath(session.id)}`;
+                try {
+                  await navigator.clipboard.writeText(url);
+                  toast.success('Clicker link copied. Open it on your phone (stay signed in).');
+                } catch {
+                  window.open(hostClickerPath(session.id), '_blank');
+                }
+              }}
+            >
+              <Smartphone className="h-4 w-4" /> Phone clicker
+            </Button>
+            <Button
+              onClick={handleStartGame}
+              disabled={players.length === 0 || !questions || questions.length === 0}
+              className="h-14 w-full rounded-none bg-arena-acid px-10 font-display text-lg font-extrabold text-arena-ink shadow-[6px_6px_0_rgba(200,245,66,0.25)] hover:brightness-105 sm:w-auto"
+            >
+              <Play className="mr-2 h-5 w-5 fill-current" /> Start game
+            </Button>
+          </div>
         </footer>
       </div>
     );
@@ -939,7 +1024,7 @@ export default function HostGameClient({
           <div className="order-3 flex flex-col items-center justify-center text-center md:col-span-3">
             <StatBox value={submissionsCount} label="Answers" tone="court" />
             <span className="mt-2 text-xs font-medium text-white/55">
-              out of {players.length} players
+              {waiting.length} waiting · {players.length} in room
             </span>
           </div>
         </div>
@@ -968,9 +1053,48 @@ export default function HostGameClient({
         {/* Host controls footer */}
         <div className="z-10 mt-6 flex flex-wrap items-center justify-between gap-3 border-t border-white/10 pt-4">
           <span className="text-xs font-semibold text-white/50">
-            PIN: {session.pin} | Live submissions tracking
+            PIN: {session.pin}
           </span>
           <div className="flex flex-wrap items-center gap-2">
+            <Dialog open={isWaitingOpen} onOpenChange={setIsWaitingOpen}>
+              <DialogTrigger
+                render={
+                  <Button variant="ghost" className={hostCtrl}>
+                    <Users className="h-4 w-4" /> Waiting ({waiting.length})
+                  </Button>
+                }
+              />
+              <DialogContent className="max-w-md rounded-none border-2 border-white/20 bg-arena-stage text-white shadow-[8px_8px_0_rgba(0,0,0,0.45)]">
+                <DialogHeader>
+                  <DialogTitle className="text-xl font-bold text-white">Still answering</DialogTitle>
+                  <DialogDescription className="text-xs text-white/50">
+                    Only you see this list — it is not on the question stage.
+                  </DialogDescription>
+                </DialogHeader>
+                <ul className="mt-4 max-h-[50vh] space-y-2 overflow-y-auto">
+                  {waiting.length === 0 ? (
+                    <li className="py-4 text-center text-sm text-white/50">Everyone has answered.</li>
+                  ) : (
+                    waiting.map((player) => (
+                      <li key={player.id} className="flex items-center justify-between border border-white/15 bg-white/10 px-3 py-2">
+                        <span dir="auto" className="truncate text-sm font-bold">{player.nickname}</span>
+                        {!player.connected ? (
+                          <span className="text-[10px] uppercase tracking-wider text-white/40">offline</span>
+                        ) : null}
+                      </li>
+                    ))
+                  )}
+                </ul>
+              </DialogContent>
+            </Dialog>
+            <Button
+              type="button"
+              variant="ghost"
+              className={hostCtrl}
+              onClick={() => window.open(hostClickerPath(session.id), '_blank')}
+            >
+              <Smartphone className="h-4 w-4" /> Clicker
+            </Button>
             {/* Manage Players Dialog */}
             <Dialog open={isManagePlayersOpen} onOpenChange={setIsManagePlayersOpen}>
               <DialogTrigger

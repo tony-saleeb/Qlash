@@ -1,7 +1,9 @@
 import { redirect } from 'next/navigation';
 import { createClient } from '@/lib/supabase/server';
 import HostGameClient from '@/app/host/[sessionId]/HostGameClient';
+import HostClickerClient from '@/app/host/[sessionId]/HostClickerClient';
 import { livePlayerCap } from '@/lib/game/constants';
+import { isHostClickerView } from '@/lib/game/lateJoin';
 
 export const dynamic = 'force-dynamic';
 
@@ -9,9 +11,12 @@ interface HostSessionPageProps {
   params: {
     sessionId: string;
   };
+  searchParams: {
+    view?: string;
+  };
 }
 
-export default async function HostSessionPage({ params }: HostSessionPageProps) {
+export default async function HostSessionPage({ params, searchParams }: HostSessionPageProps) {
   const { sessionId } = params;
   const supabase = createClient();
 
@@ -21,7 +26,7 @@ export default async function HostSessionPage({ params }: HostSessionPageProps) 
     supabase
       .from('game_sessions')
       .select(
-        'id, pin, status, current_question_index, question_started_at, quiz_id, host_id, active_multiplier, question_order'
+        'id, pin, status, current_question_index, question_started_at, quiz_id, host_id, active_multiplier, question_order, late_join_through_index'
       )
       .eq('id', sessionId)
       .single(),
@@ -71,7 +76,16 @@ export default async function HostSessionPage({ params }: HostSessionPageProps) 
     console.error('Error fetching players:', playersResult.error);
   }
 
-  return (
+  const clicker = isHostClickerView(searchParams.view);
+
+  return clicker ? (
+    <HostClickerClient
+      initialSession={session}
+      quiz={quiz}
+      questions={questionsResult.data || []}
+      initialPlayers={playersResult.data || []}
+    />
+  ) : (
     <HostGameClient
       initialSession={session}
       quiz={quiz}

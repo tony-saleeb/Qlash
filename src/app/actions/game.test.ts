@@ -54,6 +54,7 @@ describe('host game actions', () => {
       status: 'lobby',
       current_question_index: 0,
       active_multiplier: 1,
+      late_join_through_index: 2,
     });
   });
 
@@ -251,5 +252,15 @@ describe('host game actions', () => {
     });
     await expect(updatePlayerConnection('p1', 'good', false)).resolves.toEqual({ success: true });
     expect(admin.lastUpdate('players')).toEqual({ connected: false });
+  });
+
+  it('persists a late-join cutoff for the owning host', async () => {
+    host.setTable('game_sessions', { data: { late_join_through_index: -1 }, error: null });
+    const { setLateJoinThroughIndex } = await import('@/app/actions/game');
+    await expect(setLateJoinThroughIndex('sess-1', -1)).resolves.toEqual({
+      success: true,
+      late_join_through_index: -1,
+    });
+    expect(host.lastUpdate('game_sessions')).toEqual({ late_join_through_index: -1 });
   });
 });

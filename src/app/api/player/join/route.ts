@@ -8,6 +8,7 @@ import {
   RATE_LIMITS,
   livePlayerCap,
 } from '@/lib/game/constants';
+import { canInsertNewPlayer } from '@/lib/game/lateJoin';
 
 export const dynamic = 'force-dynamic';
 
@@ -44,7 +45,9 @@ export async function POST(request: Request) {
 
     const { data: session, error: sessionError } = await admin
       .from('game_sessions')
-      .select('id, status, quiz_id, quizzes(team_mode), hosts(plan)')
+      .select(
+        'id, status, quiz_id, current_question_index, late_join_through_index, quizzes(team_mode), hosts(plan)'
+      )
       .eq('pin', pin)
       .maybeSingle();
 
@@ -56,8 +59,17 @@ export async function POST(request: Request) {
       return NextResponse.json({ error: 'This game has already finished.' }, { status: 403 });
     }
 
-    // New player inserts only in lobby. Mid-game: reconnect only (same nickname + token via /me).
-    if (session.status !== 'lobby') {
+    const sessionWithQuiz = session as unknown as {
+      id: string;
+      status: string;
+      current_question_index?: number | null;
+      late_join_through_index?: number | null;
+      quizzes: { team_mode: boolean } | { team_mode: boolean }[] | null;
+      hosts: { plan: string } | { plan: string }[] | null;
+    };
+
+    // New players: lobby, or live until late_join_through_index. Reconnect is always 409 + /me.
+    if (!canInsertNewPlayer(sessionWithQuiz)) {
       const { data: existingMidGame } = await admin
         .from('players')
         .select('id')
@@ -87,12 +99,6 @@ export async function POST(request: Request) {
       );
     }
 
-    const sessionWithQuiz = session as unknown as {
-      id: string;
-      status: string;
-      quizzes: { team_mode: boolean } | { team_mode: boolean }[] | null;
-      hosts: { plan: string } | { plan: string }[] | null;
-    };
     const quizMeta = Array.isArray(sessionWithQuiz.quizzes)
       ? sessionWithQuiz.quizzes[0]
       : sessionWithQuiz.quizzes;

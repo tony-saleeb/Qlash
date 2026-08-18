@@ -54,9 +54,17 @@ describe('POST /api/player/join', () => {
     expect(result.body.error).toMatch(/finished/);
   });
 
-  it('blocks new joins after the lobby and reports GAME_STARTED', async () => {
+  it('blocks new joins after the late-join cutoff and reports GAME_STARTED', async () => {
     admin.setTables({
-      game_sessions: { data: { ...lobbySession, status: 'question_active' }, error: null },
+      game_sessions: {
+        data: {
+          ...lobbySession,
+          status: 'question_active',
+          current_question_index: 3,
+          late_join_through_index: 2,
+        },
+        error: null,
+      },
       players: { data: null, error: null },
     });
     const { POST } = await import('@/app/api/player/join/route');
@@ -64,6 +72,40 @@ describe('POST /api/player/join', () => {
     expect(result.status).toBe(403);
     expect(result.body.code).toBe('GAME_STARTED');
     expect(result.body.sessionId).toBe('sess-1');
+  });
+
+  it('allows a first-time join during the late-join window', async () => {
+    const player = {
+      id: 'p-late',
+      session_id: 'sess-1',
+      nickname: 'Ada',
+      team_name: null,
+      score: 0,
+      streak: 0,
+      connected: true,
+    };
+    admin.setTables({
+      game_sessions: {
+        data: {
+          ...lobbySession,
+          status: 'question_active',
+          current_question_index: 1,
+          late_join_through_index: 2,
+        },
+        error: null,
+      },
+      players: [
+        { data: null, error: null },
+        { data: null, error: null, count: 4 },
+        { data: player, error: null },
+      ],
+      player_tokens: { data: {}, error: null },
+    });
+    const { POST } = await import('@/app/api/player/join/route');
+    const result = await readJson(await POST(jsonRequest({ pin: '123456', nickname: 'Ada' })));
+    expect(result.status).toBe(200);
+    expect(result.body.success).toBe(true);
+    expect(result.body.player.id).toBe('p-late');
   });
 
   it('returns NICKNAME_TAKEN in lobby so the client can reconnect', async () => {

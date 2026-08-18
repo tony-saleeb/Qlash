@@ -2,6 +2,7 @@
 
 import { getHostAuth } from '@/lib/supabase/hostAuth';
 import { SupabaseClient } from '@supabase/supabase-js';
+import { DEFAULT_LATE_JOIN_THROUGH_INDEX } from '@/lib/game/lateJoin';
 
 async function generateUniquePin(supabase: SupabaseClient): Promise<string> {
   let pin = '';
@@ -57,6 +58,7 @@ export async function createGameSession(quizId: string) {
         status: 'lobby',
         current_question_index: 0,
         active_multiplier: 1,
+        late_join_through_index: DEFAULT_LATE_JOIN_THROUGH_INDEX,
       })
       .select()
       .single();
@@ -421,5 +423,32 @@ export async function goToPodium(sessionId: string) {
   } catch (err) {
     console.error('goToPodium error:', err);
     throw new Error(err instanceof Error ? err.message : 'Failed to display podium.');
+  }
+}
+
+export async function setLateJoinThroughIndex(sessionId: string, throughIndex: number) {
+  try {
+    const { supabase, user } = await getHostAuth();
+    if (!Number.isFinite(throughIndex)) {
+      throw new Error('Invalid late-join cutoff.');
+    }
+    const value = Math.trunc(throughIndex);
+    if (value < -1 || value > 500) {
+      throw new Error('Invalid late-join cutoff.');
+    }
+
+    const { data, error } = await supabase
+      .from('game_sessions')
+      .update({ late_join_through_index: value })
+      .eq('id', sessionId)
+      .eq('host_id', user.id)
+      .select('late_join_through_index')
+      .single();
+
+    if (error || !data) throw error || new Error('Unauthorized or session not found.');
+    return { success: true, late_join_through_index: data.late_join_through_index as number };
+  } catch (err) {
+    console.error('setLateJoinThroughIndex error:', err);
+    throw new Error(err instanceof Error ? err.message : 'Failed to update late join.');
   }
 }
