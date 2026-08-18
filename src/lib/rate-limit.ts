@@ -33,9 +33,9 @@ export function rateLimitMemory(params: {
   existing.count += 1;
 
   if (buckets.size > 4000) {
-    for (const [key, bucket] of buckets) {
+    buckets.forEach((bucket, key) => {
       if (now >= bucket.resetAt) buckets.delete(key);
-    }
+    });
   }
 
   return { ok: true };

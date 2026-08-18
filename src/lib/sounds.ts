@@ -76,7 +76,6 @@ function getAudioContext(): AudioContext | null {
   if (!ctx) return null;
   if (ctx.state === 'suspended') {
     void ctx.resume();
-    if (ctx.state !== 'running') return null;
   }
   return ctx;
 }
