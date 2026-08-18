@@ -1,4 +1,4 @@
-import type { Metadata } from "next";
+import type { Metadata, Viewport } from "next";
 import { Bricolage_Grotesque, Figtree } from "next/font/google";
 import localFont from "next/font/local";
 import "./globals.css";
@@ -22,6 +22,12 @@ const geistMono = localFont({
   weight: "100 900",
   preload: false,
 });
+
+export const viewport: Viewport = {
+  width: "device-width",
+  initialScale: 1,
+  viewportFit: "cover",
+};
 
 export const metadata: Metadata = {
   title: "Qlash — Live classroom quiz, built for the rush",

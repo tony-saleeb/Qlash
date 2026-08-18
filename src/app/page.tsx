@@ -134,22 +134,22 @@ export default function LandingPage() {
   };
 
   return (
-    <div className="arena-noise relative flex h-dvh flex-col overflow-hidden bg-arena-canvas">
-      {/* Full-bleed ink plane — dominant visual edge */}
-      <div className="pointer-events-none absolute inset-y-0 right-0 hidden w-[46%] bg-arena-ink lg:block">
+    <div className="relative flex min-h-dvh flex-col overflow-x-hidden bg-arena-canvas lg:h-dvh lg:overflow-hidden">
+      <div className="pointer-events-none absolute inset-0 z-0 overflow-hidden arena-noise" aria-hidden />
+      <div className="pointer-events-none absolute inset-y-0 right-0 z-0 hidden w-[46%] bg-arena-ink lg:block">
         <div className="absolute inset-0 arena-grid opacity-30" />
         <div className="absolute -left-8 top-1/2 w-[min(28vw,380px)] -translate-y-1/2">
           <ArenaFloor />
         </div>
       </div>
 
-      <header className="relative z-20 mx-auto flex w-full max-w-6xl shrink-0 items-center justify-between px-6 py-4 lg:max-w-none lg:px-10">
+      <header className="relative z-10 mx-auto flex w-full max-w-6xl shrink-0 items-center justify-between px-4 py-3 sm:px-6 sm:py-4 lg:max-w-none lg:px-10">
         <BrandMark />
         {currentHost ? (
           <Link
             href="/dashboard"
             prefetch
-            className="inline-flex h-11 items-center border-2 border-arena-ink bg-white px-4 text-sm font-bold text-arena-ink transition hover:bg-arena-ink hover:text-white"
+            className="inline-flex h-11 min-h-11 items-center border-2 border-arena-ink bg-white px-4 text-sm font-bold text-arena-ink transition hover:bg-arena-ink hover:text-white"
           >
             Library
           </Link>
@@ -157,24 +157,24 @@ export default function LandingPage() {
           <button
             type="button"
             onClick={() => setPanel('host')}
-            className="text-sm font-bold text-arena-ink/60 underline-offset-4 hover:text-arena-ink hover:underline"
+            className="min-h-11 px-2 text-sm font-bold text-arena-ink/60 underline-offset-4 hover:text-arena-ink hover:underline"
           >
             Host sign in
           </button>
         )}
       </header>
 
-      <main className="relative z-20 grid min-h-0 flex-1 grid-cols-1 lg:grid-cols-12">
-        <section className="flex flex-col justify-center px-6 py-4 lg:col-span-6 lg:px-10 lg:py-6 xl:col-span-5">
-          <p className="motion-rise arena-chip mb-6 w-fit bg-arena-acid">Pin. Lock. Clash.</p>
-          <h1 className="motion-rise font-display text-[clamp(3.25rem,8vw,5.75rem)] font-extrabold leading-[0.88] tracking-[-0.05em] text-arena-ink">
+      <main className="relative z-10 mx-auto flex w-full max-w-lg flex-1 flex-col gap-6 px-4 pb-8 pt-1 sm:px-6 lg:mx-0 lg:grid lg:min-h-0 lg:max-w-none lg:flex-1 lg:grid-cols-12 lg:gap-0 lg:px-10 lg:pb-6 lg:pt-0">
+        <section className="order-2 flex flex-col justify-center lg:order-1 lg:col-span-6 lg:px-0 lg:py-6 xl:col-span-5">
+          <p className="motion-rise arena-chip mb-3 w-fit bg-arena-acid lg:mb-6">Pin. Lock. Clash.</p>
+          <h1 className="motion-rise font-display text-4xl font-extrabold leading-[0.88] tracking-[-0.05em] text-arena-ink sm:text-5xl lg:text-[clamp(3.25rem,8vw,5.75rem)]">
             Qlash
           </h1>
-          <p className="motion-rise-delay mt-6 max-w-sm text-lg font-medium leading-snug text-arena-ink/65">
+          <p className="motion-rise-delay mt-3 max-w-sm text-base font-medium leading-snug text-arena-ink/65 sm:text-lg lg:mt-6">
             Pin in. Lock answers. Own the board — built for the classroom rush.
           </p>
 
-          <div className="motion-rise-delay-2 mt-9 flex flex-wrap gap-3">
+          <div className="motion-rise-delay-2 mt-6 hidden flex-wrap gap-3 lg:mt-9 lg:flex">
             <button type="button" className="arena-cta" onClick={() => setPanel('join')}>
               Join a game
             </button>
@@ -182,21 +182,16 @@ export default function LandingPage() {
               Host a room
             </button>
           </div>
-
-          {/* Mobile arena floor */}
-          <div className="motion-rise-delay-2 mx-auto mt-8 w-full max-w-xs lg:hidden">
-            <ArenaFloor />
-          </div>
         </section>
 
-        <section className="flex items-center px-6 py-4 lg:col-span-6 lg:justify-end lg:px-10 lg:py-6 xl:col-span-7">
+        <section className="order-1 flex items-start lg:order-2 lg:col-span-6 lg:items-center lg:justify-end lg:py-6 xl:col-span-7">
           <div className="motion-rise-delay w-full max-w-md lg:mr-[min(4vw,2rem)]">
             <div className="arena-panel overflow-hidden">
               <div className="flex border-b-2 border-arena-ink">
                 <button
                   type="button"
                   onClick={() => setPanel('join')}
-                  className={`flex-1 py-3.5 text-center font-display text-sm font-extrabold uppercase tracking-wide transition ${
+                  className={`flex-1 min-h-12 py-3.5 text-center font-display text-sm font-extrabold uppercase tracking-wide transition ${
                     panel === 'join' ? 'bg-arena-ink text-white' : 'bg-white text-arena-ink/40 hover:text-arena-ink'
                   }`}
                 >
@@ -205,7 +200,7 @@ export default function LandingPage() {
                 <button
                   type="button"
                   onClick={() => setPanel('host')}
-                  className={`flex-1 border-l-2 border-arena-ink py-3.5 text-center font-display text-sm font-extrabold uppercase tracking-wide transition ${
+                  className={`flex-1 min-h-12 border-l-2 border-arena-ink py-3.5 text-center font-display text-sm font-extrabold uppercase tracking-wide transition ${
                     panel === 'host' ? 'bg-arena-ink text-white' : 'bg-white text-arena-ink/40 hover:text-arena-ink'
                   }`}
                 >
@@ -227,7 +222,7 @@ export default function LandingPage() {
                         inputMode="numeric"
                         value={pin}
                         onChange={(e) => setPin(e.target.value.replace(/\D/g, ''))}
-                        className="mt-2 h-16 border-2 border-arena-ink bg-arena-mist/40 text-center font-display text-3xl font-extrabold tracking-[0.4em] focus-visible:ring-arena-court"
+                        className="mt-2 h-14 border-2 border-arena-ink bg-arena-mist/40 text-center font-display text-2xl font-extrabold tracking-[0.28em] focus-visible:ring-arena-court sm:h-16 sm:text-3xl sm:tracking-[0.4em]"
                       />
                     </div>
                     <div>
@@ -261,7 +256,7 @@ export default function LandingPage() {
                     <Button
                       type="submit"
                       disabled={playLoading}
-                      className="h-13 mt-2 h-12 w-full rounded-none bg-arena-signal font-display text-base font-extrabold text-white hover:bg-arena-signal/90"
+                      className="mt-2 h-12 min-h-12 w-full rounded-none bg-arena-signal font-display text-base font-extrabold text-white hover:bg-arena-signal/90"
                     >
                       {playLoading ? 'Entering…' : 'Jump in'}
                     </Button>
@@ -366,7 +361,7 @@ export default function LandingPage() {
         </section>
       </main>
 
-      <div className="relative z-30 shrink-0 overflow-hidden border-t-2 border-arena-ink bg-arena-acid py-3">
+      <div className="relative z-10 mt-auto shrink-0 overflow-hidden border-t-2 border-arena-ink bg-arena-acid py-3">
         <div className="motion-slide-x flex w-max gap-12 whitespace-nowrap font-display text-sm font-extrabold uppercase tracking-[0.22em] text-arena-ink">
           {Array.from({ length: 2 }).map((_, i) => (
             <span key={i} className="flex gap-12 px-6">

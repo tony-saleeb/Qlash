@@ -127,7 +127,7 @@ export function StageBadge({ children, className }: { children: ReactNode; class
 /** Four Qlash marks — slash, Q-ring, bolt, chevron. */
 export function ArenaFloor({ className }: { className?: string }) {
   return (
-    <div className={cn('relative aspect-square w-full max-w-lg', className)} aria-hidden>
+    <div className={cn('pointer-events-none relative aspect-square w-full max-w-lg', className)} aria-hidden>
       <div className="absolute inset-0 grid grid-cols-2 grid-rows-2 gap-3 sm:gap-4">
         <div className="arena-shape-tile flex items-center justify-center bg-arena-signal motion-tile-1">
           <AnswerMark shape="slash" className="h-14 w-14 text-white sm:h-20 sm:w-20" />
