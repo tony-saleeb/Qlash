@@ -68,7 +68,7 @@ export default function PlayerJoinPage() {
         nickname: nickname.trim(),
         teamName: isTeamQuiz ? teamName.trim() : undefined,
       });
-      toast.success(result.reconnected ? `Reconnected as ${nickname}` : 'Joined the lobby');
+      toast.success(result.reconnected ? `Back in as ${nickname.trim()}` : `You're in as ${nickname.trim()}`);
       router.replace(`/play/${result.sessionId}`);
     } catch (err: unknown) {
       toast.error(err instanceof Error ? err.message : 'Failed to join. Try again.');

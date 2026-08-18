@@ -127,7 +127,7 @@ export default function LandingPage() {
         nickname: nickname.trim(),
         teamName: isTeamQuiz ? teamName.trim() : undefined,
       });
-      toast.success(result.reconnected ? `Reconnected as ${nickname}` : 'You are in the lobby');
+      toast.success(result.reconnected ? `Back in as ${nickname.trim()}` : `You're in as ${nickname.trim()}`);
       router.push(`/play/${result.sessionId}`);
     } catch (error) {
       toast.error(error instanceof Error ? error.message : 'Could not join. Try again.');

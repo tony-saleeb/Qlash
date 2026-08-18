@@ -151,9 +151,39 @@ export default function PlayerGameClient({
               setClockStartedAt(data.server_started_at);
               setTimeLeft(remainingSeconds(data.server_started_at, data.question.time_limit_seconds));
             }
-            return;
+          } else {
+            applyQuestionPayload(data.question, data.server_started_at, data.status);
           }
-          applyQuestionPayload(data.question, data.server_started_at, data.status);
+          if (data.status === 'question_reveal') {
+            const token = localStorage.getItem(`quizarena_token_${sessionId}`) || '';
+            const resResult = await fetch('/api/player/round-result', {
+              method: 'POST',
+              headers: { 'Content-Type': 'application/json' },
+              body: JSON.stringify({
+                sessionId,
+                playerId,
+                token,
+                questionId: data.question.id,
+              }),
+            });
+            const round = await resResult.json();
+            if (resResult.ok && round.submission) {
+              setRoundResult({
+                isCorrect: Boolean(round.submission.is_correct),
+                pointsAwarded: Number(round.submission.points_awarded) || 0,
+                correctAnswerIds: [],
+                optionCounts: undefined,
+              });
+              if (round.player) {
+                setPlayer((prev) =>
+                  prev
+                    ? { ...prev, score: round.player.score ?? prev.score, streak: round.player.streak ?? prev.streak }
+                    : prev
+                );
+              }
+            }
+          }
+          return;
         }
       } catch (err) {
         console.error('Failed to hydrate current question', err);
@@ -378,7 +408,12 @@ export default function PlayerGameClient({
         setLoading(false);
 
         const status = data.sessionStatus as string | undefined;
-        if (status === 'question_active' || status === 'question_paused') {
+        if (
+          status === 'question_active' ||
+          status === 'question_paused' ||
+          status === 'question_reveal' ||
+          status === 'leaderboard'
+        ) {
           void hydrateCurrentQuestion(data.player.id);
         } else if (status === 'finished') {
           void loadPodium(data.player.id);
@@ -663,7 +698,7 @@ export default function PlayerGameClient({
             </div>
 
             <p className="text-[11px] font-bold uppercase tracking-[0.22em] text-arena-ink/40">You are in</p>
-            <h1 dir="auto" className="mt-1 truncate font-display text-3xl font-extrabold text-arena-ink">{player.nickname}</h1>
+            <h1 dir="auto" className="mt-1 font-display text-4xl font-extrabold leading-none text-arena-ink sm:text-5xl">{player.nickname}</h1>
             {player.team_name && (
               <p className="mt-2 inline-flex items-center gap-1 bg-arena-mist px-2.5 py-1 text-xs font-bold text-arena-court">
                 <Users className="h-3.5 w-3.5" /> {player.team_name}
@@ -1039,6 +1074,7 @@ export default function PlayerGameClient({
               ✓
             </div>
             <h1 className="font-display text-3xl font-extrabold text-white">Answer locked</h1>
+            <p dir="auto" className="mt-2 text-sm font-bold text-arena-acid">{player.nickname}</p>
             {timeLeft > 0 && (
               <div className="mt-6 flex justify-center">
                 <div
@@ -1090,8 +1126,8 @@ export default function PlayerGameClient({
         )}
         <div className="flex items-center justify-between border-b border-white/10 pb-3 text-xs font-semibold text-white/50">
           <BrandMark tone="light" size="sm" wordmark={false} />
-          <span className="font-bold uppercase tracking-widest text-arena-acid">
-            {player.team_name ? <><Users className="mr-0.5 inline-block h-3 w-3" /> {player.team_name}</> : activeQuestion.type.replace('_', ' ')}
+          <span dir="auto" className="max-w-[40%] truncate font-bold uppercase tracking-widest text-arena-acid">
+            {player.nickname}
           </span>
           <span className="font-display font-extrabold text-white">{player.score}</span>
         </div>

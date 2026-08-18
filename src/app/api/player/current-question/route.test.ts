@@ -55,19 +55,36 @@ describe('POST /api/player/current-question', () => {
     expect(result.status).toBe(401);
   });
 
-  it('returns null question outside the active/paused window without leaking answers', async () => {
+  it('returns null question in lobby or finished without leaking answers', async () => {
     admin.setTables({
       player_tokens: { data: { client_token: 'tok' }, error: null },
       players: { data: { id: 'p1' }, error: null },
-      game_sessions: { data: { ...liveSession, status: 'leaderboard' }, error: null },
+      game_sessions: { data: { ...liveSession, status: 'finished' }, error: null },
     });
     const { POST } = await import('@/app/api/player/current-question/route');
     const result = await readJson(
       await POST(jsonRequest({ sessionId: 'sess-1', playerId: 'p1', token: 'tok' }))
     );
     expect(result.status).toBe(200);
-    expect(result.body).toEqual({ success: true, status: 'leaderboard', question: null });
+    expect(result.body).toEqual({ success: true, status: 'finished', question: null });
     expect(admin.from).not.toHaveBeenCalledWith('questions');
+  });
+
+  it('hydrates the public question during reveal so late joiners can recover', async () => {
+    admin.setTables({
+      player_tokens: { data: { client_token: 'tok' }, error: null },
+      players: { data: { id: 'p1' }, error: null },
+      game_sessions: { data: { ...liveSession, status: 'question_reveal' }, error: null },
+      questions: { data: dbQuestion, error: null },
+    });
+    const { POST } = await import('@/app/api/player/current-question/route');
+    const result = await readJson(
+      await POST(jsonRequest({ sessionId: 'sess-1', playerId: 'p1', token: 'tok' }))
+    );
+    expect(result.status).toBe(200);
+    expect(result.body.status).toBe('question_reveal');
+    expect(result.body.question.id).toBe('q1');
+    expect(result.body.question.answers[0]).not.toHaveProperty('is_correct');
   });
 
   it('hydrates the public question by session order and strips is_correct', async () => {

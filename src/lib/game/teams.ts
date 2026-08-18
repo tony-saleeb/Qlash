@@ -36,3 +36,9 @@ export function aggregateTeamScores(players: Player[]): TeamScoreRow[] {
 
   return Array.from(map.values()).sort((a, b) => b.score - a.score);
 }
+
+/** Bar width for projector scoreboards. Never 0% so a last-place row still reads. */
+export function scoreBarPercent(score: number, maxScore: number): number {
+  if (!Number.isFinite(score) || !Number.isFinite(maxScore) || maxScore <= 0) return 0;
+  return Math.max(6, Math.round((Math.max(0, score) / maxScore) * 100));
+}

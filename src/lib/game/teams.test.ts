@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest';
-import { aggregateTeamScores } from '@/lib/game/teams';
+import { aggregateTeamScores, scoreBarPercent } from '@/lib/game/teams';
 import type { Player } from '@/lib/game/types';
 
 function player(partial: Partial<Player> & Pick<Player, 'id' | 'nickname' | 'score'>): Player {
@@ -47,5 +47,12 @@ describe('aggregateTeamScores', () => {
       members: 3,
       topPlayer: 'High',
     });
+  });
+
+  it('scales score bars against the leader', () => {
+    expect(scoreBarPercent(80, 80)).toBe(100);
+    expect(scoreBarPercent(40, 80)).toBe(50);
+    expect(scoreBarPercent(0, 80)).toBe(6);
+    expect(scoreBarPercent(10, 0)).toBe(0);
   });
 });

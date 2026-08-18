@@ -8,7 +8,7 @@ export const dynamic = 'force-dynamic';
 /**
  * Hydrate the current public question for a player who missed question:start.
  * Strips is_correct; requires valid client token.
- * Uses session.question_order when present (randomized play order).
+ * Serves active, paused, reveal, and leaderboard so late joiners recover.
  */
 export async function POST(request: Request) {
   try {
@@ -44,7 +44,7 @@ export async function POST(request: Request) {
       return NextResponse.json({ error: 'Session not found.' }, { status: 404 });
     }
 
-    if (!['question_active', 'question_paused'].includes(session.status)) {
+    if (!['question_active', 'question_paused', 'question_reveal', 'leaderboard'].includes(session.status)) {
       return NextResponse.json({
         success: true,
         status: session.status,

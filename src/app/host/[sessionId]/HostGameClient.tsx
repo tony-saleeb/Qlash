@@ -48,7 +48,7 @@ import {
   type GameSessionRow,
 } from '@/lib/game/types';
 import { maybeSeededShuffle, questionsInPlayOrder } from '@/lib/game/shuffle';
-import { aggregateTeamScores } from '@/lib/game/teams';
+import { aggregateTeamScores, scoreBarPercent } from '@/lib/game/teams';
 import { MAX_PLAYERS_PER_SESSION } from '@/lib/game/constants';
 import { remainingSeconds } from '@/lib/game/clock';
 import { answerUsesInk, resolveAnswerColor } from '@/lib/game/marks';
@@ -61,6 +61,7 @@ import {
   isLateJoinEnabled,
 } from '@/lib/game/lateJoin';
 import { waitingPlayers } from '@/lib/game/waitingPlayers';
+import { buildTeachableReveal } from '@/lib/game/teachableReveal';
 
 const hostCtrl =
   'h-10 gap-1.5 rounded-none border-2 border-white/30 bg-white/10 px-3.5 font-display text-[11px] font-extrabold uppercase tracking-[0.14em] text-white shadow-none hover:border-arena-acid hover:bg-arena-acid hover:text-arena-ink aria-expanded:border-arena-acid aria-expanded:bg-arena-acid aria-expanded:text-arena-ink [&_svg]:text-current';
@@ -1333,6 +1334,12 @@ export default function HostGameClient({
     const totalVotes = revealData
       ? Object.values(revealData.optionCounts).reduce((a, b) => a + b, 0)
       : 0;
+    const lesson = buildTeachableReveal(
+      activeQuestion.answers,
+      revealData?.optionCounts,
+      activeQuestion.type
+    );
+    const correctAnswers = activeQuestion.answers.filter((ans) => ans.is_correct);
 
     return (
       <GameShell>
@@ -1341,13 +1348,35 @@ export default function HostGameClient({
           <BrandMark tone="light" size="sm" wordmark={false} />
         </div>
 
-        <div className="z-10 mx-auto my-6 max-w-4xl text-center">
-          <h1 dir="auto" className="font-display text-3xl font-extrabold leading-tight text-white">
-            {activeQuestion.prompt}
+        <div className="z-10 mx-auto my-4 max-w-4xl text-center">
+          <p dir="auto" className="text-sm font-semibold text-white/50">{activeQuestion.prompt}</p>
+          <h1 className="mt-3 font-display text-4xl font-extrabold leading-tight tracking-tight text-arena-acid sm:text-5xl">
+            {lesson.headline}
           </h1>
+          {lesson.subline && (
+            <p dir="auto" className="mt-3 font-display text-2xl font-extrabold text-white sm:text-3xl">
+              {lesson.subline}
+            </p>
+          )}
+          {correctAnswers.length > 0 && activeQuestion.type !== 'poll' && (
+            <div className="mt-5 flex flex-wrap justify-center gap-2">
+              {correctAnswers.map((ans) => (
+                <div
+                  key={ans.id}
+                  className={`flex items-center gap-2 border-2 border-arena-acid px-4 py-2 text-base font-bold ${
+                    answerUsesInk(ans.color) ? 'text-arena-ink' : 'text-white'
+                  }`}
+                  style={{ backgroundColor: resolveAnswerColor(ans.color) }}
+                >
+                  <AnswerSwatch shape={ans.shape} color={ans.color} className="h-8 w-8" markClassName="h-4 w-4" />
+                  <span dir="auto">{ans.text}</span>
+                </div>
+              ))}
+            </div>
+          )}
         </div>
 
-        <div className="z-10 mx-auto flex w-full max-w-4xl flex-1 flex-col items-center justify-center gap-8 py-6">
+        <div className="z-10 mx-auto flex w-full max-w-4xl flex-1 flex-col items-center justify-center gap-6 py-4">
           <h3 className="text-xs font-extrabold uppercase tracking-[0.22em] text-white/50">
             How the room voted
           </h3>
@@ -1386,34 +1415,6 @@ export default function HostGameClient({
           </div>
         </div>
 
-        <div className="z-10 mx-auto mt-6 grid w-full max-w-5xl gap-4 sm:grid-cols-2">
-          {activeQuestion.answers.map((ans) => {
-            const isCorrect = ans.is_correct;
-            return (
-              <div
-                key={ans.id}
-                className={`flex select-none items-center gap-3.5 border-2 p-4 text-lg font-bold transition-all ${
-                  answerUsesInk(ans.color) ? 'text-arena-ink' : 'text-white'
-                } ${
-                  isCorrect
-                    ? 'border-arena-acid ring-4 ring-arena-acid/30'
-                    : 'border-arena-ink opacity-30'
-                }`}
-                style={{ backgroundColor: resolveAnswerColor(ans.color) }}
-              >
-                <AnswerSwatch
-                  shape={ans.shape}
-                  color={ans.color}
-                  className="h-10 w-10"
-                  markClassName="h-5 w-5"
-                />
-                <span dir="auto" className="flex-1 truncate">{ans.text}</span>
-                {isCorrect && <CheckCircle2 className="h-6 w-6 text-arena-acid" />}
-              </div>
-            );
-          })}
-        </div>
-
         <div className="z-10 mt-6 flex items-center justify-between border-t border-white/10 pt-4">
           <span className="text-xs font-semibold text-white/50">
             PIN {session.pin}
@@ -1449,59 +1450,80 @@ export default function HostGameClient({
           </p>
         </div>
 
-        <div className="z-10 mx-auto flex w-full max-w-xl flex-1 flex-col justify-center gap-3 py-6">
+        <div className="z-10 mx-auto flex w-full max-w-2xl flex-1 flex-col justify-center gap-4 py-6">
           {teamMode
-            ? teamRows.map((team, rank) => (
-                <div
-                  key={team.team_name}
-                  className="flex items-center justify-between border-2 border-white/15 bg-white/[0.05] p-4 shadow-[4px_4px_0_rgba(0,0,0,0.25)]"
-                >
-                  <div className="flex items-center gap-3">
-                    <span className="w-8 text-center font-display text-lg font-extrabold text-arena-acid">#{rank + 1}</span>
-                    <div>
-                      <p className="font-bold text-white">{team.team_name}</p>
-                      <p className="text-xs text-white/50">
-                        {team.members} players · top: {team.topPlayer}
-                      </p>
+            ? teamRows.map((team, rank) => {
+                const maxScore = teamRows[0]?.score || 1;
+                return (
+                  <div
+                    key={team.team_name}
+                    className="border-2 border-white/15 bg-white/[0.05] p-4 shadow-[4px_4px_0_rgba(0,0,0,0.25)]"
+                  >
+                    <div className="mb-2 flex items-end justify-between gap-3">
+                      <div className="min-w-0">
+                        <p className="truncate font-display text-xl font-extrabold text-white">
+                          <span className="mr-2 text-arena-acid">#{rank + 1}</span>
+                          {team.team_name}
+                        </p>
+                        <p className="text-xs text-white/50">
+                          {team.members} players · top: {team.topPlayer}
+                        </p>
+                      </div>
+                      <span className="font-display text-2xl font-black tabular-nums text-arena-acid">
+                        {team.score.toLocaleString()}
+                      </span>
+                    </div>
+                    <div className="h-4 overflow-hidden bg-white/10">
+                      <div
+                        className="h-full bg-arena-acid transition-all duration-700"
+                        style={{ width: `${scoreBarPercent(team.score, maxScore)}%` }}
+                      />
                     </div>
                   </div>
-                  <span className="font-display font-black text-arena-acid">{team.score}</span>
-                </div>
-              ))
+                );
+              })
             : leaderboardPlayers.map((playerRecord, rank) => {
-            const isTop3 = rank < 3;
-
-            return (
-              <div
-                key={playerRecord.id}
-                className={cn(
-                  'flex items-center justify-between border-2 bg-white/[0.05] p-4 shadow-[4px_4px_0_rgba(0,0,0,0.25)]',
-                  isTop3 ? 'border-arena-acid/50' : 'border-white/15'
-                )}
-              >
-                <div className="flex min-w-0 items-center gap-4">
-                  <span
-                    className={`w-8 text-center font-display text-lg font-extrabold ${
-                      isTop3 ? 'text-arena-acid' : 'text-white/50'
-                    }`}
+                const isTop3 = rank < 3;
+                const maxScore = leaderboardPlayers[0]?.score || 1;
+                return (
+                  <div
+                    key={playerRecord.id}
+                    className={cn(
+                      'border-2 bg-white/[0.05] p-4 shadow-[4px_4px_0_rgba(0,0,0,0.25)]',
+                      isTop3 ? 'border-arena-acid/50' : 'border-white/15'
+                    )}
                   >
-                    {rank + 1}
-                  </span>
-                  <span className="max-w-[200px] truncate font-extrabold text-lg text-white sm:max-w-xs">
-                    {playerRecord.nickname}
-                  </span>
-                  {playerRecord.streak > 1 && (
-                    <span className="flex items-center gap-1 border-2 border-arena-acid bg-arena-acid px-2.5 py-0.5 text-xs font-extrabold text-arena-ink">
-                      <Flame className="h-3.5 w-3.5 fill-current" /> {playerRecord.streak}
-                    </span>
-                  )}
-                </div>
-                <span className="font-display text-xl font-black tabular-nums text-arena-acid">
-                  {playerRecord.score.toLocaleString()}
-                </span>
-              </div>
-            );
-          })}
+                    <div className="mb-2 flex items-end justify-between gap-3">
+                      <div className="flex min-w-0 items-center gap-3">
+                        <span
+                          className={`font-display text-lg font-extrabold ${
+                            isTop3 ? 'text-arena-acid' : 'text-white/50'
+                          }`}
+                        >
+                          #{rank + 1}
+                        </span>
+                        <span dir="auto" className="truncate font-extrabold text-lg text-white">
+                          {playerRecord.nickname}
+                        </span>
+                        {playerRecord.streak > 1 && (
+                          <span className="flex items-center gap-1 border-2 border-arena-acid bg-arena-acid px-2.5 py-0.5 text-xs font-extrabold text-arena-ink">
+                            <Flame className="h-3.5 w-3.5 fill-current" /> {playerRecord.streak}
+                          </span>
+                        )}
+                      </div>
+                      <span className="font-display text-xl font-black tabular-nums text-arena-acid">
+                        {playerRecord.score.toLocaleString()}
+                      </span>
+                    </div>
+                    <div className="h-3 overflow-hidden bg-white/10">
+                      <div
+                        className={`h-full transition-all duration-700 ${isTop3 ? 'bg-arena-acid' : 'bg-white/40'}`}
+                        style={{ width: `${scoreBarPercent(playerRecord.score, maxScore)}%` }}
+                      />
+                    </div>
+                  </div>
+                );
+              })}
         </div>
 
         <div className="z-10 mt-6 flex items-center justify-between border-t border-white/10 pt-4">
