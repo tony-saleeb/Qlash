@@ -10,6 +10,8 @@ import { Label } from '@/components/ui/label';
 import { toast } from 'sonner';
 import { User } from '@supabase/supabase-js';
 import { ArenaFloor, BrandMark } from '@/components/brand/BrandMark';
+import { authCallbackUrl } from '@/lib/siteUrl';
+import { unlockGameAudio } from '@/lib/sounds';
 
 export default function LandingPage() {
   const router = useRouter();
@@ -83,7 +85,7 @@ export default function LandingPage() {
           password,
           options: {
             data: { display_name: displayName },
-            emailRedirectTo: `${window.location.origin}/auth/callback`,
+            emailRedirectTo: authCallbackUrl(),
           },
         });
         if (error) throw error;
@@ -104,6 +106,7 @@ export default function LandingPage() {
 
   const handlePlayerJoin = async (e: React.FormEvent) => {
     e.preventDefault();
+    void unlockGameAudio();
     if (!pin || pin.length !== 6) {
       toast.error('Enter a valid 6-digit game PIN.');
       return;
@@ -293,7 +296,7 @@ export default function LandingPage() {
                         setAuthLoading(true);
                         const { error } = await supabase.auth.signInWithOAuth({
                           provider: 'google',
-                          options: { redirectTo: `${window.location.origin}/auth/callback` },
+                          options: { redirectTo: authCallbackUrl() },
                         });
                         if (error) {
                           toast.error(error.message);

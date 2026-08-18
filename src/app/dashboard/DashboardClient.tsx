@@ -23,8 +23,9 @@ import {
   createTemplateQuiz,
 } from '@/app/actions/quizzes';
 import { createGameSession } from '@/app/actions/game';
-import { Plus, Play, Edit, Copy, Trash2, LogOut, BookTemplate } from 'lucide-react';
+import { Plus, Play, Edit, Copy, Trash2, LogOut, BookTemplate, ClipboardList } from 'lucide-react';
 import { BrandMark } from '@/components/brand/BrandMark';
+import { livePlayerCap, normalizeHostPlan, quizLibraryCap } from '@/lib/game/constants';
 
 interface Quiz {
   id: string;
@@ -34,12 +35,33 @@ interface Quiz {
   questions?: { count: number }[];
 }
 
-interface DashboardClientProps {
-  initialQuizzes: Quiz[];
-  user: User;
+export interface RecentSession {
+  id: string;
+  pin: string;
+  created_at: string;
+  quiz_id: string | null;
+  quizzes: { title: string } | { title: string }[] | null;
+  players?: { count: number }[];
 }
 
-export default function DashboardClient({ initialQuizzes, user }: DashboardClientProps) {
+interface DashboardClientProps {
+  initialQuizzes: Quiz[];
+  recentSessions: RecentSession[];
+  user: User;
+  hostPlan?: string | null;
+}
+
+function quizTitleFromSession(session: RecentSession): string {
+  const quiz = Array.isArray(session.quizzes) ? session.quizzes[0] : session.quizzes;
+  return quiz?.title || 'Untitled quiz';
+}
+
+export default function DashboardClient({
+  initialQuizzes,
+  recentSessions = [],
+  user,
+  hostPlan,
+}: DashboardClientProps) {
   const router = useRouter();
   const supabase = createClient();
   const [quizzes, setQuizzes] = useState<Quiz[]>(initialQuizzes);
@@ -47,6 +69,19 @@ export default function DashboardClient({ initialQuizzes, user }: DashboardClien
   const [title, setTitle] = useState('');
   const [description, setDescription] = useState('');
   const [actionLoading, setActionLoading] = useState(false);
+
+  const plan = normalizeHostPlan(hostPlan);
+  const quizCap = quizLibraryCap(plan);
+  const playerCap = livePlayerCap(plan);
+  const atQuizCap = Number.isFinite(quizCap) && quizzes.length >= quizCap;
+  const planLabel = plan === 'free' ? 'Free' : plan === 'pro' ? 'Pro' : 'Org';
+  const quizQuotaLabel = Number.isFinite(quizCap)
+    ? `${quizzes.length}/${quizCap} quizzes`
+    : `${quizzes.length} quizzes`;
+
+  const toastQuizCap = () => {
+    toast.error(`Free plan is ${quizCap} quizzes. Delete one, or ask for Pro.`);
+  };
 
   const handleLogout = async () => {
     try {
@@ -82,6 +117,10 @@ export default function DashboardClient({ initialQuizzes, user }: DashboardClien
   };
 
   const handleCreateTemplate = async () => {
+    if (atQuizCap) {
+      toastQuizCap();
+      return;
+    }
     const loadingToast = toast.loading('Creating template quiz…');
     try {
       const newQuiz = await createTemplateQuiz();
@@ -93,6 +132,10 @@ export default function DashboardClient({ initialQuizzes, user }: DashboardClien
   };
 
   const handleCloneQuiz = async (quizId: string) => {
+    if (atQuizCap) {
+      toastQuizCap();
+      return;
+    }
     const loadingToast = toast.loading('Duplicating…');
     try {
       const cloned = await cloneQuiz(quizId);
@@ -137,7 +180,9 @@ export default function DashboardClient({ initialQuizzes, user }: DashboardClien
           </button>
           <div className="flex items-center gap-3">
             <div className="hidden text-right sm:block">
-              <p className="text-[10px] font-bold uppercase tracking-[0.18em] text-arena-ink/40">Host</p>
+              <p className="text-[10px] font-bold uppercase tracking-[0.18em] text-arena-ink/40">
+                {planLabel} · {playerCap} live
+              </p>
               <p className="max-w-[180px] truncate text-sm font-semibold text-arena-ink">{user.email}</p>
             </div>
             <Button
@@ -159,18 +204,22 @@ export default function DashboardClient({ initialQuizzes, user }: DashboardClien
             <p className="arena-chip mb-3 bg-arena-acid">Your library</p>
             <h1 className="font-display text-5xl font-extrabold tracking-[-0.03em] text-arena-ink">Quizzes</h1>
             <p className="mt-2 max-w-md text-sm font-medium text-arena-ink/55">
-              Build once. Host live. Keep the room under control.
+              Build once. Host live. Open the class report after the podium.
+              {' '}
+              <span className="text-arena-ink/80">{quizQuotaLabel}</span>
+              {atQuizCap ? ' — delete one to add another.' : null}
             </p>
           </div>
           <div className="flex flex-wrap gap-2">
             <Button
               onClick={handleCreateTemplate}
+              disabled={atQuizCap}
               className="h-11 rounded-none border-2 border-arena-ink bg-transparent font-bold text-arena-ink hover:bg-arena-ink hover:text-white"
             >
               <BookTemplate className="mr-1.5 h-4 w-4" /> Template
             </Button>
             <Button
-              onClick={() => setCreateDialogOpen(true)}
+              onClick={() => (atQuizCap ? toastQuizCap() : setCreateDialogOpen(true))}
               className="h-11 rounded-none bg-arena-signal font-display font-extrabold text-white hover:bg-arena-signal/90"
             >
               <Plus className="mr-1.5 h-4 w-4" /> New quiz
@@ -205,10 +254,10 @@ export default function DashboardClient({ initialQuizzes, user }: DashboardClien
                     <p className="text-[11px] font-bold uppercase tracking-[0.16em] text-arena-ink/40">
                       {questionCount} {questionCount === 1 ? 'question' : 'questions'}
                     </p>
-                    <h2 className="mt-1 line-clamp-1 font-display text-xl font-extrabold tracking-tight text-arena-ink">
+                    <h2 dir="auto" className="mt-1 line-clamp-1 font-display text-xl font-extrabold tracking-tight text-arena-ink">
                       {quiz.title}
                     </h2>
-                    <p className="mt-1 min-h-[2.5rem] text-sm text-arena-ink/55 line-clamp-2">
+                    <p dir="auto" className="mt-1 min-h-[2.5rem] text-sm text-arena-ink/55 line-clamp-2">
                       {quiz.description || 'No description'}
                     </p>
                     <p className="mt-3 text-xs text-arena-ink/35">
@@ -255,6 +304,46 @@ export default function DashboardClient({ initialQuizzes, user }: DashboardClien
               );
             })}
           </ul>
+        )}
+
+        {recentSessions.length > 0 && (
+          <section className="mt-14">
+            <p className="arena-chip mb-3 w-fit bg-white">Recent rooms</p>
+            <h2 className="font-display text-3xl font-extrabold tracking-tight">Class reports</h2>
+            <ul className="mt-5 divide-y-2 divide-arena-ink/10 border-2 border-arena-ink bg-white">
+              {recentSessions.map((session) => {
+                const playerCount = session.players?.[0]?.count ?? 0;
+                return (
+                  <li key={session.id} className="flex flex-col gap-3 px-4 py-4 sm:flex-row sm:items-center sm:justify-between">
+                    <div>
+                      <p dir="auto" className="font-display text-lg font-bold">{quizTitleFromSession(session)}</p>
+                      <p className="text-xs text-arena-ink/45">
+                        PIN {session.pin} · {playerCount} {playerCount === 1 ? 'player' : 'players'} ·{' '}
+                        {new Date(session.created_at).toLocaleString()}
+                      </p>
+                    </div>
+                    <div className="flex gap-2">
+                      <Button
+                        variant="ghost"
+                        className="h-10 rounded-none border-2 border-arena-ink font-bold"
+                        onClick={() => router.push(`/dashboard/sessions/${session.id}`)}
+                      >
+                        <ClipboardList className="mr-1.5 h-4 w-4" /> Report
+                      </Button>
+                      {session.quiz_id && (
+                        <Button
+                          className="h-10 rounded-none bg-arena-ink font-display font-extrabold text-white hover:bg-arena-ink/90"
+                          onClick={() => handleHostGame(session.quiz_id!)}
+                        >
+                          <Play className="mr-1 h-3.5 w-3.5 fill-current" /> Replay
+                        </Button>
+                      )}
+                    </div>
+                  </li>
+                );
+              })}
+            </ul>
+          </section>
         )}
       </main>
 

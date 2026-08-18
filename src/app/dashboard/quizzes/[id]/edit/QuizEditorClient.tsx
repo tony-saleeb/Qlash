@@ -332,6 +332,7 @@ export default function QuizEditorClient({
         />
 
         <QuestionEditorPane
+          quizId={quiz.id}
           activeQuestion={activeQuestion}
           isDoublePointsRound={isDoublePointsRound}
           onTypeChange={handleTypeChange}

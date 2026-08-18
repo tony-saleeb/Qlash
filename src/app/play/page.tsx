@@ -8,6 +8,7 @@ import { Button } from '@/components/ui/button';
 import { Label } from '@/components/ui/label';
 import { toast } from 'sonner';
 import { BrandMark } from '@/components/brand/BrandMark';
+import { unlockGameAudio } from '@/lib/sounds';
 
 export default function PlayerJoinPage() {
   const router = useRouter();
@@ -46,6 +47,7 @@ export default function PlayerJoinPage() {
 
   const handlePlayerJoin = async (e: React.FormEvent) => {
     e.preventDefault();
+    void unlockGameAudio();
     if (!pin || pin.length !== 6) {
       toast.error('Enter a valid 6-digit game PIN.');
       return;

@@ -53,7 +53,12 @@
   h2,
   h3,
   .font-display {
-    font-family: var(--font-display), var(--font-sans), system-ui, sans-serif;
+    font-family: var(--font-display), var(--font-arabic), var(--font-sans), system-ui, sans-serif;
+  }
+
+  input[dir="auto"],
+  textarea[dir="auto"] {
+    unicode-bidi: plaintext;
   }
 
   ::selection {

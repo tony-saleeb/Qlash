@@ -1,5 +1,5 @@
 import { describe, expect, it, vi } from 'vitest';
-import { maybeShuffle, shuffle } from '@/lib/game/shuffle';
+import { maybeSeededShuffle, maybeShuffle, seededShuffle, shuffle } from '@/lib/game/shuffle';
 
 describe('shuffle', () => {
   it('preserves elements and returns a new array', () => {
@@ -31,5 +31,17 @@ describe('maybeShuffle', () => {
   it('shuffles when enabled', () => {
     vi.spyOn(Math, 'random').mockReturnValue(0);
     expect(maybeShuffle(['a', 'b', 'c'], true)).toEqual(['b', 'c', 'a']);
+  });
+});
+
+describe('seededShuffle', () => {
+  it('is stable for the same seed and independent of Math.random', () => {
+    const input = ['a', 'b', 'c', 'd', 'e'];
+    vi.spyOn(Math, 'random').mockReturnValue(0.99);
+    const first = seededShuffle(input, 'sess-1:q1');
+    const second = seededShuffle(input, 'sess-1:q1');
+    expect(first).toEqual(second);
+    expect([...first].sort()).toEqual([...input].sort());
+    expect(maybeSeededShuffle(input, false, 'sess-1:q1')).toEqual(input);
   });
 });

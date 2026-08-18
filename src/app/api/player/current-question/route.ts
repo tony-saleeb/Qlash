@@ -1,7 +1,7 @@
 import { NextResponse } from 'next/server';
 import { createAdminClient } from '@/lib/supabase/admin';
 import { sanitizeAnswers, type AnswerOption } from '@/lib/game/types';
-import { maybeShuffle } from '@/lib/game/shuffle';
+import { maybeSeededShuffle } from '@/lib/game/shuffle';
 
 export const dynamic = 'force-dynamic';
 
@@ -79,9 +79,10 @@ export async function POST(request: Request) {
       quizzes?: { randomize_answers?: boolean } | null;
     };
     const randomizeAnswers = Boolean(quizMeta.quizzes?.randomize_answers);
-    const answers = maybeShuffle(
+    const answers = maybeSeededShuffle(
       sanitizeAnswers((question.answers || []) as AnswerOption[]),
-      randomizeAnswers
+      randomizeAnswers,
+      `${sessionId}:${question.id}`
     );
 
     return NextResponse.json({

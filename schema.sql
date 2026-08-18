@@ -5,6 +5,7 @@ create extension if not exists "uuid-ossp";
 create table public.hosts (
   id uuid primary key references auth.users on delete cascade,
   display_name text,
+  plan text not null default 'free' check (plan in ('free', 'pro', 'org')),
   created_at timestamptz default now()
 );
 

@@ -13,6 +13,7 @@ import {
   goToLeaderboard,
   goToNextQuestion,
   goToPodium,
+  createGameSession,
   endGameSession,
   setSessionMultiplier,
   startGameSession,
@@ -20,10 +21,10 @@ import {
   resumeGameSession,
   addQuestionTime,
 } from '@/app/actions/game';
-import { Flame, Users, Play, Pause, UserX, AlertCircle, Trophy, ArrowRight, Home, CheckCircle2, Clock, Settings, Edit3, Zap, SkipForward, Send, Activity, ChevronDown, ChevronUp, MessageSquare, X } from 'lucide-react';
+import { Flame, Users, Play, Pause, UserX, AlertCircle, Trophy, ArrowRight, Home, CheckCircle2, Clock, Settings, Edit3, Zap, SkipForward, Send, Activity, ChevronDown, ChevronUp, MessageSquare, X, ClipboardList } from 'lucide-react';
 import confetti from 'canvas-confetti';
 import QRCode from 'qrcode';
-import { playJoinSound, playTickSound, playRevealSound, playFanfareSound } from '@/lib/sounds';
+import { bindAudioUnlock, playJoinSound, playTickSound, playRevealSound, playFanfareSound, unlockGameAudio } from '@/lib/sounds';
 import { BrandMark, PinDisplay, StageBadge, playerChipColor } from '@/components/brand/BrandMark';
 import { GameShell, LiveChip, StatBox } from '@/components/brand/GameShell';
 import { QLASH_CONFETTI } from '@/lib/game/theme';
@@ -45,7 +46,7 @@ import {
   type Question,
   type GameSessionRow,
 } from '@/lib/game/types';
-import { maybeShuffle } from '@/lib/game/shuffle';
+import { maybeSeededShuffle, maybeShuffle } from '@/lib/game/shuffle';
 import { aggregateTeamScores } from '@/lib/game/teams';
 import { MAX_PLAYERS_PER_SESSION } from '@/lib/game/constants';
 import { remainingSeconds } from '@/lib/game/clock';
@@ -61,6 +62,7 @@ const hostCta =
 interface HostGameClientProps {
   initialSession: GameSessionRow;
   quiz: {
+    id: string;
     title: string;
     randomize_questions?: boolean;
     randomize_answers?: boolean;
@@ -68,6 +70,7 @@ interface HostGameClientProps {
   };
   questions: Question[];
   initialPlayers: Player[];
+  playerCap?: number;
 }
 
 export default function HostGameClient({
@@ -75,6 +78,7 @@ export default function HostGameClient({
   quiz,
   questions,
   initialPlayers,
+  playerCap = MAX_PLAYERS_PER_SESSION,
 }: HostGameClientProps) {
   const router = useRouter();
   const supabase = createClient();
@@ -127,6 +131,8 @@ export default function HostGameClient({
   // QR Code State
   const [qrDataUrl, setQrDataUrl] = useState<string>('');
 
+  useEffect(() => bindAudioUnlock(), []);
+
   useEffect(() => {
     if (session.status === 'lobby' && session.pin) {
       const joinUrl = `${window.location.origin}/play?pin=${session.pin}`;
@@ -155,9 +161,21 @@ export default function HostGameClient({
   const activeQuestion = (playQuestions && playQuestions.length > 0)
     ? (playQuestions[activeQuestionIndex] || playQuestions[0])
     : null;
+  const activeQuestionRef = useRef(activeQuestion);
+  activeQuestionRef.current = activeQuestion;
   const timerRef = useRef<NodeJS.Timeout | null>(null);
   const lastTickSecondRef = useRef<number | null>(null);
+  const displayedSecondRef = useRef<number | null>(null);
   const revealingRef = useRef(false);
+  const playersFlushRef = useRef<Map<string, Player>>(new Map());
+  const playersFlushTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
+
+  useEffect(() => {
+    return () => {
+      if (activityTimerRef.current) clearTimeout(activityTimerRef.current);
+      if (playersFlushTimerRef.current) clearTimeout(playersFlushTimerRef.current);
+    };
+  }, []);
 
   // Debounced activity feed to avoid UI thrash at ~80 players
   const addActivityEntry = useCallback((type: string, message: string) => {
@@ -198,7 +216,6 @@ export default function HostGameClient({
 
       void sendSessionEvent('question:reveal', {
         correct_answer_ids: correctOptionIds,
-        leaderboard: results.leaderboard,
         option_counts: results.optionCounts,
       });
 
@@ -210,10 +227,18 @@ export default function HostGameClient({
     }
   }, [session.id, activeQuestion, sendSessionEvent]);
 
-  // 1. Setup Realtime Player database synchronizer (stable deps — use playersRef)
+  // One Realtime channel for players, session row, and submissions
   useEffect(() => {
+    const flushPlayerUpdates = () => {
+      playersFlushTimerRef.current = null;
+      const batch = playersFlushRef.current;
+      if (batch.size === 0) return;
+      playersFlushRef.current = new Map();
+      setPlayers((prev) => prev.map((player) => batch.get(player.id) ?? player));
+    };
+
     const channel = supabase
-      .channel(`host_players_${session.id}`)
+      .channel(`host_live_${session.id}`)
       .on(
         'postgres_changes',
         {
@@ -235,23 +260,13 @@ export default function HostGameClient({
             if (removed) addActivityEntry('kick', `${removed.nickname} was removed`);
             setPlayers((prev) => prev.filter((p) => p.id !== payload.old.id));
           } else if (payload.eventType === 'UPDATE') {
-            setPlayers((prev) =>
-              prev.map((p) => (p.id === payload.new.id ? (payload.new as Player) : p))
-            );
+            playersFlushRef.current.set(payload.new.id as string, payload.new as Player);
+            if (!playersFlushTimerRef.current) {
+              playersFlushTimerRef.current = setTimeout(flushPlayerUpdates, 120);
+            }
           }
         }
       )
-      .subscribe();
-
-    return () => {
-      supabase.removeChannel(channel);
-    };
-  }, [supabase, session.id, addActivityEntry]);
-
-  // 2. Setup Realtime Session database updates synchronizer
-  useEffect(() => {
-    const channel = supabase
-      .channel(`host_session_${session.id}`)
       .on(
         'postgres_changes',
         {
@@ -268,33 +283,6 @@ export default function HostGameClient({
           }
         }
       )
-      .subscribe();
-
-    return () => {
-      supabase.removeChannel(channel);
-    };
-  }, [supabase, session.id]);
-
-  // 3. Listen to Submissions count dynamically during question_active
-  useEffect(() => {
-    if (session.status !== 'question_active') {
-      setSubmissionsCount(0);
-      return;
-    }
-
-    const loadInitialSubmissions = async () => {
-      if (!activeQuestion) return;
-      const { count } = await supabase
-        .from('answers_submitted')
-        .select('*', { count: 'exact', head: true })
-        .eq('session_id', session.id)
-        .eq('question_id', activeQuestion.id);
-      setSubmissionsCount(count || 0);
-    };
-    loadInitialSubmissions();
-
-    const channel = supabase
-      .channel(`host_submissions_${session.id}`)
       .on(
         'postgres_changes',
         {
@@ -304,7 +292,8 @@ export default function HostGameClient({
           filter: `session_id=eq.${session.id}`,
         },
         (payload) => {
-          if (activeQuestion && payload.new.question_id === activeQuestion.id) {
+          const question = activeQuestionRef.current;
+          if (question && payload.new.question_id === question.id) {
             setSubmissionsCount((prev) => prev + 1);
             const answerer = playersRef.current.find((p) => p.id === payload.new.player_id);
             if (answerer) addActivityEntry('answer', `${answerer.nickname} submitted an answer`);
@@ -314,81 +303,106 @@ export default function HostGameClient({
       .subscribe();
 
     return () => {
+      if (playersFlushTimerRef.current) {
+        clearTimeout(playersFlushTimerRef.current);
+        playersFlushTimerRef.current = null;
+      }
       supabase.removeChannel(channel);
     };
-  }, [supabase, session.id, session.status, activeQuestion, addActivityEntry]);
+  }, [supabase, session.id, addActivityEntry]);
 
-  // 4. Timer Tick-down thread logic
+  useEffect(() => {
+    if (session.status !== 'question_active') {
+      setSubmissionsCount(0);
+      return;
+    }
+    const questionId = activeQuestion?.id;
+    if (!questionId) return;
+    let cancelled = false;
+    void supabase
+      .from('answers_submitted')
+      .select('id', { count: 'exact', head: true })
+      .eq('session_id', session.id)
+      .eq('question_id', questionId)
+      .then(({ count }) => {
+        if (!cancelled) setSubmissionsCount(count || 0);
+      });
+    return () => {
+      cancelled = true;
+    };
+  }, [supabase, session.id, session.status, activeQuestion?.id]);
+
   useEffect(() => {
     if (session.status !== 'question_active' || !session.question_started_at || !activeQuestion) {
       if (timerRef.current) clearInterval(timerRef.current);
       return;
     }
 
-    const startTimer = () => {
-      if (timerRef.current) clearInterval(timerRef.current);
-      lastTickSecondRef.current = null;
+    if (timerRef.current) clearInterval(timerRef.current);
+    lastTickSecondRef.current = null;
+    displayedSecondRef.current = null;
 
-      const timeLimit = activeQuestion.time_limit_seconds;
-      const startedAt = new Date(session.question_started_at!).getTime();
+    const timeLimit = activeQuestion.time_limit_seconds;
+    const startedAt = new Date(session.question_started_at).getTime();
 
-      const updateTimer = () => {
-        const elapsed = (Date.now() - startedAt) / 1000;
-        const remaining = Math.max(0, Math.ceil(timeLimit - elapsed));
+    const updateTimer = () => {
+      const elapsed = (Date.now() - startedAt) / 1000;
+      const remaining = Math.max(0, Math.ceil(timeLimit - elapsed));
+      if (remaining !== displayedSecondRef.current) {
+        displayedSecondRef.current = remaining;
         setTimeLeft(remaining);
+      }
 
-        if (remaining <= 5 && remaining > 0 && remaining !== lastTickSecondRef.current) {
-          lastTickSecondRef.current = remaining;
-          playTickSound();
-        }
+      if (remaining <= 5 && remaining > 0 && remaining !== lastTickSecondRef.current) {
+        lastTickSecondRef.current = remaining;
+        playTickSound();
+      }
 
-        if (remaining <= 0) {
-          if (timerRef.current) clearInterval(timerRef.current);
-          handleRevealAnswer();
-        }
-      };
-
-      updateTimer();
-      timerRef.current = setInterval(updateTimer, 200);
+      if (remaining <= 0) {
+        if (timerRef.current) clearInterval(timerRef.current);
+        handleRevealAnswer();
+      }
     };
 
-    startTimer();
+    updateTimer();
+    timerRef.current = setInterval(updateTimer, 200);
 
     return () => {
       if (timerRef.current) clearInterval(timerRef.current);
     };
-  }, [session.status, session.question_started_at, activeQuestion, handleRevealAnswer]);
+  }, [session.status, session.question_started_at, activeQuestion?.id, activeQuestion?.time_limit_seconds, handleRevealAnswer]);
 
-  // 5. Confetti trigger for podium finish
   useEffect(() => {
-    if (session.status === 'finished') {
-      playFanfareSound();
-      // Fire confetti bursts!
-      const duration = 5 * 1000;
-      const end = Date.now() + duration;
+    if (session.status !== 'finished') return;
+    playFanfareSound();
+    const duration = 5 * 1000;
+    const end = Date.now() + duration;
+    let raf = 0;
+    let cancelled = false;
 
-      const frame = () => {
-        confetti({
-          particleCount: 5,
-          angle: 60,
-          spread: 55,
-          origin: { x: 0 },
-          colors: [...QLASH_CONFETTI],
-        });
-        confetti({
-          particleCount: 5,
-          angle: 120,
-          spread: 55,
-          origin: { x: 1 },
-          colors: [...QLASH_CONFETTI],
-        });
-
-        if (Date.now() < end) {
-          requestAnimationFrame(frame);
-        }
-      };
-      frame();
-    }
+    const frame = () => {
+      if (cancelled) return;
+      confetti({
+        particleCount: 5,
+        angle: 60,
+        spread: 55,
+        origin: { x: 0 },
+        colors: [...QLASH_CONFETTI],
+      });
+      confetti({
+        particleCount: 5,
+        angle: 120,
+        spread: 55,
+        origin: { x: 1 },
+        colors: [...QLASH_CONFETTI],
+      });
+      if (Date.now() < end) raf = requestAnimationFrame(frame);
+    };
+    raf = requestAnimationFrame(frame);
+    return () => {
+      cancelled = true;
+      cancelAnimationFrame(raf);
+    };
   }, [session.status]);
 
   // Kick Player Handler
@@ -451,18 +465,20 @@ export default function HostGameClient({
   };
 
   const prepareQuestionForPlay = useCallback(
-    (question: Question): Question => {
-      if (!randomizeAnswers) return question;
-      return {
-        ...question,
-        answers: maybeShuffle(question.answers, true),
-      };
-    },
-    [randomizeAnswers]
+    (question: Question): Question => ({
+      ...question,
+      answers: maybeSeededShuffle(
+        question.answers,
+        randomizeAnswers,
+        `${session.id}:${question.id}`
+      ),
+    }),
+    [randomizeAnswers, session.id]
   );
 
   // Start Game
   const handleStartGame = async () => {
+    void unlockGameAudio();
     if (!questions || questions.length === 0) {
       toast.error('You cannot start a game with 0 questions.');
       return;
@@ -548,6 +564,21 @@ export default function HostGameClient({
       router.refresh();
     } catch {
       router.push('/dashboard');
+    }
+  };
+
+  const handleOpenReport = () => {
+    router.push(`/dashboard/sessions/${session.id}`);
+  };
+
+  const handlePlayAgain = async () => {
+    const loading = toast.loading('Opening a new lobby…');
+    try {
+      const next = await createGameSession(quiz.id);
+      toast.success('Lobby ready.', { id: loading });
+      router.push(`/host/${next.id}`);
+    } catch (err: unknown) {
+      toast.error(err instanceof Error ? err.message : 'Could not start a new room.', { id: loading });
     }
   };
 
@@ -678,13 +709,13 @@ export default function HostGameClient({
           <div className="flex items-center gap-4">
             <BrandMark tone="light" size="sm" />
             <div className="hidden border-l border-white/15 pl-4 sm:block">
-              <p className="font-display text-sm font-bold text-white">{quiz.title}</p>
+              <p dir="auto" className="font-display text-sm font-bold text-white">{quiz.title}</p>
               <p className="text-[11px] font-medium uppercase tracking-[0.18em] text-white/40">Live lobby</p>
             </div>
           </div>
           <StageBadge className="motion-pulse-soft">
             <Users className="h-3.5 w-3.5" />
-            {connectedCount}/{players.length} · max {MAX_PLAYERS_PER_SESSION}
+            {connectedCount}/{players.length} · max {playerCap}
           </StageBadge>
         </header>
 
@@ -766,7 +797,7 @@ export default function HostGameClient({
                       >
                         {p.nickname.slice(0, 1).toUpperCase()}
                       </span>
-                      <span className="min-w-0 flex-1 truncate text-sm font-bold">{p.nickname}</span>
+                      <span dir="auto" className="min-w-0 flex-1 truncate text-sm font-bold">{p.nickname}</span>
                       <button
                         type="button"
                         disabled={!!kickingId}
@@ -844,7 +875,7 @@ export default function HostGameClient({
                       }`}
                     >
                       <span className="font-black">Q{idx + 1}</span>{' '}
-                      <span className="truncate text-white/60">{q.prompt.slice(0, 30)}{q.prompt.length > 30 ? '...' : ''}</span>
+                      <span dir="auto" className="truncate text-white/60">{q.prompt.slice(0, 30)}{q.prompt.length > 30 ? '...' : ''}</span>
                     </button>
                   ))}
                 </div>
@@ -861,7 +892,7 @@ export default function HostGameClient({
         </div>
 
         <div className="z-10 mx-auto my-6 max-w-4xl text-center">
-          <h1 className="font-display text-3xl font-extrabold leading-tight tracking-tight text-white sm:text-4xl lg:text-5xl">
+          <h1 dir="auto" className="font-display text-3xl font-extrabold leading-tight tracking-tight text-white sm:text-4xl lg:text-5xl">
             {activeQuestion.prompt}
           </h1>
         </div>
@@ -929,7 +960,7 @@ export default function HostGameClient({
                 className="h-10 w-10"
                 markClassName="h-5 w-5"
               />
-              <span className="truncate">{ans.text}</span>
+              <span dir="auto" className="truncate">{ans.text}</span>
             </div>
           ))}
         </div>
@@ -1187,7 +1218,7 @@ export default function HostGameClient({
         </div>
 
         <div className="z-10 mx-auto my-6 max-w-4xl text-center">
-          <h1 className="font-display text-3xl font-extrabold leading-tight text-white">
+          <h1 dir="auto" className="font-display text-3xl font-extrabold leading-tight text-white">
             {activeQuestion.prompt}
           </h1>
         </div>
@@ -1252,7 +1283,7 @@ export default function HostGameClient({
                   className="h-10 w-10"
                   markClassName="h-5 w-5"
                 />
-                <span className="flex-1 truncate">{ans.text}</span>
+                <span dir="auto" className="flex-1 truncate">{ans.text}</span>
                 {isCorrect && <CheckCircle2 className="h-6 w-6 text-arena-acid" />}
               </div>
             );
@@ -1389,7 +1420,7 @@ export default function HostGameClient({
             Final <span className="text-arena-acid">podium</span>
           </h1>
           <p className="mt-2 text-xs text-white/50">
-            Champions of {quiz.title}
+            Champions of <span dir="auto">{quiz.title}</span>
           </p>
         </div>
 
@@ -1447,12 +1478,15 @@ export default function HostGameClient({
           )}
         </div>
 
-        <div className="z-10 mt-6 flex w-full items-center justify-center border-t border-white/10 pt-4">
-          <Button
-            onClick={handleCloseSession}
-            className="flex h-12 items-center gap-2 rounded-none border-2 border-white/30 bg-white/10 px-6 text-xs font-bold text-white hover:border-arena-acid hover:bg-arena-acid hover:text-arena-ink"
-          >
-            <Home className="h-4 w-4" /> Return to Host Dashboard
+        <div className="z-10 mt-6 flex w-full flex-col items-center justify-center gap-3 border-t border-white/10 pt-4 sm:flex-row">
+          <Button onClick={handleOpenReport} className={hostCta}>
+            <ClipboardList className="h-4 w-4" /> Class report
+          </Button>
+          <Button onClick={handlePlayAgain} className={hostCtrl}>
+            <Play className="h-4 w-4 fill-current" /> Play again
+          </Button>
+          <Button onClick={handleCloseSession} className={hostCtrl}>
+            <Home className="h-4 w-4" /> Dashboard
           </Button>
         </div>
       </GameShell>

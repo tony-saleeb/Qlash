@@ -24,7 +24,10 @@ describe('quiz library actions', () => {
   });
 
   it('creates a quiz with the Qlash default theme', async () => {
-    host.setTable('quizzes', { data: { id: 'q1', title: 'Clash' }, error: null });
+    host.setTables({
+      hosts: { data: { plan: 'pro' }, error: null },
+      quizzes: { data: { id: 'q1', title: 'Clash' }, error: null },
+    });
     const { createQuiz } = await import('@/app/actions/quizzes');
     await createQuiz('Clash', 'live');
     expect(host.lastInsert('quizzes')).toEqual({
@@ -43,6 +46,7 @@ describe('quiz library actions', () => {
 
   it('clones quiz metadata and remaps question rows onto the new id', async () => {
     host.setTables({
+      hosts: { data: { plan: 'pro' }, error: null },
       quizzes: [
         {
           data: {
@@ -96,8 +100,19 @@ describe('quiz library actions', () => {
   });
 
   it('rejects unauthenticated library access', async () => {
+    host.auth.getSession.mockResolvedValue({ data: { session: null } });
     host.auth.getUser.mockResolvedValue({ data: { user: null }, error: { message: 'no' } });
     const { createQuiz } = await import('@/app/actions/quizzes');
     await expect(createQuiz('Clash')).rejects.toThrow(/Unauthorized/);
+  });
+
+  it('rejects a sixth quiz on the free plan', async () => {
+    host.setTables({
+      hosts: { data: { plan: 'free' }, error: null },
+      quizzes: { data: null, error: null, count: 5 },
+    });
+    const { createQuiz } = await import('@/app/actions/quizzes');
+    await expect(createQuiz('Clash')).rejects.toThrow(/5 saved quizzes/);
+    expect(host.lastInsert('quizzes')).toBeUndefined();
   });
 });

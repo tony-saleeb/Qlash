@@ -1,26 +1,7 @@
 'use server';
 
-import { createClient } from '@/lib/supabase/server';
+import { getHostAuth } from '@/lib/supabase/hostAuth';
 import { SupabaseClient } from '@supabase/supabase-js';
-
-async function getAuthUser() {
-  const supabase = createClient();
-  // Cookie JWT — no Auth HTTP round-trip. RLS + host_id still authorize writes.
-  const {
-    data: { session },
-  } = await supabase.auth.getSession();
-  if (session?.user) {
-    return { supabase, user: session.user };
-  }
-  const {
-    data: { user },
-    error,
-  } = await supabase.auth.getUser();
-  if (error || !user) {
-    throw new Error('Unauthorized. Please log in.');
-  }
-  return { supabase, user };
-}
 
 async function generateUniquePin(supabase: SupabaseClient): Promise<string> {
   let pin = '';
@@ -52,7 +33,7 @@ async function generateUniquePin(supabase: SupabaseClient): Promise<string> {
 
 export async function createGameSession(quizId: string) {
   try {
-    const { supabase, user } = await getAuthUser();
+    const { supabase, user } = await getHostAuth();
 
     const { data: quiz, error: quizError } = await supabase
       .from('quizzes')
@@ -93,7 +74,7 @@ export async function createGameSession(quizId: string) {
 
 export async function endGameSession(sessionId: string) {
   try {
-    const { supabase, user } = await getAuthUser();
+    const { supabase, user } = await getHostAuth();
 
     const { error } = await supabase
       .from('game_sessions')
@@ -112,7 +93,7 @@ export async function endGameSession(sessionId: string) {
 
 export async function kickPlayer(playerId: string, sessionId: string) {
   try {
-    const { supabase, user } = await getAuthUser();
+    const { supabase, user } = await getHostAuth();
 
     const { data: session, error: sessionError } = await supabase
       .from('game_sessions')
@@ -171,7 +152,7 @@ export async function updatePlayerConnection(playerId: string, token: string, co
 /** Host-controlled live 2x multiplier (persisted; submit-answer reads this). */
 export async function setSessionMultiplier(sessionId: string, multiplier: 1 | 2) {
   try {
-    const { supabase, user } = await getAuthUser();
+    const { supabase, user } = await getHostAuth();
 
     if (multiplier !== 1 && multiplier !== 2) {
       throw new Error('Invalid multiplier.');
@@ -198,7 +179,7 @@ export async function setSessionMultiplier(sessionId: string, multiplier: 1 | 2)
 
 export async function revealQuestionResults(sessionId: string, questionId: string) {
   try {
-    const { supabase } = await getAuthUser();
+    const { supabase } = await getHostAuth();
 
     const { data, error } = await supabase.rpc('apply_question_scores_and_reveal', {
       p_session_id: sessionId,
@@ -232,7 +213,7 @@ export async function revealQuestionResults(sessionId: string, questionId: strin
 
 export async function goToLeaderboard(sessionId: string) {
   try {
-    const { supabase, user } = await getAuthUser();
+    const { supabase, user } = await getHostAuth();
     const { error } = await supabase
       .from('game_sessions')
       .update({ status: 'leaderboard' })
@@ -250,7 +231,7 @@ export async function goToLeaderboard(sessionId: string) {
 /** Start first question from lobby (host-authenticated). */
 export async function startGameSession(sessionId: string, questionOrder: string[]) {
   try {
-    const { supabase, user } = await getAuthUser();
+    const { supabase, user } = await getHostAuth();
     const serverStartedAt = new Date().toISOString();
 
     if (!Array.isArray(questionOrder) || questionOrder.length === 0) {
@@ -286,7 +267,7 @@ export async function startGameSession(sessionId: string, questionOrder: string[
 
 export async function pauseGameSession(sessionId: string) {
   try {
-    const { supabase, user } = await getAuthUser();
+    const { supabase, user } = await getHostAuth();
 
     const { data: session, error: fetchError } = await supabase
       .from('game_sessions')
@@ -323,7 +304,7 @@ export async function pauseGameSession(sessionId: string) {
 
 export async function resumeGameSession(sessionId: string) {
   try {
-    const { supabase, user } = await getAuthUser();
+    const { supabase, user } = await getHostAuth();
 
     const { data: session, error: fetchError } = await supabase
       .from('game_sessions')
@@ -360,7 +341,7 @@ export async function resumeGameSession(sessionId: string) {
 /** Add seconds to the current question clock (default +10s). */
 export async function addQuestionTime(sessionId: string, extraSeconds = 10) {
   try {
-    const { supabase, user } = await getAuthUser();
+    const { supabase, user } = await getHostAuth();
     const ms = Math.max(1, extraSeconds) * 1000;
 
     const { data: session, error: fetchError } = await supabase
@@ -402,7 +383,7 @@ export async function addQuestionTime(sessionId: string, extraSeconds = 10) {
 
 export async function goToNextQuestion(sessionId: string, nextIndex: number) {
   try {
-    const { supabase, user } = await getAuthUser();
+    const { supabase, user } = await getHostAuth();
     const serverStartedAt = new Date().toISOString();
     const { data, error } = await supabase
       .from('game_sessions')
@@ -428,7 +409,7 @@ export async function goToNextQuestion(sessionId: string, nextIndex: number) {
 
 export async function goToPodium(sessionId: string) {
   try {
-    const { supabase, user } = await getAuthUser();
+    const { supabase, user } = await getHostAuth();
     const { error } = await supabase
       .from('game_sessions')
       .update({ status: 'finished' })

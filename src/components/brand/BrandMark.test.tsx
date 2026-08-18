@@ -54,6 +54,7 @@ describe('Answer identity', () => {
     );
     await user.click(screen.getByRole('button', { name: /lock it/i }));
     expect(onClick).toHaveBeenCalledTimes(1);
+    expect(screen.getByText('Lock it')).toHaveAttribute('dir', 'auto');
   });
 });
 

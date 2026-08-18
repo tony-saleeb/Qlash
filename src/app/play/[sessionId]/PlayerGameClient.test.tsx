@@ -24,9 +24,15 @@ vi.mock('@/app/actions/game', () => ({
 }));
 
 vi.mock('@/lib/sounds', () => ({
+  bindAudioUnlock: () => () => undefined,
+  unlockGameAudio: vi.fn(async () => true),
   playCorrectSound: vi.fn(),
   playIncorrectSound: vi.fn(),
   playFanfareSound: vi.fn(),
+  playJoinSound: vi.fn(),
+  playLockSound: vi.fn(),
+  playQuestionStartSound: vi.fn(),
+  playTickSound: vi.fn(),
 }));
 
 vi.mock('canvas-confetti', () => ({

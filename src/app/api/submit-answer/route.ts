@@ -28,7 +28,7 @@ function mapRpcError(message: string) {
 export async function POST(request: Request) {
   try {
     const ip = clientIpFromRequest(request);
-    const ipLimit = rateLimit({
+    const ipLimit = await rateLimit({
       key: `submit:${ip}`,
       limit: RATE_LIMITS.submitPerIp.limit,
       windowMs: RATE_LIMITS.submitPerIp.windowMs,
@@ -50,7 +50,7 @@ export async function POST(request: Request) {
       return NextResponse.json({ error: 'Invalid answer payload.' }, { status: 400 });
     }
 
-    const playerLimit = rateLimit({
+    const playerLimit = await rateLimit({
       key: `submit:player:${playerId}`,
       limit: RATE_LIMITS.submitPerPlayer.limit,
       windowMs: RATE_LIMITS.submitPerPlayer.windowMs,

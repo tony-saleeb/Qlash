@@ -55,7 +55,7 @@ export default function QuestionListSidebar({
                     <span className="text-xs text-arena-ink/45 font-semibold uppercase tracking-wider">
                       {q.type.replace('_', ' ')} {isDouble && '⭐ 2x'}
                     </span>
-                    <p className="text-xs font-medium truncate">
+                    <p dir="auto" className="text-xs font-medium truncate">
                       {q.prompt || 'Untitled question prompt...'}
                     </p>
                   </div>

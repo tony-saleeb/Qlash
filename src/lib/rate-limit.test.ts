@@ -1,18 +1,18 @@
 import { describe, expect, it, vi } from 'vitest';
-import { clientIpFromRequest, rateLimit } from '@/lib/rate-limit';
+import { clientIpFromRequest, rateLimitMemory } from '@/lib/rate-limit';
 
-describe('rateLimit', () => {
+describe('rateLimitMemory', () => {
   it('allows the first hit and subsequent hits under the cap', () => {
     const key = `unit-allow-${Math.random()}`;
-    expect(rateLimit({ key, limit: 3, windowMs: 60_000 })).toEqual({ ok: true });
-    expect(rateLimit({ key, limit: 3, windowMs: 60_000 })).toEqual({ ok: true });
-    expect(rateLimit({ key, limit: 3, windowMs: 60_000 })).toEqual({ ok: true });
+    expect(rateLimitMemory({ key, limit: 3, windowMs: 60_000 })).toEqual({ ok: true });
+    expect(rateLimitMemory({ key, limit: 3, windowMs: 60_000 })).toEqual({ ok: true });
+    expect(rateLimitMemory({ key, limit: 3, windowMs: 60_000 })).toEqual({ ok: true });
   });
 
   it('blocks when the bucket is full and reports retry-after', () => {
     const key = `unit-block-${Math.random()}`;
-    rateLimit({ key, limit: 1, windowMs: 30_000 });
-    const blocked = rateLimit({ key, limit: 1, windowMs: 30_000 });
+    rateLimitMemory({ key, limit: 1, windowMs: 30_000 });
+    const blocked = rateLimitMemory({ key, limit: 1, windowMs: 30_000 });
     expect(blocked.ok).toBe(false);
     if (!blocked.ok) {
       expect(blocked.retryAfterSec).toBeGreaterThanOrEqual(1);
@@ -25,10 +25,10 @@ describe('rateLimit', () => {
     const now = Date.now();
     const nowSpy = vi.spyOn(Date, 'now');
     nowSpy.mockReturnValue(now);
-    expect(rateLimit({ key, limit: 1, windowMs: 1000 }).ok).toBe(true);
-    expect(rateLimit({ key, limit: 1, windowMs: 1000 }).ok).toBe(false);
+    expect(rateLimitMemory({ key, limit: 1, windowMs: 1000 }).ok).toBe(true);
+    expect(rateLimitMemory({ key, limit: 1, windowMs: 1000 }).ok).toBe(false);
     nowSpy.mockReturnValue(now + 1000);
-    expect(rateLimit({ key, limit: 1, windowMs: 1000 }).ok).toBe(true);
+    expect(rateLimitMemory({ key, limit: 1, windowMs: 1000 }).ok).toBe(true);
   });
 });
 

@@ -42,15 +42,17 @@ export async function POST(request: Request) {
       return NextResponse.json({ error: 'Nickname does not match this device session.' }, { status: 403 });
     }
 
-    if (!session || session.status === 'finished') {
+    if (!session) {
       return NextResponse.json({ error: 'Game session is not available.' }, { status: 403 });
     }
 
-    void admin.from('players').update({ connected: true }).eq('id', player.id);
+    if (session.status !== 'finished') {
+      void admin.from('players').update({ connected: true }).eq('id', player.id);
+    }
 
     return NextResponse.json({
       success: true,
-      player: { ...player, connected: true },
+      player: { ...player, connected: session.status === 'finished' ? player.connected : true },
       sessionStatus: session.status,
     });
   } catch (err) {

@@ -1,6 +1,7 @@
 import { redirect } from 'next/navigation';
 import { createClient } from '@/lib/supabase/server';
 import HostGameClient from '@/app/host/[sessionId]/HostGameClient';
+import { livePlayerCap } from '@/lib/game/constants';
 
 export const dynamic = 'force-dynamic';
 
@@ -19,7 +20,9 @@ export default async function HostSessionPage({ params }: HostSessionPageProps) 
     supabase.auth.getUser(),
     supabase
       .from('game_sessions')
-      .select('*')
+      .select(
+        'id, pin, status, current_question_index, question_started_at, quiz_id, host_id, active_multiplier, question_order'
+      )
       .eq('id', sessionId)
       .single(),
   ]);
@@ -35,22 +38,25 @@ export default async function HostSessionPage({ params }: HostSessionPageProps) 
   }
 
   // Fetch quiz, questions, and players all in parallel
-  const [quizResult, questionsResult, playersResult] = await Promise.all([
+  const [quizResult, questionsResult, playersResult, hostResult] = await Promise.all([
     supabase
       .from('quizzes')
-      .select('*')
+      .select('id, title, randomize_questions, randomize_answers, team_mode')
       .eq('id', session.quiz_id)
       .single(),
     supabase
       .from('questions')
-      .select('*')
+      .select(
+        'id, type, prompt, media_url, media_type, time_limit_seconds, points_base, scoring_type, answers, order_index'
+      )
       .eq('quiz_id', session.quiz_id)
       .order('order_index', { ascending: true }),
     supabase
       .from('players')
-      .select('*')
+      .select('id, session_id, nickname, team_name, score, streak, joined_at, connected')
       .eq('session_id', sessionId)
       .order('joined_at', { ascending: true }),
+    supabase.from('hosts').select('plan').eq('id', user.id).maybeSingle(),
   ]);
 
   const { data: quiz, error: quizError } = quizResult;
@@ -71,6 +77,7 @@ export default async function HostSessionPage({ params }: HostSessionPageProps) 
       quiz={quiz}
       questions={questionsResult.data || []}
       initialPlayers={playersResult.data || []}
+      playerCap={livePlayerCap(hostResult.data?.plan)}
     />
   );
 }

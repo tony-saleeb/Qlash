@@ -56,7 +56,7 @@ describe('POST /api/player/me', () => {
     expect(result.body.error).toMatch(/Nickname does not match/);
   });
 
-  it('rejects a finished session', async () => {
+  it('returns the player on a finished session so the podium survives refresh', async () => {
     admin.setTables({
       player_tokens: { data: { player_id: 'p1', client_token: 'tok' }, error: null },
       players: {
@@ -69,7 +69,9 @@ describe('POST /api/player/me', () => {
     const result = await readJson(
       await POST(jsonRequest({ sessionId: 'sess-1', token: 'tok' }))
     );
-    expect(result.status).toBe(403);
+    expect(result.status).toBe(200);
+    expect(result.body.sessionStatus).toBe('finished');
+    expect(result.body.player.nickname).toBe('Ada');
   });
 
   it('returns the player as connected on a valid token', async () => {

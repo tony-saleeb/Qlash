@@ -177,7 +177,7 @@ export function AnswerButton({
     >
       <span className="pointer-events-none absolute inset-x-0 top-0 h-1/3 bg-gradient-to-b from-white/25 to-transparent" />
       <AnswerMark shape={shape} className={cn('h-9 w-9 shrink-0 drop-shadow-sm', answerMarkClass(bg))} />
-      <span className="line-clamp-3 max-w-full px-1 font-display text-sm font-extrabold leading-snug sm:text-base">
+      <span dir="auto" className="line-clamp-3 max-w-full px-1 font-display text-sm font-extrabold leading-snug sm:text-base">
         {label}
       </span>
     </button>

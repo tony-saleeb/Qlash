@@ -145,6 +145,15 @@ export function createClientMock(user = { id: 'host-1', email: 'host@qlash.test'
       fromCalls.length = 0;
       from.mockClear();
       rpc.mockClear();
+      this.auth.getUser.mockReset();
+      this.auth.getUser.mockResolvedValue({
+        data: { user },
+        error: user ? null : { message: 'Unauthorized' },
+      });
+      this.auth.getSession.mockReset();
+      this.auth.getSession.mockResolvedValue({
+        data: { session: user ? { user } : null },
+      });
     },
   };
 }

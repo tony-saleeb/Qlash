@@ -3,10 +3,10 @@ import { createAdminClient } from '@/lib/supabase/admin';
 import { randomUUID } from 'crypto';
 import { clientIpFromRequest, rateLimit } from '@/lib/rate-limit';
 import {
-  MAX_PLAYERS_PER_SESSION,
   NICKNAME_MAX_LEN,
   NICKNAME_MIN_LEN,
   RATE_LIMITS,
+  livePlayerCap,
 } from '@/lib/game/constants';
 
 export const dynamic = 'force-dynamic';
@@ -14,7 +14,7 @@ export const dynamic = 'force-dynamic';
 export async function POST(request: Request) {
   try {
     const ip = clientIpFromRequest(request);
-    const limited = rateLimit({
+    const limited = await rateLimit({
       key: `join:${ip}`,
       limit: RATE_LIMITS.joinPerIp.limit,
       windowMs: RATE_LIMITS.joinPerIp.windowMs,
@@ -44,7 +44,7 @@ export async function POST(request: Request) {
 
     const { data: session, error: sessionError } = await admin
       .from('game_sessions')
-      .select('id, status, quiz_id, quizzes(team_mode)')
+      .select('id, status, quiz_id, quizzes(team_mode), hosts(plan)')
       .eq('pin', pin)
       .maybeSingle();
 
@@ -90,20 +90,34 @@ export async function POST(request: Request) {
     const sessionWithQuiz = session as unknown as {
       id: string;
       status: string;
-      quizzes: { team_mode: boolean } | null;
+      quizzes: { team_mode: boolean } | { team_mode: boolean }[] | null;
+      hosts: { plan: string } | { plan: string }[] | null;
     };
-    const isTeamQuiz = Boolean(sessionWithQuiz.quizzes?.team_mode);
+    const quizMeta = Array.isArray(sessionWithQuiz.quizzes)
+      ? sessionWithQuiz.quizzes[0]
+      : sessionWithQuiz.quizzes;
+    const hostMeta = Array.isArray(sessionWithQuiz.hosts)
+      ? sessionWithQuiz.hosts[0]
+      : sessionWithQuiz.hosts;
+    const isTeamQuiz = Boolean(quizMeta?.team_mode);
+    const playerCap = livePlayerCap(hostMeta?.plan);
 
     if (isTeamQuiz && (!teamName || !String(teamName).trim())) {
       return NextResponse.json({ error: 'Team name is required.' }, { status: 400 });
     }
 
-    const { data: existingPlayer } = await admin
-      .from('players')
-      .select('id')
-      .eq('session_id', session.id)
-      .eq('nickname', trimmedNickname)
-      .maybeSingle();
+    const [{ data: existingPlayer }, countResult] = await Promise.all([
+      admin
+        .from('players')
+        .select('id')
+        .eq('session_id', session.id)
+        .eq('nickname', trimmedNickname)
+        .maybeSingle(),
+      admin
+        .from('players')
+        .select('id', { count: 'exact', head: true })
+        .eq('session_id', session.id),
+    ]);
 
     if (existingPlayer) {
       return NextResponse.json(
@@ -117,17 +131,13 @@ export async function POST(request: Request) {
       );
     }
 
-    const { count, error: countError } = await admin
-      .from('players')
-      .select('id', { count: 'exact', head: true })
-      .eq('session_id', session.id);
-
+    const { count, error: countError } = countResult;
     if (countError) throw countError;
 
-    if ((count || 0) >= MAX_PLAYERS_PER_SESSION) {
+    if ((count || 0) >= playerCap) {
       return NextResponse.json(
         {
-          error: `This room is full (${MAX_PLAYERS_PER_SESSION} players max).`,
+          error: `This room is full (${playerCap} players max).`,
           code: 'ROOM_FULL',
         },
         { status: 403 }
@@ -148,8 +158,9 @@ export async function POST(request: Request) {
       .single();
 
     if (joinError || !player) {
-      // Unique nickname race under concurrent joins
-      if ((joinError as { code?: string } | null)?.code === '23505') {
+      const code = (joinError as { code?: string } | null)?.code;
+      const message = (joinError as { message?: string } | null)?.message || '';
+      if (code === '23505') {
         return NextResponse.json(
           {
             error: 'Nickname already taken in this room.',
@@ -157,6 +168,15 @@ export async function POST(request: Request) {
             sessionId: session.id,
           },
           { status: 409 }
+        );
+      }
+      if (code === 'P0001' || /ROOM_FULL/i.test(message)) {
+        return NextResponse.json(
+          {
+            error: `This room is full (${playerCap} players max).`,
+            code: 'ROOM_FULL',
+          },
+          { status: 403 }
         );
       }
       throw joinError || new Error('Failed to join.');

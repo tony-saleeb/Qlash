@@ -4,8 +4,8 @@ import { createServerClient } from '@supabase/ssr';
 export async function middleware(request: NextRequest) {
   const { pathname } = request.nextUrl;
 
-  // Skip auth refresh entirely for player routes — players don't use Supabase Auth
-  if (pathname.startsWith('/play') || pathname.startsWith('/api/')) {
+  // Skip auth refresh for public/player traffic — hosts refresh on dashboard/host/editor
+  if (pathname === '/' || pathname.startsWith('/play') || pathname.startsWith('/api/')) {
     return NextResponse.next();
   }
 

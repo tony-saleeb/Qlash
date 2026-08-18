@@ -1,4 +1,4 @@
-import { describe, expect, it, vi } from 'vitest';
+import { afterEach, describe, expect, it, vi } from 'vitest';
 
 const exchangeCodeForSession = vi.fn();
 
@@ -9,7 +9,12 @@ vi.mock('@/lib/supabase/server', () => ({
 }));
 
 describe('GET /auth/callback', () => {
+  afterEach(() => {
+    vi.unstubAllEnvs();
+  });
+
   it('exchanges a code and redirects into the host dashboard', async () => {
+    vi.stubEnv('NEXT_PUBLIC_SITE_URL', '');
     exchangeCodeForSession.mockResolvedValueOnce({ error: null });
     const { GET } = await import('@/app/auth/callback/route');
     const response = await GET(new Request('http://qlash.test/auth/callback?code=abc'));
@@ -19,6 +24,7 @@ describe('GET /auth/callback', () => {
   });
 
   it('honors next and bounces home when the exchange fails', async () => {
+    vi.stubEnv('NEXT_PUBLIC_SITE_URL', '');
     exchangeCodeForSession.mockResolvedValueOnce({ error: { message: 'bad' } });
     const { GET } = await import('@/app/auth/callback/route');
     const failed = await GET(new Request('http://qlash.test/auth/callback?code=abc&next=/host/1'));
@@ -26,5 +32,13 @@ describe('GET /auth/callback', () => {
 
     const missing = await GET(new Request('http://qlash.test/auth/callback'));
     expect(missing.headers.get('location')).toBe('http://qlash.test/');
+  });
+
+  it('prefers NEXT_PUBLIC_SITE_URL over the request origin', async () => {
+    vi.stubEnv('NEXT_PUBLIC_SITE_URL', 'https://qlash.app');
+    exchangeCodeForSession.mockResolvedValueOnce({ error: null });
+    const { GET } = await import('@/app/auth/callback/route');
+    const response = await GET(new Request('http://qlash.test/auth/callback?code=abc'));
+    expect(response.headers.get('location')).toBe('https://qlash.app/dashboard');
   });
 });

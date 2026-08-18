@@ -16,8 +16,10 @@ import {
 import { CheckCircle, Clock, Award, Trash2 } from 'lucide-react';
 import { AnswerSwatch } from '@/components/brand/AnswerMark';
 import type { Question } from './quizEditorModel';
+import QuestionMediaField from './QuestionMediaField';
 
 interface QuestionEditorPaneProps {
+  quizId: string;
   activeQuestion: Question;
   isDoublePointsRound: boolean;
   onTypeChange: (type: Question['type']) => void;
@@ -30,6 +32,7 @@ interface QuestionEditorPaneProps {
 }
 
 export default function QuestionEditorPane({
+  quizId,
   activeQuestion,
   isDoublePointsRound,
   onTypeChange,
@@ -160,38 +163,12 @@ export default function QuestionEditorPane({
         />
       </div>
 
-      {/* Media attachment input */}
-      <div className="space-y-2">
-        <Label className="text-arena-ink/55 text-xs font-semibold">
-          Media Attachment (Optional Image/GIF/Video URL)
-        </Label>
-        <div className="flex gap-2">
-          <Input
-            placeholder="https://example.com/media.jpg"
-            value={activeQuestion.media_url || ''}
-            onChange={(e) => {
-              const url = e.target.value;
-              const type = url.match(/\.(mp4|webm|ogg)$/i) ? 'video' : url ? 'image' : null;
-              onUpdate({ media_url: url || null, media_type: type });
-            }}
-            className="bg-arena-mist/60 border-arena-line h-10 focus-visible:ring-arena-court rounded-xl flex-1"
-          />
-          {activeQuestion.media_url && (
-            <Select
-              value={activeQuestion.media_type || 'image'}
-              onValueChange={(val) => { if (val) onUpdate({ media_type: val as Question['media_type'] }); }}
-            >
-              <SelectTrigger className="bg-arena-mist border-arena-line w-28 h-10 text-xs rounded-xl">
-                <SelectValue />
-              </SelectTrigger>
-              <SelectContent className="bg-arena-mist border-arena-line text-arena-ink">
-                <SelectItem value="image">Image / GIF</SelectItem>
-                <SelectItem value="video">Short Video</SelectItem>
-              </SelectContent>
-            </Select>
-          )}
-        </div>
-      </div>
+      <QuestionMediaField
+        quizId={quizId}
+        mediaUrl={activeQuestion.media_url}
+        mediaType={activeQuestion.media_type}
+        onChange={onUpdate}
+      />
 
       {/* Answers Design Section */}
       <div className="space-y-4">

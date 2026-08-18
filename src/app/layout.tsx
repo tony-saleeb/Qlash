@@ -1,5 +1,5 @@
 import type { Metadata, Viewport } from "next";
-import { Bricolage_Grotesque, Figtree } from "next/font/google";
+import { Bricolage_Grotesque, Cairo, Figtree } from "next/font/google";
 import localFont from "next/font/local";
 import "./globals.css";
 import { Toaster } from "@/components/ui/sonner";
@@ -14,6 +14,12 @@ const sans = Figtree({
   subsets: ["latin"],
   variable: "--font-sans",
   weight: ["400", "600", "700"],
+});
+
+const arabic = Cairo({
+  subsets: ["arabic"],
+  variable: "--font-arabic",
+  weight: ["400", "600", "700", "800"],
 });
 
 const geistMono = localFont({
@@ -32,7 +38,7 @@ export const viewport: Viewport = {
 export const metadata: Metadata = {
   title: "Qlash — Live classroom quiz, built for the rush",
   description:
-    "Host up to 80 players in a real-time quiz clash. Instant join, sharp scoring, projector-ready control.",
+    "Host up to 80 players on Pro (30 on Free). Instant join, sharp scoring, projector-ready control.",
   icons: {
     icon: [{ url: "/favicon.svg", type: "image/svg+xml" }],
   },
@@ -44,7 +50,7 @@ export default function RootLayout({
   children: React.ReactNode;
 }>) {
   return (
-    <html lang="en" className={`${display.variable} ${sans.variable} ${geistMono.variable}`}>
+    <html lang="en" className={`${display.variable} ${sans.variable} ${arabic.variable} ${geistMono.variable}`}>
       <body className="min-h-screen font-sans text-arena-ink antialiased">
         {children}
         <Toaster position="top-center" richColors />

@@ -6,6 +6,8 @@ import {
   NICKNAME_MAX_LEN,
   NICKNAME_MIN_LEN,
   RATE_LIMITS,
+  livePlayerCap,
+  quizLibraryCap,
 } from '@/lib/game/constants';
 
 describe('cn', () => {
@@ -28,5 +30,9 @@ describe('theme + capacity constants', () => {
     expect(NICKNAME_MAX_LEN).toBe(20);
     expect(RATE_LIMITS.joinPerIp.limit).toBe(120);
     expect(RATE_LIMITS.submitPerPlayer.limit).toBe(8);
+    expect(livePlayerCap('free')).toBe(30);
+    expect(livePlayerCap('pro')).toBe(80);
+    expect(quizLibraryCap('free')).toBe(5);
+    expect(quizLibraryCap('org')).toBe(Number.POSITIVE_INFINITY);
   });
 });

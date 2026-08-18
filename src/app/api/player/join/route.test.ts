@@ -22,6 +22,7 @@ const lobbySession = {
   status: 'lobby',
   quiz_id: 'quiz-1',
   quizzes: { team_mode: false },
+  hosts: { plan: 'pro' },
 };
 
 describe('POST /api/player/join', () => {
@@ -102,6 +103,21 @@ describe('POST /api/player/join', () => {
     expect(result.body.code).toBe('ROOM_FULL');
   });
 
+  it('rejects a free-plan lobby at 30 players', async () => {
+    admin.setTables({
+      game_sessions: { data: { ...lobbySession, hosts: { plan: 'free' } }, error: null },
+      players: [
+        { data: null, error: null },
+        { data: null, error: null, count: 30 },
+      ],
+    });
+    const { POST } = await import('@/app/api/player/join/route');
+    const result = await readJson(await POST(jsonRequest({ pin: '123456', nickname: 'Ada' })));
+    expect(result.status).toBe(403);
+    expect(result.body.code).toBe('ROOM_FULL');
+    expect(result.body.error).toMatch(/30/);
+  });
+
   it('inserts the player, stores a token, and returns both', async () => {
     const player = {
       id: 'p1',
@@ -136,6 +152,21 @@ describe('POST /api/player/join', () => {
       team_name: null,
       connected: true,
     });
+  });
+
+  it('maps a capacity trigger to ROOM_FULL', async () => {
+    admin.setTables({
+      game_sessions: { data: lobbySession, error: null },
+      players: [
+        { data: null, error: null },
+        { data: null, error: null, count: 3 },
+        { data: null, error: { code: 'P0001', message: 'ROOM_FULL' } },
+      ],
+    });
+    const { POST } = await import('@/app/api/player/join/route');
+    const result = await readJson(await POST(jsonRequest({ pin: '123456', nickname: 'Ada' })));
+    expect(result.status).toBe(403);
+    expect(result.body.code).toBe('ROOM_FULL');
   });
 
   it('maps a unique-nickname race to 409', async () => {

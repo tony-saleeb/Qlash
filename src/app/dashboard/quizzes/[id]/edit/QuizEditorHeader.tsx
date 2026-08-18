@@ -38,7 +38,7 @@ export default function QuizEditorHeader({
           <BrandMark size="sm" />
         </div>
         <div className="border-l border-arena-line pl-3">
-          <h2 className="line-clamp-1 font-display text-lg font-extrabold leading-tight text-arena-ink">
+          <h2 dir="auto" className="line-clamp-1 font-display text-lg font-extrabold leading-tight text-arena-ink">
             {title}
           </h2>
           <p className="mt-0.5 text-xs text-arena-ink/45">

@@ -90,4 +90,28 @@ describe('POST /api/player/current-question', () => {
     ]);
     expect(result.body.question.answers[0]).not.toHaveProperty('is_correct');
   });
+
+  it('hydrates randomized answers with a stable session seed', async () => {
+    admin.setTables({
+      player_tokens: { data: { client_token: 'tok' }, error: null },
+      players: { data: { id: 'p1' }, error: null },
+      game_sessions: { data: liveSession, error: null },
+      questions: {
+        data: { ...dbQuestion, quizzes: { randomize_answers: true } },
+        error: null,
+      },
+    });
+    const { POST } = await import('@/app/api/player/current-question/route');
+    const first = await readJson(
+      await POST(jsonRequest({ sessionId: 'sess-1', playerId: 'p1', token: 'tok' }))
+    );
+    const second = await readJson(
+      await POST(jsonRequest({ sessionId: 'sess-1', playerId: 'p1', token: 'tok' }))
+    );
+    expect(first.status).toBe(200);
+    expect(first.body.question.answers.map((a: { id: string }) => a.id)).toEqual(
+      second.body.question.answers.map((a: { id: string }) => a.id)
+    );
+    expect(first.body.question.answers[0]).not.toHaveProperty('is_correct');
+  });
 });

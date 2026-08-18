@@ -1,9 +1,11 @@
 'use server';
 
-import { createClient } from '@/lib/supabase/server';
 import { revalidatePath } from 'next/cache';
 import { ANSWER_MARKS } from '@/lib/game/marks';
 import { DEFAULT_QUIZ_THEME } from '@/lib/game/theme';
+import { getHostAuth } from '@/lib/supabase/hostAuth';
+import { quizLibraryCap } from '@/lib/game/constants';
+import type { SupabaseClient } from '@supabase/supabase-js';
 
 interface AnswerOptionInput {
   id: string;
@@ -36,19 +38,26 @@ interface QuizSettingsInput {
   double_points_rounds: string[];
 }
 
-// Helper to get authenticated user
-async function getAuthUser() {
-  const supabase = createClient();
-  const { data: { user }, error } = await supabase.auth.getUser();
-  if (error || !user) {
-    throw new Error('Unauthorized. Please log in.');
+
+async function assertQuizQuota(supabase: SupabaseClient, hostId: string) {
+  const { data: host } = await supabase.from('hosts').select('plan').eq('id', hostId).maybeSingle();
+  const cap = quizLibraryCap(host?.plan);
+  if (!Number.isFinite(cap)) return;
+
+  const { count, error } = await supabase
+    .from('quizzes')
+    .select('id', { count: 'exact', head: true })
+    .eq('host_id', hostId);
+  if (error) throw error;
+  if ((count || 0) >= cap) {
+    throw new Error(`Free plan allows ${cap} saved quizzes. Delete one, or ask for Pro.`);
   }
-  return { supabase, user };
 }
 
 export async function createQuiz(title: string, description: string = '') {
   try {
-    const { supabase, user } = await getAuthUser();
+    const { supabase, user } = await getHostAuth();
+    await assertQuizQuota(supabase, user.id);
     const { data, error } = await supabase
       .from('quizzes')
       .insert({
@@ -71,7 +80,7 @@ export async function createQuiz(title: string, description: string = '') {
 
 export async function deleteQuiz(quizId: string) {
   try {
-    const { supabase, user } = await getAuthUser();
+    const { supabase, user } = await getHostAuth();
     const { error } = await supabase
       .from('quizzes')
       .delete()
@@ -89,7 +98,8 @@ export async function deleteQuiz(quizId: string) {
 
 export async function cloneQuiz(quizId: string) {
   try {
-    const { supabase, user } = await getAuthUser();
+    const { supabase, user } = await getHostAuth();
+    await assertQuizQuota(supabase, user.id);
 
     // Fetch original quiz details
     const { data: originalQuiz, error: quizError } = await supabase
@@ -165,7 +175,7 @@ export async function saveQuizData(
   questions: QuestionInput[]
 ) {
   try {
-    const { supabase, user } = await getAuthUser();
+    const { supabase, user } = await getHostAuth();
 
     // 1. Verify quiz ownership and update settings
     const { error: updateQuizError } = await supabase
@@ -206,10 +216,12 @@ export async function saveQuizData(
       if (deleteError) throw deleteError;
     }
 
-    // 4. Perform Updates & Insertions
+    const toUpdate: { id: string; row: Record<string, unknown> }[] = [];
+    const toInsert: Record<string, unknown>[] = [];
+
     for (let i = 0; i < questions.length; i++) {
       const q = questions[i];
-      const qData = {
+      const row = {
         quiz_id: quizId,
         order_index: i,
         type: q.type,
@@ -221,21 +233,26 @@ export async function saveQuizData(
         scoring_type: q.scoring_type,
         answers: q.answers,
       };
-
       if (q.id && existingIds.includes(q.id)) {
-        // Update existing question
-        const { error: updateError } = await supabase
-          .from('questions')
-          .update(qData)
-          .eq('id', q.id);
-        if (updateError) throw updateError;
+        toUpdate.push({ id: q.id, row });
       } else {
-        // Insert new question
-        const { error: insertError } = await supabase
-          .from('questions')
-          .insert(qData);
-        if (insertError) throw insertError;
+        toInsert.push(row);
       }
+    }
+
+    if (toInsert.length > 0) {
+      const { error: insertError } = await supabase.from('questions').insert(toInsert);
+      if (insertError) throw insertError;
+    }
+
+    const chunkSize = 8;
+    for (let i = 0; i < toUpdate.length; i += chunkSize) {
+      const slice = toUpdate.slice(i, i + chunkSize);
+      const results = await Promise.all(
+        slice.map(({ id, row }) => supabase.from('questions').update(row).eq('id', id))
+      );
+      const failed = results.find((result) => result.error);
+      if (failed?.error) throw failed.error;
     }
 
     return { success: true };
@@ -247,7 +264,8 @@ export async function saveQuizData(
 
 export async function createTemplateQuiz() {
   try {
-    const { supabase, user } = await getAuthUser();
+    const { supabase, user } = await getHostAuth();
+    await assertQuizQuota(supabase, user.id);
 
     // Create the quiz shell
     const { data: quiz, error: quizError } = await supabase

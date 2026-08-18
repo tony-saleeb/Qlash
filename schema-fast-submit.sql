@@ -179,7 +179,18 @@ begin
       v_time_taken_ms, v_points, v_is_correct
     );
   exception when unique_violation then
-    return jsonb_build_object('success', true, 'duplicate', true);
+    select points_awarded, is_correct
+      into v_points, v_is_correct
+    from public.answers_submitted
+    where session_id = p_session_id
+      and question_id = p_question_id
+      and player_id = p_player_id;
+    return jsonb_build_object(
+      'success', true,
+      'duplicate', true,
+      'pointsAwarded', coalesce(v_points, 0),
+      'isCorrect', coalesce(v_is_correct, false)
+    );
   end;
 
   return jsonb_build_object(

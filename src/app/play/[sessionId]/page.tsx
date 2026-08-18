@@ -16,15 +16,11 @@ export default async function PlayerSessionPage({ params }: PlayerSessionPagePro
 
   const { data: session, error } = await supabase
     .from('game_sessions')
-    .select('*, quizzes(team_mode)')
+    .select('id, status, quizzes(team_mode)')
     .eq('id', sessionId)
     .single();
 
   if (error || !session) {
-    redirect('/play');
-  }
-
-  if (session.status === 'finished') {
     redirect('/play');
   }
 

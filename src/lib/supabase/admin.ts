@@ -28,7 +28,7 @@ export const createAdminClient = (): SupabaseClient => {
         autoRefreshToken: false,
       },
       global: {
-        headers: { 'x-client-info': 'quizarena-admin' },
+        headers: { 'x-client-info': 'qlash-admin' },
       },
     }
   );

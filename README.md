@@ -1,36 +1,83 @@
-This is a [Next.js](https://nextjs.org) project bootstrapped with [`create-next-app`](https://nextjs.org/docs/app/api-reference/cli/create-next-app).
+# Qlash
 
-## Getting Started
+Live classroom quiz for Arabic / church / school rooms. Hosts sign in. Players join with a PIN — no account. Cap is **80** on Pro, **30** on Free.
 
-First, run the development server:
+Stack: Next.js 14, Supabase (Auth, Postgres, Realtime), pnpm, Vitest.
+
+## Local setup
 
 ```bash
-npm run dev
-# or
-yarn dev
-# or
-pnpm dev
-# or
-bun dev
+pnpm install
+cp .env.local.example .env.local
 ```
 
-Open [http://localhost:3000](http://localhost:3000) with your browser to see the result.
+Fill `.env.local` from the Supabase project settings. Then:
 
-You can start editing the page by modifying `app/page.tsx`. The page auto-updates as you edit the file.
+```bash
+pnpm dev
+```
 
-This project uses [`next/font`](https://nextjs.org/docs/app/building-your-application/optimizing/fonts) to automatically optimize and load [Geist](https://vercel.com/font), a new font family for Vercel.
+- Players: [http://localhost:3000](http://localhost:3000) or `/play`
+- Hosts: sign in on the landing page → `/dashboard`
 
-## Learn More
+```bash
+pnpm test
+```
 
-To learn more about Next.js, take a look at the following resources:
+## Database
 
-- [Next.js Documentation](https://nextjs.org/docs) - learn about Next.js features and API.
-- [Learn Next.js](https://nextjs.org/learn) - an interactive Next.js tutorial.
+Run these in the Supabase SQL editor, in order, on a new project:
 
-You can check out [the Next.js GitHub repository](https://github.com/vercel/next.js) - your feedback and contributions are welcome!
+1. `schema.sql`
+2. `schema-p0-migration.sql` (if upgrading an older project)
+3. `schema-p2-migration.sql`
+4. `schema-p2b-capacity.sql`
+5. `schema-fast-submit.sql`
+6. `schema-p3-live-hardening.sql`
+7. `schema-p4-ops.sql`
+8. `schema-media.sql`
 
-## Deploy on Vercel
+Existing projects that already have the live loop: run **5–8** (re-run fast-submit, then p3, p4, media).
 
-The easiest way to deploy your Next.js app is to use the [Vercel Platform](https://vercel.com/new?utm_medium=default-template&filter=next.js&utm_source=create-next-app&utm_campaign=create-next-app-readme) from the creators of Next.js.
+## Production URL + Google login
 
-Check out our [Next.js deployment documentation](https://nextjs.org/docs/app/building-your-application/deploying) for more details.
+Use a **stable** origin. Do not paste a Vercel `*-vercel.app` deployment-id hostname.
+
+Vercel env (Production):
+
+```
+NEXT_PUBLIC_SITE_URL=https://your-domain.com
+NEXT_PUBLIC_SUPABASE_URL=...
+NEXT_PUBLIC_SUPABASE_ANON_KEY=...
+SUPABASE_SERVICE_ROLE_KEY=...
+```
+
+Supabase **Authentication → URL configuration**:
+
+| Setting | Value |
+|---|---|
+| Site URL | `https://your-domain.com` |
+| Redirect URLs | `https://your-domain.com/auth/callback` |
+| Google callback | `https://<project-ref>.supabase.co/auth/v1/callback` |
+
+Enable the Google provider with that Supabase callback in Google Cloud. Local also needs `http://localhost:3000/auth/callback` in Redirect URLs.
+
+## Plans (no Stripe yet)
+
+Set `hosts.plan` in the database when a teacher is blocked:
+
+| Plan | Live seats | Saved quizzes |
+|---|---|---|
+| `free` (default) | 30 | 5 |
+| `pro` | 80 | unlimited |
+| `org` | 80 | unlimited |
+
+```sql
+update public.hosts set plan = 'pro' where id = '<auth user uuid>';
+```
+
+Stripe Checkout comes after someone asks to pay.
+
+## Deploy
+
+Vercel, this repo, env vars above. After deploy, run one real class of 40–80 on Pro (or 30 on Free) and fix whatever the room shows you.

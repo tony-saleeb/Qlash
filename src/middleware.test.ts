@@ -14,10 +14,12 @@ function request(path: string) {
 }
 
 describe('middleware', () => {
-  it('skips auth refresh on player and API routes', async () => {
+  it('skips auth refresh on landing, player, and API routes', async () => {
     const { middleware } = await import('@/middleware');
+    const home = await middleware(request('/'));
     const play = await middleware(request('/play/abc'));
     const api = await middleware(request('/api/player/join'));
+    expect(home.status).toBe(200);
     expect(play.status).toBe(200);
     expect(api.status).toBe(200);
     expect(getUser).not.toHaveBeenCalled();
