@@ -32,6 +32,8 @@ import {
 import { remainingFromPausedElapsed, remainingSeconds, startedAtFromRemaining } from '@/lib/game/clock';
 import { answerUsesInk, resolveAnswerColor } from '@/lib/game/marks';
 import { aggregateTeamScores } from '@/lib/game/teams';
+import { LocaleToggle } from '@/components/brand/LocaleToggle';
+import { useLocale } from '@/lib/i18n/useLocale';
 
 type ActiveQuestionPayload = PublicQuestionPayload;
 
@@ -48,6 +50,7 @@ export default function PlayerGameClient({
 }: PlayerGameClientProps) {
   const router = useRouter();
   const supabase = createClient();
+  const { locale, setLocale, t } = useLocale();
 
   // State managers
   const [player, setPlayer] = useState<Player | null>(null);
@@ -680,8 +683,9 @@ export default function PlayerGameClient({
   if (sessionStatus === 'lobby') {
     return (
       <GameShell>
-        <header className="py-2">
+        <header className="flex items-center justify-between py-2">
           <BrandMark tone="light" size="sm" />
+          <LocaleToggle locale={locale} onChange={setLocale} tone="light" />
         </header>
 
         <main className="my-auto flex w-full max-w-sm flex-col items-center gap-6 text-center">
@@ -693,11 +697,11 @@ export default function PlayerGameClient({
                 }`}
               >
                 {online ? <Wifi className="h-3.5 w-3.5" /> : <WifiOff className="h-3.5 w-3.5" />}
-                {online ? 'Connected' : 'Offline'}
+                {online ? t('connected') : t('offline')}
               </span>
             </div>
 
-            <p className="text-[11px] font-bold uppercase tracking-[0.22em] text-arena-ink/40">You are in</p>
+            <p className="text-[11px] font-bold uppercase tracking-[0.22em] text-arena-ink/40">{t('youAreIn')}</p>
             <h1 dir="auto" className="mt-1 font-display text-4xl font-extrabold leading-none text-arena-ink sm:text-5xl">{player.nickname}</h1>
             {player.team_name && (
               <p className="mt-2 inline-flex items-center gap-1 bg-arena-mist px-2.5 py-1 text-xs font-bold text-arena-court">
@@ -709,8 +713,8 @@ export default function PlayerGameClient({
               <div className="mx-auto mb-3 h-1.5 w-24 overflow-hidden bg-arena-mist">
                 <div className="h-full w-1/2 animate-pulse bg-arena-signal" />
               </div>
-              <p className="font-display text-sm font-bold text-arena-ink">Waiting for host…</p>
-              <p className="mt-1 text-xs text-arena-ink/50">Watch the big screen — the round starts there.</p>
+              <p className="font-display text-sm font-bold text-arena-ink">{t('waitingForHost')}</p>
+              <p className="mt-1 text-xs text-arena-ink/50">{t('watchBigScreen')}</p>
             </div>
           </div>
         </main>
@@ -905,9 +909,9 @@ export default function PlayerGameClient({
       <GameShell className="items-center justify-center">
         <div className="flex flex-1 flex-col items-center justify-center text-center">
           <Award className="mb-4 h-12 w-12 text-arena-acid" />
-          <h1 className="font-display text-2xl font-extrabold text-white">Scoreboard time</h1>
+          <h1 className="font-display text-2xl font-extrabold text-white">{t('scoreboardTime')}</h1>
           <p className="mt-2 max-w-xs text-sm leading-relaxed text-white/60">
-            Look at the projector — standings are on the host screen.
+            {t('lookAtProjector')}
           </p>
           <div className="mt-8 w-full max-w-xs border-2 border-white/15 bg-white/[0.06] p-4">
             <span className="block text-[10px] font-bold uppercase tracking-widest text-white/50">

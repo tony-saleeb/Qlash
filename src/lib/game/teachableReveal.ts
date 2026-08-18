@@ -1,3 +1,6 @@
+import type { Locale } from '@/lib/i18n/locale';
+import { t } from '@/lib/i18n/messages';
+
 export interface TeachableAnswer {
   id: string;
   text: string;
@@ -114,5 +117,45 @@ export function buildTeachableReveal(
     mostPickedIsCorrect: false,
     headline: `Most of you picked ${mostPicked?.text || 'the wrong option'}.`,
     subline: correctLabels.length ? `Correct: ${correctLabels.join(' · ')}` : null,
+  };
+}
+
+export function formatTeachableCopy(lesson: TeachableReveal, locale: Locale): { headline: string; subline: string | null } {
+  if (lesson.totalVotes <= 0) {
+    return {
+      headline: t(locale, 'noAnswers'),
+      subline:
+        lesson.kind !== 'poll' && lesson.correctLabels.length
+          ? `${t(locale, 'correctPrefix')} ${lesson.correctLabels.join(' · ')}`
+          : null,
+    };
+  }
+  if (lesson.kind === 'poll') {
+    return {
+      headline: lesson.tied
+        ? t(locale, 'roomSplit')
+        : `${t(locale, 'roomPickedPrefix')} ${lesson.mostPicked?.text || ''}.`,
+      subline: lesson.mostPicked ? `${lesson.mostPicked.percent}${t(locale, 'pollShareSuffix')}` : null,
+    };
+  }
+  if (lesson.tied) {
+    return {
+      headline: t(locale, 'roomSplit'),
+      subline: lesson.correctLabels.length
+        ? `${t(locale, 'correctPrefix')} ${lesson.correctLabels.join(' · ')}`
+        : null,
+    };
+  }
+  if (lesson.mostPickedIsCorrect) {
+    return {
+      headline: t(locale, 'roomGotThis'),
+      subline: lesson.correctLabels.join(' · ') || null,
+    };
+  }
+  return {
+    headline: `${t(locale, 'mostPickedPrefix')} ${lesson.mostPicked?.text || ''}.`,
+    subline: lesson.correctLabels.length
+      ? `${t(locale, 'correctPrefix')} ${lesson.correctLabels.join(' · ')}`
+      : null,
   };
 }

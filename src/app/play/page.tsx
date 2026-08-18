@@ -9,10 +9,13 @@ import { Label } from '@/components/ui/label';
 import { toast } from 'sonner';
 import { BrandMark } from '@/components/brand/BrandMark';
 import { unlockGameAudio } from '@/lib/sounds';
+import { LocaleToggle } from '@/components/brand/LocaleToggle';
+import { useLocale } from '@/lib/i18n/useLocale';
 
 export default function PlayerJoinPage() {
   const router = useRouter();
   const supabase = createClient();
+  const { locale, setLocale, t } = useLocale('en');
 
   const [pin, setPin] = useState('');
   const [nickname, setNickname] = useState('');
@@ -83,22 +86,23 @@ export default function PlayerJoinPage() {
       <div className="pointer-events-none absolute right-8 top-24 h-24 w-24 rotate-12 bg-arena-acid" />
       <div className="pointer-events-none absolute left-6 top-36 h-12 w-12 -rotate-6 bg-arena-signal" />
 
-      <header className="relative z-10 flex justify-center px-6 py-8">
+      <header className="relative z-10 flex items-center justify-between px-6 py-8">
         <button type="button" onClick={() => router.push('/')}>
           <BrandMark tone="light" />
         </button>
+        <LocaleToggle locale={locale} onChange={setLocale} tone="light" />
       </header>
 
       <main className="relative z-10 mx-auto flex w-full max-w-md flex-1 flex-col justify-center px-6 pb-16">
         <div className="arena-panel motion-rise p-6 sm:p-8">
           <p className="text-[11px] font-bold uppercase tracking-[0.22em] text-arena-ink/40">Join</p>
-          <h1 className="mt-1 font-display text-3xl font-extrabold tracking-tight text-arena-ink">Jump in</h1>
+          <h1 className="mt-1 font-display text-3xl font-extrabold tracking-tight text-arena-ink">{t('jumpIn')}</h1>
           <p className="mt-2 text-sm font-medium text-arena-ink/55">PIN from the big screen. Nickname on the board.</p>
 
           <form onSubmit={handlePlayerJoin} className="mt-6 space-y-4">
             <div>
               <Label htmlFor="pin" className="text-[11px] font-bold uppercase tracking-[0.18em] text-arena-ink/45">
-                Game PIN
+                {t('gamePin')}
               </Label>
               <Input
                 id="pin"
@@ -112,11 +116,11 @@ export default function PlayerJoinPage() {
             </div>
             <div>
               <Label htmlFor="nickname" className="text-[11px] font-bold uppercase tracking-[0.18em] text-arena-ink/45">
-                Nickname
+                {t('nickname')}
               </Label>
               <Input
                 id="nickname"
-                placeholder="Your name"
+                placeholder={t('nicknamePlaceholder')}
                 maxLength={15}
                 value={nickname}
                 onChange={(e) => setNickname(e.target.value)}
@@ -143,7 +147,7 @@ export default function PlayerJoinPage() {
               disabled={loading}
               className="h-12 w-full rounded-none bg-arena-signal font-display font-extrabold text-white hover:bg-arena-signal/90"
             >
-              {loading ? 'Joining…' : 'Enter lobby'}
+              {loading ? t('entering') : t('jumpIn')}
             </Button>
           </form>
         </div>

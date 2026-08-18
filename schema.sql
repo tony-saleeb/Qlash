@@ -6,6 +6,7 @@ create table public.hosts (
   id uuid primary key references auth.users on delete cascade,
   display_name text,
   plan text not null default 'free' check (plan in ('free', 'pro', 'org')),
+  ui_locale text not null default 'en' check (ui_locale in ('en', 'ar')),
   created_at timestamptz default now()
 );
 

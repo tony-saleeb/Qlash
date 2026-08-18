@@ -1,7 +1,7 @@
 import { beforeEach, describe, expect, it, vi } from 'vitest';
 import { createClientMock } from '@/test/supabaseMock';
 import { createClient } from '@/lib/supabase/server';
-import { getSessionReport } from '@/app/actions/reports';
+import { getSessionReport, getPreviousSessionReport } from '@/app/actions/reports';
 
 vi.mock('@/lib/supabase/server', () => ({
   createClient: vi.fn(),
@@ -80,5 +80,81 @@ describe('getSessionReport', () => {
   it('rejects a session the host does not own', async () => {
     host.setTable('game_sessions', { data: null, error: { message: 'not found' } });
     await expect(getSessionReport('missing')).rejects.toThrow(/Session not found/);
+  });
+});
+
+describe('getPreviousSessionReport', () => {
+  beforeEach(() => {
+    host.reset();
+    vi.mocked(createClient).mockReturnValue(host as never);
+    host.auth.getUser.mockResolvedValue({
+      data: { user: { id: 'host-1', email: 'host@qlash.test' } },
+      error: null,
+    });
+  });
+
+  it('returns the latest earlier finished session of the same quiz', async () => {
+    host.setTables({
+      game_sessions: [
+        { data: { id: 's2', quiz_id: 'quiz-1', created_at: '2026-08-18T12:00:00.000Z' }, error: null },
+        { data: { id: 's1' }, error: null },
+        {
+          data: {
+            id: 's1',
+            pin: '111111',
+            status: 'finished',
+            created_at: '2026-08-01T12:00:00.000Z',
+            quiz_id: 'quiz-1',
+            question_order: ['q1'],
+            quizzes: { title: 'Geo', team_mode: false },
+          },
+          error: null,
+        },
+      ],
+      players: {
+        data: [{ id: 'p1', nickname: 'Ada', team_name: null, score: 0, streak: 0 }],
+        error: null,
+      },
+      questions: {
+        data: [
+          {
+            id: 'q1',
+            prompt: 'Capital?',
+            type: 'mcq',
+            order_index: 0,
+            answers: [{ id: 'a', text: 'Paris', is_correct: true }],
+          },
+        ],
+        error: null,
+      },
+      answers_submitted: {
+        data: [
+          {
+            player_id: 'p1',
+            question_id: 'q1',
+            selected_answer_ids: ['b'],
+            points_awarded: 0,
+            is_correct: false,
+            time_taken_ms: 900,
+          },
+        ],
+        error: null,
+      },
+    });
+
+    const previous = await getPreviousSessionReport('s2');
+    expect(previous?.sessionId).toBe('s1');
+    expect(previous?.pin).toBe('111111');
+    expect(previous?.questions[0].accuracy).toBe(0);
+  });
+
+  it('returns null when this is the first run of the quiz', async () => {
+    host.setTables({
+      game_sessions: [
+        { data: { id: 's1', quiz_id: 'quiz-1', created_at: '2026-08-18T12:00:00.000Z' }, error: null },
+        { data: null, error: null },
+      ],
+    });
+    expect(await getPreviousSessionReport('s1')).toBeNull();
   });
 });

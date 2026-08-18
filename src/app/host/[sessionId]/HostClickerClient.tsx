@@ -34,6 +34,10 @@ import {
   isLateJoinEnabled,
 } from '@/lib/game/lateJoin';
 import { waitingPlayers } from '@/lib/game/waitingPlayers';
+import { LocaleToggle } from '@/components/brand/LocaleToggle';
+import { useLocale } from '@/lib/i18n/useLocale';
+import { setHostLocale } from '@/app/actions/host';
+import type { Locale } from '@/lib/i18n/locale';
 
 interface HostClickerClientProps {
   initialSession: GameSessionRow;
@@ -45,6 +49,7 @@ interface HostClickerClientProps {
   };
   questions: Question[];
   initialPlayers: Player[];
+  initialLocale?: Locale;
 }
 
 function displayRemaining(session: GameSessionRow, question: Question | null, now: number): number {
@@ -60,10 +65,16 @@ export default function HostClickerClient({
   quiz,
   questions,
   initialPlayers,
+  initialLocale,
 }: HostClickerClientProps) {
   const router = useRouter();
   const supabase = createClient();
   const { send: sendSessionEvent } = useSessionChannel(initialSession.id, { supabase });
+  const { locale, setLocale, t } = useLocale(initialLocale);
+  const persistLocale = (next: Locale) => {
+    setLocale(next);
+    void setHostLocale(next);
+  };
 
   const [session, setSession] = useState(initialSession);
   const [players, setPlayers] = useState<Player[]>(initialPlayers);
@@ -280,14 +291,17 @@ export default function HostClickerClient({
     <div className="flex min-h-dvh flex-col bg-arena-stage px-4 py-5 text-white">
       <header className="mb-5 flex items-center justify-between gap-3">
         <BrandMark tone="light" size="sm" />
-        <Button
-          type="button"
-          variant="ghost"
-          className="h-10 rounded-none border-2 border-white/30 bg-white/10 px-3 text-xs font-bold uppercase tracking-wider text-white"
-          onClick={openStage}
-        >
-          <Monitor className="mr-1.5 h-4 w-4" /> Projector
-        </Button>
+        <div className="flex items-center gap-2">
+          <LocaleToggle locale={locale} onChange={persistLocale} tone="light" />
+          <Button
+            type="button"
+            variant="ghost"
+            className="h-10 rounded-none border-2 border-white/30 bg-white/10 px-3 text-xs font-bold uppercase tracking-wider text-white"
+            onClick={openStage}
+          >
+            <Monitor className="mr-1.5 h-4 w-4" /> {t('projector')}
+          </Button>
+        </div>
       </header>
 
       <p dir="auto" className="text-sm font-semibold text-white/55">
@@ -300,11 +314,11 @@ export default function HostClickerClient({
       {session.status === 'lobby' && (
         <div className="mt-6 flex flex-1 flex-col gap-5">
           <p className="flex items-center gap-2 font-display text-2xl font-extrabold">
-            <Users className="h-6 w-6 text-arena-acid" /> {players.length} in lobby
+            <Users className="h-6 w-6 text-arena-acid" /> {players.length} {t('inLobby')}
           </p>
           <label className="flex items-center justify-between gap-3 border border-white/15 bg-white/5 p-4">
             <span>
-              <span className="block text-sm font-bold">Late join through question 3</span>
+              <span className="block text-sm font-bold">{t('lateJoin')}</span>
               <span className="text-xs text-white/50">Kids who arrive after Start can still enter.</span>
             </span>
             <Switch
@@ -319,7 +333,7 @@ export default function HostClickerClient({
             onClick={handleStart}
             className={`${bigBtn} bg-arena-acid text-arena-ink`}
           >
-            <Play className="mr-2 h-6 w-6 fill-current" /> Start
+            <Play className="mr-2 h-6 w-6 fill-current" /> {t('start')}
           </Button>
         </div>
       )}
@@ -335,7 +349,7 @@ export default function HostClickerClient({
           </p>
           <p className="font-display text-6xl font-extrabold tabular-nums text-arena-acid">{remaining}</p>
           <p className="text-sm font-bold text-white/70">
-            {answeredIds.size}/{players.length} answered · {waiting.length} waiting
+            {answeredIds.size}/{players.length} answered · {waiting.length} {t('waiting')}
           </p>
           <ul className="max-h-40 flex-1 space-y-1 overflow-y-auto border border-white/10 bg-black/25 p-3">
             {waiting.length === 0 ? (
@@ -356,11 +370,11 @@ export default function HostClickerClient({
             <Button type="button" disabled={busy} onClick={handlePauseResume} className={`${bigBtn} bg-white/10`}>
               {session.status === 'question_paused' ? (
                 <>
-                  <Play className="mr-1 h-5 w-5 fill-current" /> Resume
+                  <Play className="mr-1 h-5 w-5 fill-current" /> {t('resume')}
                 </>
               ) : (
                 <>
-                  <Pause className="mr-1 h-5 w-5" /> Pause
+                  <Pause className="mr-1 h-5 w-5" /> {t('pause')}
                 </>
               )}
             </Button>
@@ -371,7 +385,7 @@ export default function HostClickerClient({
             onClick={handleReveal}
             className={`${bigBtn} bg-arena-signal text-white`}
           >
-            Reveal <ArrowRight className="ml-2 h-5 w-5" />
+            {t('reveal')} <ArrowRight className="ml-2 h-5 w-5" />
           </Button>
         </div>
       )}
@@ -385,7 +399,7 @@ export default function HostClickerClient({
             onClick={handleLeaderboard}
             className={`${bigBtn} bg-arena-acid text-arena-ink`}
           >
-            <Trophy className="mr-2 h-5 w-5" /> Leaderboard
+            <Trophy className="mr-2 h-5 w-5" /> {t('leaderboard')}
           </Button>
         </div>
       )}
@@ -399,7 +413,7 @@ export default function HostClickerClient({
               onClick={handleNext}
               className={`${bigBtn} bg-arena-acid text-arena-ink`}
             >
-              Next question <ArrowRight className="ml-2 h-5 w-5" />
+              {t('nextQuestion')} <ArrowRight className="ml-2 h-5 w-5" />
             </Button>
           ) : (
             <Button
@@ -408,7 +422,7 @@ export default function HostClickerClient({
               onClick={handlePodium}
               className={`${bigBtn} bg-arena-acid text-arena-ink`}
             >
-              Podium
+              {t('podium')}
             </Button>
           )}
         </div>
@@ -421,7 +435,7 @@ export default function HostClickerClient({
             className={`${bigBtn} bg-arena-acid text-arena-ink`}
             onClick={() => router.push(`/dashboard/sessions/${session.id}`)}
           >
-            Class report
+            {t('classReport')}
           </Button>
         </div>
       )}

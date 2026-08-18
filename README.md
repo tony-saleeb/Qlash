@@ -37,8 +37,9 @@ Run these in the Supabase SQL editor, in order, on a new project:
 7. `schema-p4-ops.sql`
 8. `schema-media.sql`
 9. `schema-p5-classroom.sql`
+10. `schema-p6-locale.sql`
 
-Existing projects that already have the live loop: run **5–9** (re-run fast-submit, then p3, p4, media, p5).
+Existing projects that already have the live loop: run **5–10** (re-run fast-submit, then p3, p4, media, p5, p6).
 
 ## Production URL + Google login
 

@@ -4,6 +4,7 @@ import HostGameClient from '@/app/host/[sessionId]/HostGameClient';
 import HostClickerClient from '@/app/host/[sessionId]/HostClickerClient';
 import { livePlayerCap } from '@/lib/game/constants';
 import { isHostClickerView } from '@/lib/game/lateJoin';
+import { normalizeLocale } from '@/lib/i18n/locale';
 
 export const dynamic = 'force-dynamic';
 
@@ -61,7 +62,7 @@ export default async function HostSessionPage({ params, searchParams }: HostSess
       .select('id, session_id, nickname, team_name, score, streak, joined_at, connected')
       .eq('session_id', sessionId)
       .order('joined_at', { ascending: true }),
-    supabase.from('hosts').select('plan').eq('id', user.id).maybeSingle(),
+    supabase.from('hosts').select('plan, ui_locale').eq('id', user.id).maybeSingle(),
   ]);
 
   const { data: quiz, error: quizError } = quizResult;
@@ -77,6 +78,7 @@ export default async function HostSessionPage({ params, searchParams }: HostSess
   }
 
   const clicker = isHostClickerView(searchParams.view);
+  const initialLocale = normalizeLocale(hostResult.data?.ui_locale);
 
   return clicker ? (
     <HostClickerClient
@@ -84,6 +86,7 @@ export default async function HostSessionPage({ params, searchParams }: HostSess
       quiz={quiz}
       questions={questionsResult.data || []}
       initialPlayers={playersResult.data || []}
+      initialLocale={initialLocale}
     />
   ) : (
     <HostGameClient
@@ -92,6 +95,7 @@ export default async function HostSessionPage({ params, searchParams }: HostSess
       questions={questionsResult.data || []}
       initialPlayers={playersResult.data || []}
       playerCap={livePlayerCap(hostResult.data?.plan)}
+      initialLocale={initialLocale}
     />
   );
 }

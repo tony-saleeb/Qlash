@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest';
-import { buildSessionReport, sessionReportToCsv } from '@/lib/game/sessionReport';
+import { buildSessionReport, compareSessionReports, sessionReportToCsv } from '@/lib/game/sessionReport';
 
 const capital = {
   id: 'q1',
@@ -118,5 +118,79 @@ describe('sessionReportToCsv', () => {
     const csv = sessionReportToCsv(report);
     expect(csv).toContain('"Ada, A."');
     expect(csv).toContain('"1. Capital, France?"');
+  });
+});
+
+describe('compareSessionReports', () => {
+  it('flags questions that got easier or stayed hard', () => {
+    const base = {
+      quizTitle: 'Geo',
+      teamMode: false,
+      players: [
+        { id: 'p1', nickname: 'Ada', score: 1000, streak: 1 },
+        { id: 'p2', nickname: 'Bob', score: 0, streak: 0 },
+      ],
+      questions: [capital],
+    };
+    const previous = buildSessionReport({
+      ...base,
+      session: {
+        id: 'old',
+        pin: '111111',
+        status: 'finished',
+        created_at: '2026-08-01T12:00:00.000Z',
+        quiz_id: 'quiz-1',
+      },
+      answers: [
+        {
+          player_id: 'p1',
+          question_id: 'q1',
+          selected_answer_ids: ['b'],
+          points_awarded: 0,
+          is_correct: false,
+          time_taken_ms: 1000,
+        },
+        {
+          player_id: 'p2',
+          question_id: 'q1',
+          selected_answer_ids: ['b'],
+          points_awarded: 0,
+          is_correct: false,
+          time_taken_ms: 1000,
+        },
+      ],
+    });
+    const current = buildSessionReport({
+      ...base,
+      session: {
+        id: 'new',
+        pin: '222222',
+        status: 'finished',
+        created_at: '2026-08-18T12:00:00.000Z',
+        quiz_id: 'quiz-1',
+      },
+      answers: [
+        {
+          player_id: 'p1',
+          question_id: 'q1',
+          selected_answer_ids: ['a'],
+          points_awarded: 1000,
+          is_correct: true,
+          time_taken_ms: 800,
+        },
+        {
+          player_id: 'p2',
+          question_id: 'q1',
+          selected_answer_ids: ['a'],
+          points_awarded: 1000,
+          is_correct: true,
+          time_taken_ms: 900,
+        },
+      ],
+    });
+    const compare = compareSessionReports(current, previous);
+    expect(compare.avgDelta).toBe(100);
+    expect(compare.improved[0]).toMatchObject({ id: 'q1', before: 0, after: 100, delta: 100 });
+    expect(compare.stillHard).toEqual([]);
   });
 });

@@ -1,6 +1,6 @@
 'use server';
 
-import { buildSessionReport, type SessionReport } from '@/lib/game/sessionReport';
+import { buildSessionReport, compareSessionReports, type SessionReport } from '@/lib/game/sessionReport';
 import { getHostAuth } from '@/lib/supabase/hostAuth';
 
 export async function getSessionReport(sessionId: string): Promise<SessionReport> {
@@ -67,3 +67,35 @@ export async function getSessionReport(sessionId: string): Promise<SessionReport
     throw new Error(err instanceof Error ? err.message : 'Failed to load class report.');
   }
 }
+
+export async function getPreviousSessionReport(sessionId: string): Promise<SessionReport | null> {
+  try {
+    const { supabase, user } = await getHostAuth();
+    const { data: current, error } = await supabase
+      .from('game_sessions')
+      .select('id, quiz_id, created_at')
+      .eq('id', sessionId)
+      .eq('host_id', user.id)
+      .single();
+
+    if (error || !current?.quiz_id) return null;
+
+    const { data: previous } = await supabase
+      .from('game_sessions')
+      .select('id')
+      .eq('host_id', user.id)
+      .eq('quiz_id', current.quiz_id)
+      .eq('status', 'finished')
+      .lt('created_at', current.created_at)
+      .order('created_at', { ascending: false })
+      .limit(1)
+      .maybeSingle();
+
+    if (!previous?.id) return null;
+    return getSessionReport(previous.id);
+  } catch {
+    return null;
+  }
+}
+
+export { compareSessionReports };

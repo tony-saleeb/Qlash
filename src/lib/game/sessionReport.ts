@@ -255,3 +255,69 @@ export function sessionReportToCsv(report: SessionReport): string {
   ];
   return lines.join('\n');
 }
+
+export interface QuestionDelta {
+  id: string;
+  prompt: string;
+  before: number | null;
+  after: number | null;
+  delta: number | null;
+}
+
+export interface SessionCompare {
+  previousSessionId: string;
+  previousCreatedAt: string;
+  previousPin: string;
+  avgBefore: number | null;
+  avgAfter: number | null;
+  avgDelta: number | null;
+  questions: QuestionDelta[];
+  stillHard: QuestionDelta[];
+  improved: QuestionDelta[];
+}
+
+export function compareSessionReports(current: SessionReport, previous: SessionReport): SessionCompare {
+  const previousById = new Map(previous.questions.map((q) => [q.id, q]));
+  const questions: QuestionDelta[] = current.questions
+    .filter((q) => q.type !== 'poll')
+    .map((question) => {
+      const before = previousById.get(question.id)?.accuracy ?? null;
+      const after = question.accuracy;
+      const delta =
+        before === null || after === null ? null : after - before;
+      return {
+        id: question.id,
+        prompt: question.prompt,
+        before,
+        after,
+        delta,
+      };
+    });
+
+  const stillHard = [...questions]
+    .filter((row) => (row.after !== null && row.after < 50) || (row.delta !== null && row.delta < 0))
+    .sort((a, b) => (a.after ?? 101) - (b.after ?? 101))
+    .slice(0, 5);
+
+  const improved = [...questions]
+    .filter((row) => row.delta !== null && row.delta > 0)
+    .sort((a, b) => (b.delta ?? 0) - (a.delta ?? 0))
+    .slice(0, 5);
+
+  const avgBefore = previous.avgAccuracy;
+  const avgAfter = current.avgAccuracy;
+  const avgDelta =
+    avgBefore === null || avgAfter === null ? null : avgAfter - avgBefore;
+
+  return {
+    previousSessionId: previous.sessionId,
+    previousCreatedAt: previous.createdAt,
+    previousPin: previous.pin,
+    avgBefore,
+    avgAfter,
+    avgDelta,
+    questions,
+    stillHard,
+    improved,
+  };
+}

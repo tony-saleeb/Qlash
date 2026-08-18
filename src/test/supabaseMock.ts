@@ -36,6 +36,8 @@ export function createQueryChain(getResult: () => QueryResult) {
     'or',
     'gte',
     'lte',
+    'lt',
+    'gt',
     'contains',
   ]) {
     chain[method] = wrap(method);

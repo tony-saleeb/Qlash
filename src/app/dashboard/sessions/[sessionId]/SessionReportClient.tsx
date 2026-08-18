@@ -5,11 +5,38 @@ import { toast } from 'sonner';
 import { ArrowLeft, Download, Play } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { BrandMark } from '@/components/brand/BrandMark';
+import { LocaleToggle } from '@/components/brand/LocaleToggle';
 import { createGameSession } from '@/app/actions/game';
-import { sessionReportToCsv, type SessionReport } from '@/lib/game/sessionReport';
+import { setHostLocale } from '@/app/actions/host';
+import { useLocale } from '@/lib/i18n/useLocale';
+import type { Locale } from '@/lib/i18n/locale';
+import {
+  compareSessionReports,
+  sessionReportToCsv,
+  type QuestionDelta,
+  type SessionReport,
+} from '@/lib/game/sessionReport';
 
-export default function SessionReportClient({ report }: { report: SessionReport }) {
+function formatDelta(value: number | null): string {
+  if (value === null) return '—';
+  if (value > 0) return `+${value}`;
+  return String(value);
+}
+
+export default function SessionReportClient({
+  report,
+  previous,
+}: {
+  report: SessionReport;
+  previous?: SessionReport | null;
+}) {
   const router = useRouter();
+  const { locale, setLocale, t } = useLocale();
+  const persistLocale = (next: Locale) => {
+    setLocale(next);
+    void setHostLocale(next);
+  };
+  const compare = previous ? compareSessionReports(report, previous) : null;
 
   const downloadCsv = () => {
     const blob = new Blob([sessionReportToCsv(report)], { type: 'text/csv;charset=utf-8;' });
@@ -37,6 +64,7 @@ export default function SessionReportClient({ report }: { report: SessionReport 
   };
 
   const when = new Date(report.createdAt).toLocaleString();
+  const previousWhen = compare ? new Date(compare.previousCreatedAt).toLocaleDateString() : '';
 
   return (
     <div className="min-h-screen bg-arena-canvas text-arena-ink">
@@ -53,7 +81,8 @@ export default function SessionReportClient({ report }: { report: SessionReport 
             </Button>
             <BrandMark size="sm" />
           </div>
-          <div className="flex shrink-0 gap-2">
+          <div className="flex shrink-0 items-center gap-2">
+            <LocaleToggle locale={locale} onChange={persistLocale} />
             <Button
               variant="ghost"
               className="h-10 rounded-none border-2 border-arena-ink font-bold"
@@ -75,19 +104,38 @@ export default function SessionReportClient({ report }: { report: SessionReport 
 
       <main className="mx-auto max-w-5xl space-y-8 px-4 py-8 sm:px-6">
         <div>
-          <p className="arena-chip mb-3 w-fit bg-arena-acid">Class report</p>
+          <p className="arena-chip mb-3 w-fit bg-arena-acid">{t('classReport')}</p>
           <h1 dir="auto" className="font-display text-4xl font-extrabold tracking-tight sm:text-5xl">{report.quizTitle}</h1>
           <p className="mt-2 text-sm text-arena-ink/55">
-            PIN {report.pin} · {when} · {report.playerCount} players · {report.questionCount} questions
+            PIN {report.pin} · {when} · {report.playerCount} {t('players').toLowerCase()} · {report.questionCount} questions
             {report.avgAccuracy !== null ? ` · ${report.avgAccuracy}% class accuracy` : ''}
           </p>
         </div>
 
         <section className="grid gap-3 sm:grid-cols-3">
-          <Stat label="Players" value={String(report.playerCount)} />
+          <Stat label={t('players')} value={String(report.playerCount)} />
           <Stat label="Questions" value={String(report.questionCount)} />
           <Stat label="Accuracy" value={report.avgAccuracy === null ? '—' : `${report.avgAccuracy}%`} />
         </section>
+
+        {compare ? (
+          <section className="arena-panel overflow-hidden">
+            <h2 className="border-b-2 border-arena-ink bg-arena-ink px-4 py-3 font-display text-sm font-extrabold uppercase tracking-wider text-white">
+              {t('vsLastClass')}
+            </h2>
+            <div className="space-y-5 p-5">
+              <p className="text-sm text-arena-ink/60">
+                PIN {compare.previousPin} · {previousWhen} · {compare.avgBefore ?? '—'}% → {compare.avgAfter ?? '—'}%
+                {' '}
+                <span className="font-bold text-arena-ink">({formatDelta(compare.avgDelta)})</span>
+              </p>
+              <div className="grid gap-6 sm:grid-cols-2">
+                <CompareList title={t('stillHard')} rows={compare.stillHard} empty="—" />
+                <CompareList title={t('improved')} rows={compare.improved} empty="—" />
+              </div>
+            </div>
+          </section>
+        ) : null}
 
         <section className="arena-panel overflow-hidden">
           <h2 className="border-b-2 border-arena-ink bg-arena-ink px-4 py-3 font-display text-sm font-extrabold uppercase tracking-wider text-white">
@@ -179,6 +227,36 @@ function Stat({ label, value }: { label: string; value: string }) {
     <div className="arena-panel px-4 py-4">
       <p className="text-[11px] font-bold uppercase tracking-wider text-arena-ink/40">{label}</p>
       <p className="mt-1 font-display text-3xl font-extrabold">{value}</p>
+    </div>
+  );
+}
+
+function CompareList({
+  title,
+  rows,
+  empty,
+}: {
+  title: string;
+  rows: QuestionDelta[];
+  empty: string;
+}) {
+  return (
+    <div>
+      <h3 className="text-[11px] font-extrabold uppercase tracking-wider text-arena-ink/45">{title}</h3>
+      {rows.length === 0 ? (
+        <p className="mt-2 text-sm text-arena-ink/45">{empty}</p>
+      ) : (
+        <ul className="mt-2 space-y-2">
+          {rows.map((row) => (
+            <li key={row.id} className="flex items-start justify-between gap-3 border-b border-arena-line/80 py-1.5 text-sm">
+              <span dir="auto" className="min-w-0 font-semibold">{row.prompt}</span>
+              <span className="shrink-0 font-mono font-bold tabular-nums">
+                {row.before ?? '—'}% → {row.after ?? '—'}% ({formatDelta(row.delta)})
+              </span>
+            </li>
+          ))}
+        </ul>
+      )}
     </div>
   );
 }

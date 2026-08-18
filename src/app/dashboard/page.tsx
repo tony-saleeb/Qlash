@@ -1,6 +1,7 @@
 import { redirect } from 'next/navigation';
 import { createClient } from '@/lib/supabase/server';
 import DashboardClient, { type RecentSession } from './DashboardClient';
+import { normalizeLocale } from '@/lib/i18n/locale';
 
 export const dynamic = 'force-dynamic';
 
@@ -30,7 +31,7 @@ export default async function DashboardPage() {
       .eq('status', 'finished')
       .order('created_at', { ascending: false })
       .limit(8),
-    supabase.from('hosts').select('plan').eq('id', user.id).maybeSingle(),
+    supabase.from('hosts').select('plan, ui_locale').eq('id', user.id).maybeSingle(),
   ]);
 
   const { data: quizzes, error: quizzesError } = quizzesResult;
@@ -49,6 +50,7 @@ export default async function DashboardPage() {
       recentSessions={(recentSessions || []) as RecentSession[]}
       user={user}
       hostPlan={hostResult.data?.plan}
+      initialLocale={normalizeLocale(hostResult.data?.ui_locale)}
     />
   );
 }

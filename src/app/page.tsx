@@ -12,10 +12,13 @@ import { User } from '@supabase/supabase-js';
 import { ArenaFloor, BrandMark } from '@/components/brand/BrandMark';
 import { authCallbackUrl } from '@/lib/siteUrl';
 import { unlockGameAudio } from '@/lib/sounds';
+import { LocaleToggle } from '@/components/brand/LocaleToggle';
+import { useLocale } from '@/lib/i18n/useLocale';
 
 export default function LandingPage() {
   const router = useRouter();
   const supabase = createClient();
+  const { locale, setLocale, t } = useLocale('en');
 
   const [authMode, setAuthMode] = useState<'login' | 'signup'>('login');
   const [email, setEmail] = useState('');
@@ -148,23 +151,26 @@ export default function LandingPage() {
 
       <header className="relative z-10 mx-auto flex w-full max-w-6xl shrink-0 items-center justify-between px-4 py-3 sm:px-6 sm:py-4 lg:max-w-none lg:px-10">
         <BrandMark />
-        {currentHost ? (
-          <Link
-            href="/dashboard"
-            prefetch
-            className="inline-flex h-11 min-h-11 items-center border-2 border-arena-ink bg-white px-4 text-sm font-bold text-arena-ink transition hover:bg-arena-ink hover:text-white"
-          >
-            Library
-          </Link>
-        ) : (
-          <button
-            type="button"
-            onClick={() => setPanel('host')}
-            className="min-h-11 px-2 text-sm font-bold text-arena-ink/60 underline-offset-4 hover:text-arena-ink hover:underline"
-          >
-            Host sign in
-          </button>
-        )}
+        <div className="flex items-center gap-3">
+          <LocaleToggle locale={locale} onChange={setLocale} />
+          {currentHost ? (
+            <Link
+              href="/dashboard"
+              prefetch
+              className="inline-flex h-11 min-h-11 items-center border-2 border-arena-ink bg-white px-4 text-sm font-bold text-arena-ink transition hover:bg-arena-ink hover:text-white"
+            >
+              {t('library')}
+            </Link>
+          ) : (
+            <button
+              type="button"
+              onClick={() => setPanel('host')}
+              className="min-h-11 px-2 text-sm font-bold text-arena-ink/60 underline-offset-4 hover:text-arena-ink hover:underline"
+            >
+              {t('hostSignIn')}
+            </button>
+          )}
+        </div>
       </header>
 
       <main className="relative z-10 mx-auto flex w-full max-w-lg flex-1 flex-col gap-6 px-4 pb-8 pt-1 sm:px-6 lg:mx-0 lg:grid lg:min-h-0 lg:max-w-none lg:flex-1 lg:grid-cols-12 lg:gap-0 lg:px-10 lg:pb-6 lg:pt-0">
@@ -198,7 +204,7 @@ export default function LandingPage() {
                     panel === 'join' ? 'bg-arena-ink text-white' : 'bg-white text-arena-ink/40 hover:text-arena-ink'
                   }`}
                 >
-                  Player
+                  {t('playerTab')}
                 </button>
                 <button
                   type="button"
@@ -207,7 +213,7 @@ export default function LandingPage() {
                     panel === 'host' ? 'bg-arena-ink text-white' : 'bg-white text-arena-ink/40 hover:text-arena-ink'
                   }`}
                 >
-                  Host
+                  {t('hostTab')}
                 </button>
               </div>
 
@@ -216,7 +222,7 @@ export default function LandingPage() {
                   <form onSubmit={handlePlayerJoin} className="space-y-4">
                     <div>
                       <Label htmlFor="pin" className="text-[11px] font-bold uppercase tracking-[0.18em] text-arena-ink/45">
-                        Game PIN
+                        {t('gamePin')}
                       </Label>
                       <Input
                         id="pin"
@@ -230,11 +236,11 @@ export default function LandingPage() {
                     </div>
                     <div>
                       <Label htmlFor="nickname" className="text-[11px] font-bold uppercase tracking-[0.18em] text-arena-ink/45">
-                        Nickname
+                        {t('nickname')}
                       </Label>
                       <Input
                         id="nickname"
-                        placeholder="Name on the board"
+                        placeholder={t('nicknamePlaceholder')}
                         maxLength={15}
                         value={nickname}
                         onChange={(e) => setNickname(e.target.value)}
@@ -261,7 +267,7 @@ export default function LandingPage() {
                       disabled={playLoading}
                       className="mt-2 h-12 min-h-12 w-full rounded-none bg-arena-signal font-display text-base font-extrabold text-white hover:bg-arena-signal/90"
                     >
-                      {playLoading ? 'Entering…' : 'Jump in'}
+                      {playLoading ? t('entering') : t('jumpIn')}
                     </Button>
                   </form>
                 ) : currentHost ? (

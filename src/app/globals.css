@@ -56,6 +56,18 @@
     font-family: var(--font-display), var(--font-arabic), var(--font-sans), system-ui, sans-serif;
   }
 
+  html[lang="ar"],
+  html[lang="ar"] body {
+    font-family: var(--font-arabic), var(--font-sans), system-ui, sans-serif;
+  }
+
+  html[lang="ar"] h1,
+  html[lang="ar"] h2,
+  html[lang="ar"] h3,
+  html[lang="ar"] .font-display {
+    font-family: var(--font-arabic), var(--font-display), var(--font-sans), system-ui, sans-serif;
+  }
+
   input[dir="auto"],
   textarea[dir="auto"] {
     unicode-bidi: plaintext;

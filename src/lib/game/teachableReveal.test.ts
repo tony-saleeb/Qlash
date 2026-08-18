@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest';
-import { buildTeachableReveal } from '@/lib/game/teachableReveal';
+import { buildTeachableReveal, formatTeachableCopy } from '@/lib/game/teachableReveal';
 
 const answers = [
   { id: 'a', text: 'Cairo', is_correct: true },
@@ -40,5 +40,14 @@ describe('buildTeachableReveal', () => {
   it('handles empty rooms and ties', () => {
     expect(buildTeachableReveal(answers, {}).headline).toBe('No answers this round.');
     expect(buildTeachableReveal(answers, { a: 4, b: 4 }).headline).toBe('The room split.');
+  });
+});
+
+describe('formatTeachableCopy', () => {
+  it('renders Arabic classroom copy from the same reveal', () => {
+    const lesson = buildTeachableReveal(answers, { a: 2, b: 10, c: 1 });
+    const copy = formatTeachableCopy(lesson, 'ar');
+    expect(copy.headline).toBe('أغلبكم اختار Alexandria.');
+    expect(copy.subline).toBe('الصحيح: Cairo');
   });
 });

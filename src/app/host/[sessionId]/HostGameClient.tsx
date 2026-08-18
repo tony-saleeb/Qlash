@@ -61,7 +61,11 @@ import {
   isLateJoinEnabled,
 } from '@/lib/game/lateJoin';
 import { waitingPlayers } from '@/lib/game/waitingPlayers';
-import { buildTeachableReveal } from '@/lib/game/teachableReveal';
+import { buildTeachableReveal, formatTeachableCopy } from '@/lib/game/teachableReveal';
+import { LocaleToggle } from '@/components/brand/LocaleToggle';
+import { useLocale } from '@/lib/i18n/useLocale';
+import { setHostLocale } from '@/app/actions/host';
+import type { Locale } from '@/lib/i18n/locale';
 
 const hostCtrl =
   'h-10 gap-1.5 rounded-none border-2 border-white/30 bg-white/10 px-3.5 font-display text-[11px] font-extrabold uppercase tracking-[0.14em] text-white shadow-none hover:border-arena-acid hover:bg-arena-acid hover:text-arena-ink aria-expanded:border-arena-acid aria-expanded:bg-arena-acid aria-expanded:text-arena-ink [&_svg]:text-current';
@@ -81,6 +85,7 @@ interface HostGameClientProps {
   questions: Question[];
   initialPlayers: Player[];
   playerCap?: number;
+  initialLocale?: Locale;
 }
 
 export default function HostGameClient({
@@ -89,10 +94,16 @@ export default function HostGameClient({
   questions,
   initialPlayers,
   playerCap = MAX_PLAYERS_PER_SESSION,
+  initialLocale,
 }: HostGameClientProps) {
   const router = useRouter();
   const supabase = createClient();
   const { send: sendSessionEvent } = useSessionChannel(initialSession.id, { supabase });
+  const { locale, setLocale, t } = useLocale(initialLocale);
+  const persistLocale = (next: Locale) => {
+    setLocale(next);
+    void setHostLocale(next);
+  };
 
   // Core game states
   const [session, setSession] = useState(initialSession);
@@ -756,30 +767,33 @@ export default function HostGameClient({
             <BrandMark tone="light" size="sm" />
             <div className="hidden border-l border-white/15 pl-4 sm:block">
               <p dir="auto" className="font-display text-sm font-bold text-white">{quiz.title}</p>
-              <p className="text-[11px] font-medium uppercase tracking-[0.18em] text-white/40">Live lobby</p>
+              <p className="text-[11px] font-medium uppercase tracking-[0.18em] text-white/40">{t('liveLobby')}</p>
             </div>
           </div>
-          <StageBadge className="motion-pulse-soft">
-            <Users className="h-3.5 w-3.5" />
-            {connectedCount}/{players.length} · max {playerCap}
-          </StageBadge>
+          <div className="flex items-center gap-3">
+            <LocaleToggle locale={locale} onChange={persistLocale} tone="light" />
+            <StageBadge className="motion-pulse-soft">
+              <Users className="h-3.5 w-3.5" />
+              {connectedCount}/{players.length} · max {playerCap}
+            </StageBadge>
+          </div>
         </header>
 
         <main className="relative z-10 mx-auto grid w-full max-w-6xl flex-1 grid-cols-1 items-center gap-8 px-6 py-10 lg:grid-cols-12">
           <div className="flex flex-col justify-center gap-8 text-center lg:col-span-4 lg:text-left">
             <div>
-              <p className="text-[11px] font-bold uppercase tracking-[0.28em] text-arena-acid">Join on your phone</p>
+              <p className="text-[11px] font-bold uppercase tracking-[0.28em] text-arena-acid">{t('joinOnPhone')}</p>
               <h2 className="mt-3 font-display text-5xl font-extrabold leading-[0.9] tracking-[-0.03em] text-white sm:text-6xl">
-                Enter
-                <span className="mt-1 block text-arena-acid">the PIN</span>
+                {t('enterPin')}
+                <span className="mt-1 block text-arena-acid">{t('thePin')}</span>
               </h2>
               <p className="mx-auto mt-4 max-w-sm text-sm font-medium text-white/50 lg:mx-0">
-                Open Qlash → Player. No accounts. Instant board presence.
+                {t('lobbyHint')}
               </p>
             </div>
 
             <div className="mx-auto w-full max-w-md border-2 border-arena-ink bg-white p-5 text-center shadow-[8px_8px_0_rgba(0,0,0,0.35)] lg:mx-0">
-              <p className="text-[10px] font-bold uppercase tracking-[0.22em] text-arena-ink/40">Room PIN</p>
+              <p className="text-[10px] font-bold uppercase tracking-[0.22em] text-arena-ink/40">{t('roomPin')}</p>
               <div className="mt-3">
                 <PinDisplay pin={session.pin} large />
               </div>
@@ -793,14 +807,14 @@ export default function HostGameClient({
               ) : (
                 <div className="h-40 w-40 animate-pulse bg-arena-mist" aria-hidden />
               )}
-              <span className="mt-1 text-[9px] font-black uppercase tracking-[0.2em] text-arena-ink/45">Scan</span>
+              <span className="mt-1 text-[9px] font-black uppercase tracking-[0.2em] text-arena-ink/45">{t('scan')}</span>
             </div>
           </div>
 
           <div className="relative z-10 flex min-h-[48vh] flex-col gap-4 self-stretch border border-white/12 bg-white/[0.04] p-6 backdrop-blur-[2px] lg:col-span-5">
             <div className="flex items-center justify-between border-b border-white/10 pb-3">
               <span className="flex items-center gap-2 text-xs font-bold uppercase tracking-[0.2em] text-white/55">
-                <Users className="h-4 w-4 text-arena-acid" /> Players
+                <Users className="h-4 w-4 text-arena-acid" /> {t('players')}
                 <span className="text-white">{players.length}</span>
               </span>
             </div>
@@ -820,7 +834,7 @@ export default function HostGameClient({
                 <div className="mb-4 h-1.5 w-28 overflow-hidden bg-white/10">
                   <div className="h-full w-1/2 animate-pulse bg-arena-acid" />
                 </div>
-                <p className="font-display text-xl font-bold text-white">Waiting for players…</p>
+                <p className="font-display text-xl font-bold text-white">{t('waitingForPlayers')}</p>
                 <p className="mt-2 max-w-xs text-xs text-white/40">
                   Nicknames land here the second someone joins.
                 </p>
@@ -870,7 +884,7 @@ export default function HostGameClient({
               Keep this screen visible · PIN <strong className="text-white">{session.pin}</strong>
             </p>
             <label className="flex items-center justify-between gap-3 border border-white/15 bg-white/5 px-3 py-2">
-              <span className="text-xs font-bold text-white/80">Late join through question 3</span>
+              <span className="text-xs font-bold text-white/80">{t('lateJoin')}</span>
               <Switch
                 checked={lateJoinOn}
                 onCheckedChange={(enabled) => {
@@ -899,20 +913,20 @@ export default function HostGameClient({
                 const url = `${window.location.origin}${hostClickerPath(session.id)}`;
                 try {
                   await navigator.clipboard.writeText(url);
-                  toast.success('Clicker link copied. Open it on your phone (stay signed in).');
+                  toast.success(t('clickerCopied'));
                 } catch {
                   window.open(hostClickerPath(session.id), '_blank');
                 }
               }}
             >
-              <Smartphone className="h-4 w-4" /> Phone clicker
+              <Smartphone className="h-4 w-4" /> {t('phoneClicker')}
             </Button>
             <Button
               onClick={handleStartGame}
               disabled={players.length === 0 || !questions || questions.length === 0}
               className="h-14 w-full rounded-none bg-arena-acid px-10 font-display text-lg font-extrabold text-arena-ink shadow-[6px_6px_0_rgba(200,245,66,0.25)] hover:brightness-105 sm:w-auto"
             >
-              <Play className="mr-2 h-5 w-5 fill-current" /> Start game
+              <Play className="mr-2 h-5 w-5 fill-current" /> {t('startGame')}
             </Button>
           </div>
         </footer>
@@ -1061,7 +1075,7 @@ export default function HostGameClient({
               <DialogTrigger
                 render={
                   <Button variant="ghost" className={hostCtrl}>
-                    <Users className="h-4 w-4" /> Waiting ({waiting.length})
+                    <Users className="h-4 w-4" /> {t('waiting')} ({waiting.length})
                   </Button>
                 }
               />
@@ -1339,23 +1353,24 @@ export default function HostGameClient({
       revealData?.optionCounts,
       activeQuestion.type
     );
+    const copy = formatTeachableCopy(lesson, locale);
     const correctAnswers = activeQuestion.answers.filter((ans) => ans.is_correct);
 
     return (
       <GameShell>
         <div className="z-10 flex items-center justify-between gap-4">
-          <LiveChip tone="acid">Answers revealed</LiveChip>
+          <LiveChip tone="acid">{t('answersRevealed')}</LiveChip>
           <BrandMark tone="light" size="sm" wordmark={false} />
         </div>
 
         <div className="z-10 mx-auto my-4 max-w-4xl text-center">
           <p dir="auto" className="text-sm font-semibold text-white/50">{activeQuestion.prompt}</p>
-          <h1 className="mt-3 font-display text-4xl font-extrabold leading-tight tracking-tight text-arena-acid sm:text-5xl">
-            {lesson.headline}
+          <h1 dir="auto" className="mt-3 font-display text-4xl font-extrabold leading-tight tracking-tight text-arena-acid sm:text-5xl">
+            {copy.headline}
           </h1>
-          {lesson.subline && (
+          {copy.subline && (
             <p dir="auto" className="mt-3 font-display text-2xl font-extrabold text-white sm:text-3xl">
-              {lesson.subline}
+              {copy.subline}
             </p>
           )}
           {correctAnswers.length > 0 && activeQuestion.type !== 'poll' && (
@@ -1378,7 +1393,7 @@ export default function HostGameClient({
 
         <div className="z-10 mx-auto flex w-full max-w-4xl flex-1 flex-col items-center justify-center gap-6 py-4">
           <h3 className="text-xs font-extrabold uppercase tracking-[0.22em] text-white/50">
-            How the room voted
+            {t('howTheRoomVoted')}
           </h3>
 
           <div className="flex h-64 w-full max-w-2xl items-end justify-center gap-6 border-b-2 border-white/15 px-6 pb-1 sm:h-80">

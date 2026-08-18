@@ -26,6 +26,10 @@ import { createGameSession } from '@/app/actions/game';
 import { Plus, Play, Edit, Copy, Trash2, LogOut, BookTemplate, ClipboardList } from 'lucide-react';
 import { BrandMark } from '@/components/brand/BrandMark';
 import { livePlayerCap, normalizeHostPlan, quizLibraryCap } from '@/lib/game/constants';
+import { LocaleToggle } from '@/components/brand/LocaleToggle';
+import { useLocale } from '@/lib/i18n/useLocale';
+import { setHostLocale } from '@/app/actions/host';
+import type { Locale } from '@/lib/i18n/locale';
 
 interface Quiz {
   id: string;
@@ -49,6 +53,7 @@ interface DashboardClientProps {
   recentSessions: RecentSession[];
   user: User;
   hostPlan?: string | null;
+  initialLocale?: Locale;
 }
 
 function quizTitleFromSession(session: RecentSession): string {
@@ -61,9 +66,15 @@ export default function DashboardClient({
   recentSessions = [],
   user,
   hostPlan,
+  initialLocale,
 }: DashboardClientProps) {
   const router = useRouter();
   const supabase = createClient();
+  const { locale, setLocale } = useLocale(initialLocale);
+  const persistLocale = (next: Locale) => {
+    setLocale(next);
+    void setHostLocale(next);
+  };
   const [quizzes, setQuizzes] = useState<Quiz[]>(initialQuizzes);
   const [createDialogOpen, setCreateDialogOpen] = useState(false);
   const [title, setTitle] = useState('');
@@ -185,6 +196,7 @@ export default function DashboardClient({
               </p>
               <p className="max-w-[180px] truncate text-sm font-semibold text-arena-ink">{user.email}</p>
             </div>
+            <LocaleToggle locale={locale} onChange={persistLocale} />
             <Button
               variant="ghost"
               size="icon"
