@@ -39,6 +39,7 @@ import {
   DialogTrigger,
 } from '@/components/ui/dialog';
 import { useSessionChannel } from '@/hooks/useSessionChannel';
+import { useAutoCloseEmptyLobby } from '@/hooks/useAutoCloseEmptyLobby';
 import {
   buildQuestionStartPayload,
   sanitizeAnswers,
@@ -195,6 +196,20 @@ export default function HostGameClient({
       window.prompt(t('copyLobbyLink'), url);
     }
   }, [session.pin, t]);
+  const closeEmptyLobby = useCallback(() => {
+    void endGameSession(session.id)
+      .catch(() => undefined)
+      .finally(() => {
+        toast.message(t('everyoneLeft'));
+        router.push('/dashboard');
+      });
+  }, [session.id, router, t]);
+  useAutoCloseEmptyLobby({
+    status: session.status,
+    players,
+    initiallyOccupied: initialPlayers.length > 0,
+    onClose: closeEmptyLobby,
+  });
   const orderKey = Array.isArray(session.question_order) ? session.question_order.join(',') : '';
   const timerRef = useRef<NodeJS.Timeout | null>(null);
   const lastTickSecondRef = useRef<number | null>(null);

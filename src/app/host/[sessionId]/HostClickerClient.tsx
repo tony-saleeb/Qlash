@@ -16,6 +16,7 @@ import {
   resumeGameSession,
   setLateJoinThroughIndex,
   startGameSession,
+  endGameSession,
 } from '@/app/actions/game';
 import { ArrowRight, Clock, Link2, Monitor, Pause, Play, Trophy, Users } from 'lucide-react';
 import { BrandMark, PinDisplay } from '@/components/brand/BrandMark';
@@ -35,6 +36,7 @@ import {
 } from '@/lib/game/lateJoin';
 import { waitingPlayers } from '@/lib/game/waitingPlayers';
 import { lobbyJoinPath } from '@/lib/game/lobbyLink';
+import { useAutoCloseEmptyLobby } from '@/hooks/useAutoCloseEmptyLobby';
 import { LocaleToggle } from '@/components/brand/LocaleToggle';
 import { useLocale } from '@/lib/i18n/useLocale';
 import { setHostLocale } from '@/app/actions/host';
@@ -108,6 +110,20 @@ export default function HostClickerClient({
   const lateJoinOn = isLateJoinEnabled(session.late_join_through_index);
   const remaining = displayRemaining(session, activeQuestion, clockNow);
   const orderKey = Array.isArray(session.question_order) ? session.question_order.join(',') : '';
+  const closeEmptyLobby = useCallback(() => {
+    void endGameSession(session.id)
+      .catch(() => undefined)
+      .finally(() => {
+        toast.message(t('everyoneLeft'));
+        router.push('/dashboard');
+      });
+  }, [session.id, router, t]);
+  useAutoCloseEmptyLobby({
+    status: session.status,
+    players,
+    initiallyOccupied: initialPlayers.length > 0,
+    onClose: closeEmptyLobby,
+  });
 
   useEffect(() => {
     if (!orderKey) return;

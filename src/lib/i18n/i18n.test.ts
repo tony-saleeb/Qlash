@@ -18,6 +18,7 @@ describe('i18n', () => {
     expect(t('ar', 'lateJoin')).toBe('اللي يتأخر يدخل');
     expect(t('ar', 'copyLobbyLink')).toBe('انسخ لينك الغرفة');
     expect(t('ar', 'lobbyTipBoard')).toBe('اسمك ظاهر على الشاشة خلاص.');
+    expect(t('ar', 'leaveLobby')).toBe('خروج');
     expect(isLocale('ar')).toBe(true);
     expect(normalizeLocale('nope')).toBe('en');
   });

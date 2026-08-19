@@ -19,10 +19,6 @@ vi.mock('@/hooks/useSessionChannel', () => ({
   useSessionChannel: () => ({ send: vi.fn(), ready: true }),
 }));
 
-vi.mock('@/app/actions/game', () => ({
-  updatePlayerConnection: vi.fn(async () => ({ success: true })),
-}));
-
 vi.mock('@/lib/sounds', () => ({
   bindAudioUnlock: () => () => undefined,
   unlockGameAudio: vi.fn(async () => true),
@@ -187,5 +183,31 @@ describe('PlayerGameClient', () => {
     render(<PlayerGameClient sessionId="sess-1" initialSessionStatus="question_active" />);
     await user.click(await screen.findByRole('button', { name: /^4$/ }));
     expect(await screen.findByText(/answer locked/i)).toBeInTheDocument();
+  });
+
+  it('lets a lobby player leave and clears their token', async () => {
+    localStorage.setItem('quizarena_token_sess-1', 'tok');
+    const fetchMock = vi.fn(async (input: RequestInfo | URL, init?: RequestInit) => {
+      const url = String(input);
+      if (url.includes('/api/player/me')) {
+        return jsonResponse({ player, sessionStatus: 'lobby' });
+      }
+      if (url.includes('/api/player/leave')) {
+        expect(JSON.parse(String(init?.body))).toMatchObject({
+          sessionId: 'sess-1',
+          playerId: 'p1',
+          token: 'tok',
+        });
+        return jsonResponse({ success: true, roomClosed: true });
+      }
+      return jsonResponse({}, 404);
+    });
+    vi.stubGlobal('fetch', fetchMock);
+
+    const user = userEvent.setup();
+    render(<PlayerGameClient sessionId="sess-1" initialSessionStatus="lobby" />);
+    await user.click(await screen.findByRole('button', { name: /leave/i }));
+    expect(localStorage.getItem('quizarena_token_sess-1')).toBeNull();
+    expect(router.push).toHaveBeenCalledWith('/play');
   });
 });

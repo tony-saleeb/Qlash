@@ -3,11 +3,10 @@
 import React, { useState, useEffect, useCallback } from 'react';
 import { useRouter } from 'next/navigation';
 import { createClient } from '@/lib/supabase/client';
-import { updatePlayerConnection } from '@/app/actions/game';
 import { toast } from 'sonner';
 import { Input } from '@/components/ui/input';
 import { Button } from '@/components/ui/button';
-import { Flame, Wifi, WifiOff, Loader2, Award, CheckCircle, XCircle, Clock, Trophy, Pause, Check, Users, Zap } from 'lucide-react';
+import { Flame, Wifi, WifiOff, Loader2, Award, CheckCircle, XCircle, Clock, Trophy, Pause, Check, Users, Zap, LogOut } from 'lucide-react';
 import { BrandMark, AnswerButton, LobbyWaitMarks } from '@/components/brand/BrandMark';
 import { GameShell, LiveChip } from '@/components/brand/GameShell';
 import { QLASH_CONFETTI } from '@/lib/game/theme';
@@ -542,31 +541,52 @@ export default function PlayerGameClient({
           } else if (newStatus === 'leaderboard') {
             setRoundResult(null);
           } else if (newStatus === 'finished') {
+            if (!activeQuestionRef.current) {
+              localStorage.removeItem(`quizarena_token_${sessionId}`);
+              toast.info(t('lobbyClosed'));
+              router.push('/play');
+              return;
+            }
             void loadPodium(playerId);
           }
         }
       )
       .subscribe();
 
+    const syncConnection = (connected: boolean) => {
+      void fetch('/api/player/connection', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ playerId, token, connected }),
+        keepalive: true,
+      });
+    };
+
     const handleVisibilityChange = () => {
       const isVisible = document.visibilityState === 'visible';
       setOnline(isVisible);
       if (connectionTimer) clearTimeout(connectionTimer);
       connectionTimer = setTimeout(() => {
-        void updatePlayerConnection(playerId, token, isVisible);
+        syncConnection(isVisible);
         if (isVisible) void hydrateCurrentQuestion(playerId);
       }, 400);
     };
 
+    const handlePageHide = () => {
+      syncConnection(false);
+    };
+
     document.addEventListener('visibilitychange', handleVisibilityChange);
+    window.addEventListener('pagehide', handlePageHide);
 
     return () => {
       if (connectionTimer) clearTimeout(connectionTimer);
       if (revealFallbackTimer) clearTimeout(revealFallbackTimer);
       supabase.removeChannel(liveChannel);
       document.removeEventListener('visibilitychange', handleVisibilityChange);
+      window.removeEventListener('pagehide', handlePageHide);
     };
-  }, [supabase, player?.id, sessionId, router, hydrateCurrentQuestion, applyRevealInstant, loadPodium]);
+  }, [supabase, player?.id, sessionId, router, hydrateCurrentQuestion, applyRevealInstant, loadPodium, t]);
 
   useEffect(() => {
     if (sessionStatus !== 'question_active' || !activeQuestion || !clockStartedAt) return;
@@ -626,6 +646,22 @@ export default function PlayerGameClient({
       cancelAnimationFrame(raf);
     };
   }, [sessionStatus]);
+
+  const handleLeaveLobby = async () => {
+    if (!player) return;
+    const token = localStorage.getItem(`quizarena_token_${sessionId}`) || '';
+    try {
+      await fetch('/api/player/leave', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ sessionId, playerId: player.id, token }),
+      });
+    } catch {
+      // Still leave the screen even if the request fails.
+    }
+    localStorage.removeItem(`quizarena_token_${sessionId}`);
+    router.push('/play');
+  };
 
   // Instant lock-in UX — never wait on the network to feel responsive
   const submitAnswer = async (answersToSubmit: string[]) => {
@@ -766,6 +802,14 @@ export default function PlayerGameClient({
               >
                 {t(LOBBY_WAIT_TIPS[lobbyTipIndex])}
               </p>
+              <Button
+                type="button"
+                variant="ghost"
+                onClick={() => void handleLeaveLobby()}
+                className="mt-4 h-10 w-full rounded-none text-xs font-bold uppercase tracking-wider text-arena-ink/45 hover:bg-arena-ink hover:text-white"
+              >
+                <LogOut className="mr-1.5 h-3.5 w-3.5" /> {t('leaveLobby')}
+              </Button>
             </div>
           </div>
         </main>
