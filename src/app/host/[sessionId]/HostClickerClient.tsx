@@ -18,7 +18,7 @@ import {
   startGameSession,
   endGameSession,
 } from '@/app/actions/game';
-import { ArrowRight, Clock, Link2, Monitor, Pause, Play, Trophy, Users } from 'lucide-react';
+import { ArrowRight, Clock, Link2, LogOut, Monitor, Pause, Play, Trophy, Users } from 'lucide-react';
 import { BrandMark, PinDisplay } from '@/components/brand/BrandMark';
 import { ClashCountdownOverlay } from '@/components/brand/ClashCountdown';
 import { useSessionChannel } from '@/hooks/useSessionChannel';
@@ -36,6 +36,7 @@ import {
   isLateJoinEnabled,
 } from '@/lib/game/lateJoin';
 import { waitingPlayers } from '@/lib/game/waitingPlayers';
+import { isPlayerConnected } from '@/lib/game/emptyLobby';
 import { lobbyJoinPath } from '@/lib/game/lobbyLink';
 import { useAutoCloseEmptyLobby } from '@/hooks/useAutoCloseEmptyLobby';
 import { LocaleToggle } from '@/components/brand/LocaleToggle';
@@ -322,6 +323,15 @@ export default function HostClickerClient({
 
   const handlePodium = () => run(async () => { await goToPodium(session.id); });
 
+  const handleQuitRoom = async () => {
+    try {
+      await endGameSession(session.id);
+    } finally {
+      router.push('/dashboard');
+      router.refresh();
+    }
+  };
+
   const openStage = () => router.push(`/host/${session.id}`);
 
   const bigBtn =
@@ -341,6 +351,14 @@ export default function HostClickerClient({
         <BrandMark tone="light" size="sm" />
         <div className="flex items-center gap-2">
           <LocaleToggle locale={locale} onChange={persistLocale} tone="light" />
+          <Button
+            type="button"
+            variant="ghost"
+            className="h-10 rounded-none border-2 border-white/30 bg-white/10 px-3 text-xs font-bold uppercase tracking-wider text-white"
+            onClick={() => void handleQuitRoom()}
+          >
+            <LogOut className="mr-1.5 h-4 w-4" /> {t('quitRoom')}
+          </Button>
           <Button
             type="button"
             variant="ghost"
@@ -422,7 +440,7 @@ export default function HostClickerClient({
               waiting.map((player) => (
                 <li key={player.id} dir="auto" className="truncate text-sm font-bold">
                   {player.nickname}
-                  {!player.connected ? <span className="ml-2 text-xs font-medium text-white/35">offline</span> : null}
+                  {!isPlayerConnected(player) ? <span className="ml-2 text-xs font-medium text-white/35">{t('offline')}</span> : null}
                 </li>
               ))
             )}

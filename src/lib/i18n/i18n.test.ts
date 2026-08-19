@@ -19,6 +19,8 @@ describe('i18n', () => {
     expect(t('ar', 'copyLobbyLink')).toBe('انسخ لينك الغرفة');
     expect(t('ar', 'lobbyTipBoard')).toBe('اسمك ظاهر على الشاشة خلاص.');
     expect(t('ar', 'leaveLobby')).toBe('خروج');
+    expect(t('en', 'quitRoom')).toBe('Quit');
+    expect(t('ar', 'quitRoom')).toBe('قفل الغرفة');
     expect(t('ar', 'tapToCheer')).toContain('اضغط علامة');
     expect(isLocale('ar')).toBe(true);
     expect(normalizeLocale('nope')).toBe('en');

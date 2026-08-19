@@ -22,7 +22,7 @@ import {
   addQuestionTime,
   setLateJoinThroughIndex,
 } from '@/app/actions/game';
-import { Flame, Users, Play, Pause, UserX, AlertCircle, Trophy, ArrowRight, Home, CheckCircle2, Clock, Settings, Edit3, Zap, SkipForward, Send, Activity, ChevronDown, ChevronUp, MessageSquare, X, ClipboardList, Smartphone, Link2 } from 'lucide-react';
+import { Flame, Users, Play, Pause, UserX, AlertCircle, Trophy, ArrowRight, Home, CheckCircle2, Clock, Settings, Edit3, Zap, SkipForward, Send, Activity, ChevronDown, ChevronUp, MessageSquare, X, ClipboardList, Smartphone, Link2, LogOut } from 'lucide-react';
 import confetti from 'canvas-confetti';
 import QRCode from 'qrcode';
 import { bindAudioUnlock, playJoinSound, playTickSound, playRevealSound, playFanfareSound, unlockGameAudio } from '@/lib/sounds';
@@ -60,6 +60,7 @@ import { Switch } from '@/components/ui/switch';
 import { hostClickerPath, isLateJoinEnabled, DEFAULT_LATE_JOIN_THROUGH_INDEX, LATE_JOIN_LOBBY_ONLY } from '@/lib/game/lateJoin';
 import { lobbyJoinPath } from '@/lib/game/lobbyLink';
 import { waitingPlayers } from '@/lib/game/waitingPlayers';
+import { connectedPlayerCount, isPlayerConnected } from '@/lib/game/emptyLobby';
 import { buildTeachableReveal, formatTeachableCopy } from '@/lib/game/teachableReveal';
 import {
   isLobbyReactionId,
@@ -314,7 +315,10 @@ export default function HostGameClient({
   // One Realtime channel for players, session row, and submissions
   useEffect(() => {
     const flushPlayerUpdates = () => {
-      playersFlushTimerRef.current = null;
+      if (playersFlushTimerRef.current) {
+        clearTimeout(playersFlushTimerRef.current);
+        playersFlushTimerRef.current = null;
+      }
       const batch = playersFlushRef.current;
       if (batch.size === 0) return;
       playersFlushRef.current = new Map();
@@ -344,8 +348,13 @@ export default function HostGameClient({
             if (removed) addActivityEntry('kick', `${removed.nickname} was removed`);
             setPlayers((prev) => prev.filter((p) => p.id !== payload.old.id));
           } else if (payload.eventType === 'UPDATE') {
-            playersFlushRef.current.set(payload.new.id as string, payload.new as Player);
-            if (!playersFlushTimerRef.current) {
+            const next = payload.new as Player;
+            const prev = playersRef.current.find((p) => p.id === next.id);
+            playersFlushRef.current.set(next.id, next);
+            const connectedChanged = prev != null && prev.connected !== next.connected;
+            if (connectedChanged) {
+              flushPlayerUpdates();
+            } else if (!playersFlushTimerRef.current) {
               playersFlushTimerRef.current = setTimeout(flushPlayerUpdates, 120);
             }
           }
@@ -813,8 +822,13 @@ export default function HostGameClient({
     setIsAnnouncementOpen(false);
   };
 
-  const connectedCount = players.filter((p) => p.connected).length;
+  const connectedCount = connectedPlayerCount(players);
   const isLastQuestion = activeQuestionIndex === playQuestions.length - 1;
+  const quitControl = (
+    <Button type="button" variant="ghost" className={hostCtrl} onClick={() => void handleCloseSession()}>
+      <LogOut className="h-3.5 w-3.5" /> {t('quitRoom')}
+    </Button>
+  );
 
   // ==========================================
   // RENDER: LOBBY STATE
@@ -846,6 +860,7 @@ export default function HostGameClient({
           </div>
           <div className="flex items-center gap-3">
             <LocaleToggle locale={locale} onChange={persistLocale} tone="light" />
+            {quitControl}
             <StageBadge className="motion-pulse-soft">
               <Users className="h-3.5 w-3.5" />
               {connectedCount}/{players.length} · max {playerCap}
@@ -934,7 +949,7 @@ export default function HostGameClient({
                     <div
                       key={p.id}
                       className={`group relative flex items-center gap-2.5 border px-3 py-2.5 transition ${
-                        p.connected
+                        isPlayerConnected(p)
                           ? 'border-white/15 bg-white/10 text-white'
                           : 'border-white/5 bg-white/[0.03] text-white/35'
                       }`}
@@ -955,7 +970,7 @@ export default function HostGameClient({
                       >
                         <UserX className="h-3.5 w-3.5" />
                       </button>
-                      {!p.connected && (
+                      {!isPlayerConnected(p) && (
                         <span className="absolute right-1.5 top-1.5 h-1.5 w-1.5 bg-arena-signal" title="Offline" />
                       )}
                     </div>
@@ -998,6 +1013,7 @@ export default function HostGameClient({
             </label>
           </div>
           <div className="flex w-full flex-col gap-2 sm:w-auto sm:flex-row sm:items-center">
+            {quitControl}
             <Button
               type="button"
               variant="ghost"
@@ -1089,7 +1105,10 @@ export default function HostGameClient({
               </span>
             )}
           </div>
-          <BrandMark tone="light" size="sm" wordmark={false} />
+          <div className="flex items-center gap-2">
+            {quitControl}
+            <BrandMark tone="light" size="sm" wordmark={false} />
+          </div>
         </div>
 
         <div className="z-10 mx-auto my-6 max-w-4xl text-center">
@@ -1194,7 +1213,7 @@ export default function HostGameClient({
                     waiting.map((player) => (
                       <li key={player.id} className="flex items-center justify-between border border-white/15 bg-white/10 px-3 py-2">
                         <span dir="auto" className="truncate text-sm font-bold">{player.nickname}</span>
-                        {!player.connected ? (
+                        {!isPlayerConnected(player) ? (
                           <span className="text-[10px] uppercase tracking-wider text-white/40">offline</span>
                         ) : null}
                       </li>
@@ -1236,7 +1255,7 @@ export default function HostGameClient({
                     players.map((p) => (
                       <div key={p.id} className="flex items-center justify-between border border-white/15 bg-white/10 p-3">
                         <div className="flex min-w-0 items-center gap-2">
-                          <span className={`h-2 w-2 ${p.connected ? 'bg-arena-acid' : 'bg-arena-signal'}`} />
+                          <span className={`h-2 w-2 ${isPlayerConnected(p) ? 'bg-arena-acid' : 'bg-arena-signal'}`} />
                           <span className="max-w-[180px] truncate text-sm font-bold">{p.nickname}</span>
                           <span className="text-[10px] text-white/50">({p.score} pts)</span>
                         </div>
@@ -1461,7 +1480,10 @@ export default function HostGameClient({
       <GameShell>
         <div className="z-10 flex items-center justify-between gap-4">
           <LiveChip tone="acid">{t('answersRevealed')}</LiveChip>
-          <BrandMark tone="light" size="sm" wordmark={false} />
+          <div className="flex items-center gap-2">
+            {quitControl}
+            <BrandMark tone="light" size="sm" wordmark={false} />
+          </div>
         </div>
 
         <div className="z-10 mx-auto my-4 max-w-4xl text-center">
@@ -1554,7 +1576,10 @@ export default function HostGameClient({
       <GameShell>
         <div className="z-10 flex items-center justify-between gap-4">
           <LiveChip tone="court">Scoreboard</LiveChip>
-          <BrandMark tone="light" size="sm" wordmark={false} />
+          <div className="flex items-center gap-2">
+            {quitControl}
+            <BrandMark tone="light" size="sm" wordmark={false} />
+          </div>
         </div>
 
         <div className="z-10 my-4 text-center">

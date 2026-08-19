@@ -1,7 +1,9 @@
 import { describe, expect, it } from 'vitest';
 import {
   LAST_LOBBY_PLAYER_ABANDON_MS,
-  lobbyAbandonedByLastPlayer,
+  connectedPlayerCount,
+  isPlayerConnected,
+  lobbyAbandonedOffline,
   lobbyShouldCloseNow,
 } from '@/lib/game/emptyLobby';
 
@@ -16,9 +18,17 @@ describe('empty lobby close', () => {
     expect(lobbyShouldCloseNow({ status: 'question_active', hadPlayers: true, playerCount: 0 })).toBe(false);
   });
 
-  it('treats a solo disconnected lobby player as abandoned', () => {
+  it('treats missing connected as online', () => {
+    expect(isPlayerConnected({})).toBe(true);
+    expect(isPlayerConnected({ connected: undefined })).toBe(true);
+    expect(isPlayerConnected({ connected: true })).toBe(true);
+    expect(isPlayerConnected({ connected: false })).toBe(false);
+    expect(connectedPlayerCount([{ connected: false }, {}])).toBe(1);
+  });
+
+  it('treats every disconnected lobby player as abandoned', () => {
     expect(
-      lobbyAbandonedByLastPlayer({
+      lobbyAbandonedOffline({
         status: 'lobby',
         hadPlayers: true,
         playerCount: 1,
@@ -26,21 +36,29 @@ describe('empty lobby close', () => {
       })
     ).toBe(true);
     expect(
-      lobbyAbandonedByLastPlayer({
+      lobbyAbandonedOffline({
+        status: 'lobby',
+        hadPlayers: true,
+        playerCount: 2,
+        connectedCount: 0,
+      })
+    ).toBe(true);
+    expect(
+      lobbyAbandonedOffline({
+        status: 'lobby',
+        hadPlayers: true,
+        playerCount: 2,
+        connectedCount: 1,
+      })
+    ).toBe(false);
+    expect(
+      lobbyAbandonedOffline({
         status: 'lobby',
         hadPlayers: true,
         playerCount: 1,
         connectedCount: 1,
       })
     ).toBe(false);
-    expect(
-      lobbyAbandonedByLastPlayer({
-        status: 'lobby',
-        hadPlayers: true,
-        playerCount: 2,
-        connectedCount: 0,
-      })
-    ).toBe(false);
-    expect(LAST_LOBBY_PLAYER_ABANDON_MS).toBeGreaterThan(3000);
+    expect(LAST_LOBBY_PLAYER_ABANDON_MS).toBe(4_000);
   });
 });
