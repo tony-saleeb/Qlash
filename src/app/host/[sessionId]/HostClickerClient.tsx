@@ -17,7 +17,7 @@ import {
   setLateJoinThroughIndex,
   startGameSession,
 } from '@/app/actions/game';
-import { ArrowRight, Clock, Monitor, Pause, Play, Trophy, Users } from 'lucide-react';
+import { ArrowRight, Clock, Link2, Monitor, Pause, Play, Trophy, Users } from 'lucide-react';
 import { BrandMark, PinDisplay } from '@/components/brand/BrandMark';
 import { useSessionChannel } from '@/hooks/useSessionChannel';
 import {
@@ -34,6 +34,7 @@ import {
   isLateJoinEnabled,
 } from '@/lib/game/lateJoin';
 import { waitingPlayers } from '@/lib/game/waitingPlayers';
+import { lobbyJoinPath } from '@/lib/game/lobbyLink';
 import { LocaleToggle } from '@/components/brand/LocaleToggle';
 import { useLocale } from '@/lib/i18n/useLocale';
 import { setHostLocale } from '@/app/actions/host';
@@ -327,6 +328,22 @@ export default function HostClickerClient({
               className="data-checked:bg-arena-acid"
             />
           </label>
+          <Button
+            type="button"
+            variant="ghost"
+            className="h-14 w-full rounded-none border-2 border-white/30 bg-white/10 font-display text-sm font-extrabold uppercase tracking-wider text-white"
+            onClick={async () => {
+              const url = `${window.location.origin}${lobbyJoinPath(session.pin)}`;
+              try {
+                await navigator.clipboard.writeText(url);
+                toast.success(t('lobbyLinkCopied'));
+              } catch {
+                window.prompt(t('copyLobbyLink'), url);
+              }
+            }}
+          >
+            <Link2 className="mr-2 h-5 w-5" /> {t('copyLobbyLink')}
+          </Button>
           <Button
             type="button"
             disabled={busy || players.length === 0 || questions.length === 0}

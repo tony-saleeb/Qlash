@@ -22,7 +22,7 @@ import {
   addQuestionTime,
   setLateJoinThroughIndex,
 } from '@/app/actions/game';
-import { Flame, Users, Play, Pause, UserX, AlertCircle, Trophy, ArrowRight, Home, CheckCircle2, Clock, Settings, Edit3, Zap, SkipForward, Send, Activity, ChevronDown, ChevronUp, MessageSquare, X, ClipboardList, Smartphone } from 'lucide-react';
+import { Flame, Users, Play, Pause, UserX, AlertCircle, Trophy, ArrowRight, Home, CheckCircle2, Clock, Settings, Edit3, Zap, SkipForward, Send, Activity, ChevronDown, ChevronUp, MessageSquare, X, ClipboardList, Smartphone, Link2 } from 'lucide-react';
 import confetti from 'canvas-confetti';
 import QRCode from 'qrcode';
 import { bindAudioUnlock, playJoinSound, playTickSound, playRevealSound, playFanfareSound, unlockGameAudio } from '@/lib/sounds';
@@ -54,12 +54,8 @@ import { remainingSeconds } from '@/lib/game/clock';
 import { answerUsesInk, resolveAnswerColor } from '@/lib/game/marks';
 import { AnswerSwatch } from '@/components/brand/AnswerMark';
 import { Switch } from '@/components/ui/switch';
-import {
-  DEFAULT_LATE_JOIN_THROUGH_INDEX,
-  LATE_JOIN_LOBBY_ONLY,
-  hostClickerPath,
-  isLateJoinEnabled,
-} from '@/lib/game/lateJoin';
+import { hostClickerPath, isLateJoinEnabled, DEFAULT_LATE_JOIN_THROUGH_INDEX, LATE_JOIN_LOBBY_ONLY } from '@/lib/game/lateJoin';
+import { lobbyJoinPath } from '@/lib/game/lobbyLink';
 import { waitingPlayers } from '@/lib/game/waitingPlayers';
 import { buildTeachableReveal, formatTeachableCopy } from '@/lib/game/teachableReveal';
 import { LocaleToggle } from '@/components/brand/LocaleToggle';
@@ -159,7 +155,7 @@ export default function HostGameClient({
 
   useEffect(() => {
     if (session.status === 'lobby' && session.pin) {
-      const joinUrl = `${window.location.origin}/play?pin=${session.pin}`;
+      const joinUrl = `${window.location.origin}${lobbyJoinPath(session.pin)}`;
       QRCode.toDataURL(
         joinUrl,
         {
@@ -190,6 +186,15 @@ export default function HostGameClient({
   const submissionsCount = answeredIds.size;
   const waiting = waitingPlayers(players, answeredIds);
   const lateJoinOn = isLateJoinEnabled(session.late_join_through_index);
+  const copyLobbyLink = useCallback(async () => {
+    const url = `${window.location.origin}${lobbyJoinPath(session.pin)}`;
+    try {
+      await navigator.clipboard.writeText(url);
+      toast.success(t('lobbyLinkCopied'));
+    } catch {
+      window.prompt(t('copyLobbyLink'), url);
+    }
+  }, [session.pin, t]);
   const orderKey = Array.isArray(session.question_order) ? session.question_order.join(',') : '';
   const timerRef = useRef<NodeJS.Timeout | null>(null);
   const lastTickSecondRef = useRef<number | null>(null);
@@ -831,13 +836,27 @@ export default function HostGameClient({
 
             {players.length === 0 ? (
               <div className="flex flex-1 flex-col items-center justify-center p-8 text-center">
-                <div className="mb-4 h-1.5 w-28 overflow-hidden bg-white/10">
-                  <div className="h-full w-1/2 animate-pulse bg-arena-acid" />
+                <div className="mb-6 flex items-center gap-2" aria-hidden>
+                  {[0, 1, 2].map((i) => (
+                    <span
+                      key={i}
+                      className="flex h-11 w-11 items-center justify-center border-2 border-dashed border-white/20 bg-white/[0.04]"
+                      style={{ animationDelay: `${i * 160}ms` }}
+                    >
+                      <span className="h-2 w-2 animate-pulse bg-arena-acid/70" />
+                    </span>
+                  ))}
                 </div>
                 <p className="font-display text-xl font-bold text-white">{t('waitingForPlayers')}</p>
-                <p className="mt-2 max-w-xs text-xs text-white/40">
-                  Nicknames land here the second someone joins.
-                </p>
+                <p className="mt-2 max-w-xs text-xs text-white/40">{t('nicknamesLand')}</p>
+                <Button
+                  type="button"
+                  variant="ghost"
+                  className={`${hostCtrl} mt-6`}
+                  onClick={() => void copyLobbyLink()}
+                >
+                  <Link2 className="h-4 w-4" /> {t('copyLobbyLink')}
+                </Button>
               </div>
             ) : (
               <div className="max-h-[52vh] flex-1 overflow-y-auto pr-1">
@@ -905,6 +924,14 @@ export default function HostGameClient({
             </label>
           </div>
           <div className="flex w-full flex-col gap-2 sm:w-auto sm:flex-row sm:items-center">
+            <Button
+              type="button"
+              variant="ghost"
+              className={hostCtrl}
+              onClick={() => void copyLobbyLink()}
+            >
+              <Link2 className="h-4 w-4" /> {t('copyLobbyLink')}
+            </Button>
             <Button
               type="button"
               variant="ghost"

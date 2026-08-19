@@ -85,6 +85,10 @@ const en = {
   shareQuiz: 'Share',
   linkCopied: 'Share link copied.',
   playMisses: 'Play the misses',
+  copyLobbyLink: 'Copy lobby link',
+  lobbyLinkCopied: 'Lobby link copied. They open it, type a name, and join.',
+  nicknamesLand: 'Names show up here the second someone joins.',
+  inviteOnlyHint: 'You’re in. Just pick a name.',
 } as const;
 
 const ar: Record<keyof typeof en, string> = {
@@ -172,6 +176,10 @@ const ar: Record<keyof typeof en, string> = {
   shareQuiz: 'شارك',
   linkCopied: 'نسخنا لينك المشاركة.',
   playMisses: 'نلعب اللي غلطوا فيه',
+  copyLobbyLink: 'انسخ لينك الغرفة',
+  lobbyLinkCopied: 'نسخنا اللينك. يفتحوه، يكتبوا اسمهم، ويدخلوا.',
+  nicknamesLand: 'الأسماء هتظهر هنا أول ما حد يدخل.',
+  inviteOnlyHint: 'اكتب اسمك وادخل.',
 };
 
 export const MESSAGES = { en, ar } as const;
