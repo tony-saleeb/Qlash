@@ -119,15 +119,15 @@ describe('quiz library actions', () => {
   it('adds a content pack into the host library', async () => {
     host.setTables({
       hosts: { data: { plan: 'pro' }, error: null },
-      quizzes: { data: { id: 'pack-1', title: 'تسخين الحصة' }, error: null },
+      quizzes: { data: { id: 'pack-1', title: 'تسخين اللعبة' }, error: null },
       questions: { data: {}, error: null },
     });
     const { createPackQuiz } = await import('@/app/actions/quizzes');
     const quiz = await createPackQuiz('warmup');
-    expect(quiz.title).toBe('تسخين الحصة');
+    expect(quiz.title).toBe('تسخين اللعبة');
     expect(host.lastInsert('quizzes')).toMatchObject({
       host_id: 'host-1',
-      title: 'تسخين الحصة',
+      title: 'تسخين اللعبة',
     });
     const rows = host.lastInsert('questions') as { prompt: string }[];
     expect(rows).toHaveLength(8);

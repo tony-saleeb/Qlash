@@ -19,7 +19,7 @@ export const CONTENT_PACKS: ContentPack[] = [
   {
     id: 'sunday-school',
     title: 'مدارس الأحد',
-    description: '11 سؤال من الكتاب نبدأ بيهم الحصة',
+    description: '11 سؤال من الكتاب نبدأ بيهم اللعبة',
     blurbEn: 'Sunday school — 11 Bible questions',
     questions: [
       { prompt: 'ماهى المعجزة التى تدخلت فيها العذراء لإتمامها ؟', answers: [{ text: 'إقامة ابن أرملة نايين', correct: false }, { text: 'إشباع الجموع', correct: false }, { text: 'عرس قانا الجليل', correct: true }, { text: 'إقامة ابنة يايرس', correct: false }] },
@@ -64,7 +64,7 @@ export const CONTENT_PACKS: ContentPack[] = [
   },
   {
     id: 'warmup',
-    title: 'تسخين الحصة',
+    title: 'تسخين اللعبة',
     description: '8 أسئلة سريعة نفتح بيهم الغرفة',
     blurbEn: 'Warm-up — 8 fast openers',
     questions: [
