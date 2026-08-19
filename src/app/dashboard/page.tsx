@@ -21,7 +21,7 @@ export default async function DashboardPage() {
   const [quizzesResult, sessionsResult, hostResult] = await Promise.all([
     supabase
       .from('quizzes')
-      .select('id, title, description, created_at, questions(count)')
+      .select('id, title, description, created_at, share_code, questions(count)')
       .eq('host_id', user.id)
       .order('created_at', { ascending: false }),
     supabase

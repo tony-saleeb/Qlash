@@ -276,6 +276,14 @@ export interface SessionCompare {
   improved: QuestionDelta[];
 }
 
+export const RECAP_ACCURACY_BELOW = 70;
+
+export function recapQuestionIds(report: SessionReport): string[] {
+  return report.questions
+    .filter((question) => question.type !== 'poll' && question.accuracy !== null && question.accuracy < RECAP_ACCURACY_BELOW)
+    .map((question) => question.id);
+}
+
 export function compareSessionReports(current: SessionReport, previous: SessionReport): SessionCompare {
   const previousById = new Map(previous.questions.map((q) => [q.id, q]));
   const questions: QuestionDelta[] = current.questions

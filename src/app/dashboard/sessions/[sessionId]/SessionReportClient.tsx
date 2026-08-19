@@ -7,6 +7,8 @@ import { Button } from '@/components/ui/button';
 import { BrandMark } from '@/components/brand/BrandMark';
 import { LocaleToggle } from '@/components/brand/LocaleToggle';
 import { createGameSession } from '@/app/actions/game';
+import { createRecapQuiz } from '@/app/actions/reports';
+import { recapQuestionIds } from '@/lib/game/sessionReport';
 import { setHostLocale } from '@/app/actions/host';
 import { useLocale } from '@/lib/i18n/useLocale';
 import type { Locale } from '@/lib/i18n/locale';
@@ -37,6 +39,7 @@ export default function SessionReportClient({
     void setHostLocale(next);
   };
   const compare = previous ? compareSessionReports(report, previous) : null;
+  const recapCount = recapQuestionIds(report).length;
 
   const downloadCsv = () => {
     const blob = new Blob([sessionReportToCsv(report)], { type: 'text/csv;charset=utf-8;' });
@@ -46,6 +49,18 @@ export default function SessionReportClient({
     link.download = `qlash-${report.pin}.csv`;
     link.click();
     URL.revokeObjectURL(url);
+  };
+
+  const playMisses = async () => {
+    const loading = toast.loading('Building a recap quiz…');
+    try {
+      const quiz = await createRecapQuiz(report.sessionId);
+      const session = await createGameSession(quiz.id);
+      toast.success('Recap lobby ready.', { id: loading });
+      router.push(`/host/${session.id}`);
+    } catch (err: unknown) {
+      toast.error(err instanceof Error ? err.message : 'Could not build a recap quiz.', { id: loading });
+    }
   };
 
   const playAgain = async () => {
@@ -90,6 +105,15 @@ export default function SessionReportClient({
             >
               <Download className="mr-1.5 h-4 w-4" /> CSV
             </Button>
+            {recapCount > 0 && (
+              <Button
+                variant="ghost"
+                className="h-10 rounded-none border-2 border-arena-ink font-bold"
+                onClick={playMisses}
+              >
+                <Play className="mr-1.5 h-4 w-4 fill-current" /> {t('playMisses')}
+              </Button>
+            )}
             {report.quizId && (
               <Button
                 className="h-10 rounded-none bg-arena-signal font-display font-extrabold text-white hover:bg-arena-signal/90"

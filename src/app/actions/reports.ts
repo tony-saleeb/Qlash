@@ -1,7 +1,14 @@
 'use server';
 
-import { buildSessionReport, compareSessionReports, type SessionReport } from '@/lib/game/sessionReport';
+import { createQuiz } from '@/app/actions/quizzes';
 import { getHostAuth } from '@/lib/supabase/hostAuth';
+import {
+  buildSessionReport,
+  compareSessionReports,
+  recapQuestionIds,
+  type SessionReport,
+} from '@/lib/game/sessionReport';
+import { revalidatePath } from 'next/cache';
 
 export async function getSessionReport(sessionId: string): Promise<SessionReport> {
   try {
@@ -98,4 +105,56 @@ export async function getPreviousSessionReport(sessionId: string): Promise<Sessi
   }
 }
 
-export { compareSessionReports };
+export { compareSessionReports, recapQuestionIds };
+
+export async function createRecapQuiz(sessionId: string) {
+  try {
+    const report = await getSessionReport(sessionId);
+    const ids = recapQuestionIds(report);
+    if (ids.length === 0) {
+      throw new Error('The class got every scored question. Nothing to recap.');
+    }
+    if (!report.quizId) {
+      throw new Error('This quiz is no longer in your library.');
+    }
+
+    const { supabase } = await getHostAuth();
+    const { data: sourceQuestions, error } = await supabase
+      .from('questions')
+      .select('id, order_index, type, prompt, media_url, media_type, time_limit_seconds, points_base, scoring_type, answers')
+      .eq('quiz_id', report.quizId)
+      .in('id', ids);
+    if (error) throw error;
+
+    const byId = new Map((sourceQuestions || []).map((row) => [row.id, row]));
+    const ordered = ids.map((id) => byId.get(id)).filter((row): row is NonNullable<typeof row> => Boolean(row));
+    if (ordered.length === 0) {
+      throw new Error('Those questions are no longer in the quiz.');
+    }
+
+    const recapLabel = /[\u0600-\u06FF]/.test(report.quizTitle) ? 'مراجعة' : 'recap';
+    const quiz = await createQuiz(`${report.quizTitle} — ${recapLabel}`, `Missed questions from PIN ${report.pin}`);
+
+    const { error: insertError } = await supabase.from('questions').insert(
+      ordered.map((question, index) => ({
+        quiz_id: quiz.id,
+        order_index: index,
+        type: question.type,
+        prompt: question.prompt,
+        media_url: question.media_url,
+        media_type: question.media_type,
+        time_limit_seconds: question.time_limit_seconds,
+        points_base: question.points_base,
+        scoring_type: question.scoring_type,
+        answers: question.answers,
+      }))
+    );
+    if (insertError) throw insertError;
+
+    revalidatePath('/dashboard');
+    return quiz;
+  } catch (err: unknown) {
+    console.error('createRecapQuiz error:', err);
+    throw new Error(err instanceof Error ? err.message : 'Failed to build recap quiz.');
+  }
+}

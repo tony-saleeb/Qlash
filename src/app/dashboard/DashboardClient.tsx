@@ -20,22 +20,24 @@ import {
   createQuiz,
   deleteQuiz,
   cloneQuiz,
-  createTemplateQuiz,
+  createPackQuiz,
+  enableQuizShare,
 } from '@/app/actions/quizzes';
 import { createGameSession } from '@/app/actions/game';
-import { Plus, Play, Edit, Copy, Trash2, LogOut, BookTemplate, ClipboardList } from 'lucide-react';
+import { Plus, Play, Edit, Copy, Trash2, LogOut, BookTemplate, ClipboardList, Link2 } from 'lucide-react';
 import { BrandMark } from '@/components/brand/BrandMark';
 import { livePlayerCap, normalizeHostPlan, quizLibraryCap } from '@/lib/game/constants';
 import { LocaleToggle } from '@/components/brand/LocaleToggle';
 import { useLocale } from '@/lib/i18n/useLocale';
 import { setHostLocale } from '@/app/actions/host';
-import type { Locale } from '@/lib/i18n/locale';
+import { CONTENT_PACKS } from '@/lib/content/packs';
 
 interface Quiz {
   id: string;
   title: string;
   description: string;
   created_at: string;
+  share_code?: string | null;
   questions?: { count: number }[];
 }
 
@@ -70,13 +72,14 @@ export default function DashboardClient({
 }: DashboardClientProps) {
   const router = useRouter();
   const supabase = createClient();
-  const { locale, setLocale } = useLocale(initialLocale);
+  const { locale, setLocale, t } = useLocale(initialLocale);
   const persistLocale = (next: Locale) => {
     setLocale(next);
     void setHostLocale(next);
   };
   const [quizzes, setQuizzes] = useState<Quiz[]>(initialQuizzes);
   const [createDialogOpen, setCreateDialogOpen] = useState(false);
+  const [packsOpen, setPacksOpen] = useState(false);
   const [title, setTitle] = useState('');
   const [description, setDescription] = useState('');
   const [actionLoading, setActionLoading] = useState(false);
@@ -127,18 +130,35 @@ export default function DashboardClient({
     }
   };
 
-  const handleCreateTemplate = async () => {
+  const handleCreatePack = async (packId: string) => {
     if (atQuizCap) {
       toastQuizCap();
       return;
     }
-    const loadingToast = toast.loading('Creating template quiz…');
+    const loadingToast = toast.loading('Adding pack…');
     try {
-      const newQuiz = await createTemplateQuiz();
-      toast.success('Template ready.', { id: loadingToast });
-      setQuizzes([newQuiz, ...quizzes]);
+      const newQuiz = await createPackQuiz(packId);
+      const pack = CONTENT_PACKS.find((item) => item.id === packId);
+      toast.success('Pack added to your library.', { id: loadingToast });
+      setQuizzes([{ ...newQuiz, questions: [{ count: pack?.questions.length ?? 0 }] }, ...quizzes]);
+      setPacksOpen(false);
     } catch (err: unknown) {
-      toast.error(err instanceof Error ? err.message : 'Failed to create template.', { id: loadingToast });
+      toast.error(err instanceof Error ? err.message : 'Failed to add pack.', { id: loadingToast });
+    }
+  };
+
+  const handleShareQuiz = async (quiz: Quiz) => {
+    const loadingToast = toast.loading('Preparing share link…');
+    try {
+      const { shareCode } = await enableQuizShare(quiz.id);
+      const url = `${window.location.origin}/import/${shareCode}`;
+      await navigator.clipboard.writeText(url);
+      setQuizzes((current) =>
+        current.map((row) => (row.id === quiz.id ? { ...row, share_code: shareCode } : row))
+      );
+      toast.success(t('linkCopied'), { id: loadingToast });
+    } catch (err: unknown) {
+      toast.error(err instanceof Error ? err.message : 'Could not share this quiz.', { id: loadingToast });
     }
   };
 
@@ -224,11 +244,11 @@ export default function DashboardClient({
           </div>
           <div className="flex flex-wrap gap-2">
             <Button
-              onClick={handleCreateTemplate}
+              onClick={() => (atQuizCap ? toastQuizCap() : setPacksOpen(true))}
               disabled={atQuizCap}
               className="h-11 rounded-none border-2 border-arena-ink bg-transparent font-bold text-arena-ink hover:bg-arena-ink hover:text-white"
             >
-              <BookTemplate className="mr-1.5 h-4 w-4" /> Template
+              <BookTemplate className="mr-1.5 h-4 w-4" /> {t('packs')}
             </Button>
             <Button
               onClick={() => (atQuizCap ? toastQuizCap() : setCreateDialogOpen(true))}
@@ -296,6 +316,15 @@ export default function DashboardClient({
                         variant="ghost"
                         size="icon"
                         className="rounded-none border-2 border-arena-ink/20"
+                        onClick={() => handleShareQuiz(quiz)}
+                        title={t('shareQuiz')}
+                      >
+                        <Link2 className="h-4 w-4" />
+                      </Button>
+                      <Button
+                        variant="ghost"
+                        size="icon"
+                        className="rounded-none border-2 border-arena-ink/20"
                         onClick={() => handleCloneQuiz(quiz.id)}
                         title="Duplicate"
                       >
@@ -358,6 +387,35 @@ export default function DashboardClient({
           </section>
         )}
       </main>
+
+      <Dialog open={packsOpen} onOpenChange={setPacksOpen}>
+        <DialogContent className="max-w-lg rounded-none border-2 border-arena-ink bg-white text-arena-ink">
+          <DialogHeader>
+            <DialogTitle className="font-display text-xl font-extrabold">{t('packs')}</DialogTitle>
+            <DialogDescription className="text-arena-ink/55">
+              Add a ready Arabic quiz, then edit it like any other set.
+            </DialogDescription>
+          </DialogHeader>
+          <ul className="mt-4 space-y-3">
+            {CONTENT_PACKS.map((pack) => (
+              <li key={pack.id}>
+                <button
+                  type="button"
+                  disabled={actionLoading}
+                  onClick={() => handleCreatePack(pack.id)}
+                  className="flex w-full flex-col items-start border-2 border-arena-ink/15 bg-arena-canvas px-4 py-3 text-left transition hover:border-arena-ink hover:bg-white"
+                >
+                  <span dir="auto" className="font-display text-lg font-extrabold">{pack.title}</span>
+                  <span dir="auto" className="mt-0.5 text-sm text-arena-ink/60">{pack.description}</span>
+                  <span className="mt-1 text-[11px] font-bold uppercase tracking-wider text-arena-ink/40">
+                    {pack.blurbEn} · {pack.questions.length} questions
+                  </span>
+                </button>
+              </li>
+            ))}
+          </ul>
+        </DialogContent>
+      </Dialog>
 
       <Dialog open={createDialogOpen} onOpenChange={setCreateDialogOpen}>
         <DialogContent className="max-w-md rounded-2xl border-arena-line bg-white text-arena-ink">

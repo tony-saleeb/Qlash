@@ -22,6 +22,7 @@ create table public.quizzes (
   randomize_answers boolean default false,
   team_mode boolean default false,
   double_points_rounds jsonb default '[]'::jsonb, -- question indices or IDs configured at edit time
+  share_code text unique,
   created_at timestamptz default now(),
   updated_at timestamptz default now()
 );

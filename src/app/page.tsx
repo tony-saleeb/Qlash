@@ -15,6 +15,19 @@ import { unlockGameAudio } from '@/lib/sounds';
 import { LocaleToggle } from '@/components/brand/LocaleToggle';
 import { useLocale } from '@/lib/i18n/useLocale';
 
+function hostAuthRedirect(): string {
+  const base = authCallbackUrl();
+  if (typeof window === 'undefined') return base;
+  try {
+    const importCode =
+      new URLSearchParams(window.location.search).get('import') || sessionStorage.getItem('qlash_import');
+    if (importCode) return `${base}?next=${encodeURIComponent(`/import/${importCode}`)}`;
+  } catch {
+    // ignore
+  }
+  return base;
+}
+
 export default function LandingPage() {
   const router = useRouter();
   const supabase = createClient();
@@ -63,6 +76,31 @@ export default function LandingPage() {
     if (currentHost || panel === 'host') router.prefetch('/dashboard');
   }, [currentHost, panel, router]);
 
+  useEffect(() => {
+    if (typeof window === 'undefined') return;
+    const importCode = new URLSearchParams(window.location.search).get('import');
+    if (importCode) {
+      try {
+        sessionStorage.setItem('qlash_import', importCode);
+      } catch {
+        // ignore
+      }
+    }
+  }, []);
+
+  useEffect(() => {
+    if (!currentHost || typeof window === 'undefined') return;
+    try {
+      const importCode = sessionStorage.getItem('qlash_import');
+      if (importCode) {
+        sessionStorage.removeItem('qlash_import');
+        router.push(`/import/${importCode}`);
+      }
+    } catch {
+      // ignore
+    }
+  }, [currentHost, router]);
+
   const handleHostAuth = async (e: React.FormEvent) => {
     e.preventDefault();
     if (!email || !password) {
@@ -76,7 +114,8 @@ export default function LandingPage() {
         if (error) throw error;
         toast.success('Welcome back.');
         setCurrentHost(data.user);
-        router.push('/dashboard');
+        const importCode = new URLSearchParams(window.location.search).get('import');
+        router.push(importCode ? `/import/${importCode}` : '/dashboard');
       } else {
         if (!displayName) {
           toast.error('Please enter a display name.');
@@ -88,7 +127,7 @@ export default function LandingPage() {
           password,
           options: {
             data: { display_name: displayName },
-            emailRedirectTo: authCallbackUrl(),
+            emailRedirectTo: hostAuthRedirect(),
           },
         });
         if (error) throw error;
@@ -308,7 +347,7 @@ export default function LandingPage() {
                         setAuthLoading(true);
                         const { error } = await supabase.auth.signInWithOAuth({
                           provider: 'google',
-                          options: { redirectTo: authCallbackUrl() },
+                          options: { redirectTo: hostAuthRedirect() },
                         });
                         if (error) {
                           toast.error(error.message);

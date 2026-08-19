@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest';
-import { buildSessionReport, compareSessionReports, sessionReportToCsv } from '@/lib/game/sessionReport';
+import { buildSessionReport, compareSessionReports, recapQuestionIds, sessionReportToCsv } from '@/lib/game/sessionReport';
 
 const capital = {
   id: 'q1',
@@ -192,5 +192,45 @@ describe('compareSessionReports', () => {
     expect(compare.avgDelta).toBe(100);
     expect(compare.improved[0]).toMatchObject({ id: 'q1', before: 0, after: 100, delta: 100 });
     expect(compare.stillHard).toEqual([]);
+  });
+});
+
+describe('recapQuestionIds', () => {
+  it('keeps scored questions the class missed', () => {
+    const report = buildSessionReport({
+      session: {
+        id: 's1',
+        pin: '847291',
+        status: 'finished',
+        created_at: '2026-08-18T12:00:00.000Z',
+        quiz_id: 'quiz-1',
+      },
+      quizTitle: 'Geo',
+      teamMode: false,
+      players: [
+        { id: 'p1', nickname: 'Ada', score: 0, streak: 0 },
+        { id: 'p2', nickname: 'Bob', score: 0, streak: 0 },
+      ],
+      questions: [capital],
+      answers: [
+        {
+          player_id: 'p1',
+          question_id: 'q1',
+          selected_answer_ids: ['b'],
+          points_awarded: 0,
+          is_correct: false,
+          time_taken_ms: 1000,
+        },
+        {
+          player_id: 'p2',
+          question_id: 'q1',
+          selected_answer_ids: ['b'],
+          points_awarded: 0,
+          is_correct: false,
+          time_taken_ms: 1000,
+        },
+      ],
+    });
+    expect(recapQuestionIds(report)).toEqual(['q1']);
   });
 });

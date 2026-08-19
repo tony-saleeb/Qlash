@@ -115,4 +115,28 @@ describe('quiz library actions', () => {
     await expect(createQuiz('Clash')).rejects.toThrow(/5 saved quizzes/);
     expect(host.lastInsert('quizzes')).toBeUndefined();
   });
+
+  it('adds a content pack into the host library', async () => {
+    host.setTables({
+      hosts: { data: { plan: 'pro' }, error: null },
+      quizzes: { data: { id: 'pack-1', title: 'إحماء الحصة' }, error: null },
+      questions: { data: {}, error: null },
+    });
+    const { createPackQuiz } = await import('@/app/actions/quizzes');
+    const quiz = await createPackQuiz('warmup');
+    expect(quiz.title).toBe('إحماء الحصة');
+    expect(host.lastInsert('quizzes')).toMatchObject({
+      host_id: 'host-1',
+      title: 'إحماء الحصة',
+    });
+    const rows = host.lastInsert('questions') as { prompt: string }[];
+    expect(rows).toHaveLength(8);
+    expect(rows[0].prompt).toContain('مصر');
+  });
+
+  it('reuses an existing share code', async () => {
+    host.setTable('quizzes', { data: { id: 'q1', share_code: 'ABCD2345' }, error: null });
+    const { enableQuizShare } = await import('@/app/actions/quizzes');
+    await expect(enableQuizShare('q1')).resolves.toEqual({ shareCode: 'ABCD2345' });
+  });
 });

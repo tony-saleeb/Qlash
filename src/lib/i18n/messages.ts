@@ -81,6 +81,10 @@ const en = {
   projectorReady: 'Projector ready',
   lockAnswersFast: 'Lock answers fast',
   teamMode: 'Team mode',
+  packs: 'Packs',
+  shareQuiz: 'Share',
+  linkCopied: 'Share link copied.',
+  playMisses: 'Play the misses',
 } as const;
 
 const ar: Record<keyof typeof en, string> = {
@@ -164,6 +168,10 @@ const ar: Record<keyof typeof en, string> = {
   projectorReady: 'جاهزة للشاشة',
   lockAnswersFast: 'اقفل الإجابات بسرعة',
   teamMode: 'وضع الفرق',
+  packs: 'حزم',
+  shareQuiz: 'شارك',
+  linkCopied: 'تم نسخ رابط المشاركة.',
+  playMisses: 'لعب الأسئلة الصعبة',
 };
 
 export const MESSAGES = { en, ar } as const;

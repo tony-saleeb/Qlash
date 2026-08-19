@@ -1,10 +1,13 @@
 'use server';
 
 import { revalidatePath } from 'next/cache';
-import { ANSWER_MARKS } from '@/lib/game/marks';
 import { DEFAULT_QUIZ_THEME } from '@/lib/game/theme';
 import { getHostAuth } from '@/lib/supabase/hostAuth';
+import { createAdminClient } from '@/lib/supabase/admin';
 import { quizLibraryCap } from '@/lib/game/constants';
+import { getContentPack } from '@/lib/content/packs';
+import { packToQuestionRows } from '@/lib/content/packRows';
+import { generateShareCode, normalizeShareCode } from '@/lib/content/shareCode';
 import type { SupabaseClient } from '@supabase/supabase-js';
 
 interface AnswerOptionInput {
@@ -262,18 +265,19 @@ export async function saveQuizData(
   }
 }
 
-export async function createTemplateQuiz() {
+export async function createPackQuiz(packId: string) {
   try {
+    const pack = getContentPack(packId);
+    if (!pack) throw new Error('Unknown content pack.');
     const { supabase, user } = await getHostAuth();
     await assertQuizQuota(supabase, user.id);
 
-    // Create the quiz shell
     const { data: quiz, error: quizError } = await supabase
       .from('quizzes')
       .insert({
         host_id: user.id,
-        title: 'أسئلة معلومات عامة',
-        description: '30 سؤال متنوع – ديني، رياضي، علمي، جغرافي',
+        title: pack.title,
+        description: pack.description,
         theme: DEFAULT_QUIZ_THEME,
       })
       .select()
@@ -281,77 +285,118 @@ export async function createTemplateQuiz() {
 
     if (quizError || !quiz) throw quizError;
 
-    const C = ANSWER_MARKS.map((m) => m.color);
-    const S = ANSWER_MARKS.map((m) => m.id);
-
-    type TQ = {
-      prompt: string;
-      answers: { text: string; correct: boolean }[];
-    };
-
-    const templateQuestions: TQ[] = [
-      { prompt: 'ماهى المعجزة التى تدخلت فيها العذراء لإتمامها ؟', answers: [{ text: 'إقامة ابن أرملة نايين', correct: false }, { text: 'إشباع الجموع', correct: false }, { text: 'عرس قانا الجليل', correct: true }, { text: 'إقامة ابنة يايرس', correct: false }] },
-      { prompt: 'ترتيب سفر العدد هو .....', answers: [{ text: '5', correct: false }, { text: '3', correct: false }, { text: '7', correct: false }, { text: '4', correct: true }] },
-      { prompt: 'من الذى بشر العذراء ؟', answers: [{ text: 'الملاك جبرائيل', correct: true }, { text: 'الملاك سوريال', correct: false }, { text: 'الملاك روفائيل', correct: false }, { text: 'الملاك ميخائيل', correct: false }] },
-      { prompt: 'هوذا العذراء تحبل و تلد ابناً و تدعو اسمه عمانوئيل نبوة جاءت فى ......', answers: [{ text: 'إرميا', correct: false }, { text: 'حزقيال', correct: false }, { text: 'دانيال', correct: false }, { text: 'إشعياء', correct: true }] },
-      { prompt: 'ما هى الرسالة التي تسمى برسالة الفرح ؟', answers: [{ text: 'كورنثوس الثانية', correct: false }, { text: 'فيلبى', correct: true }, { text: 'فليمون', correct: false }, { text: 'تيموثاوس الأولى', correct: false }] },
-      { prompt: 'فى أى جبل رأى موسى العليقة المحترقة ؟', answers: [{ text: 'أراراط', correct: false }, { text: 'حوريب', correct: true }, { text: 'الزيتون', correct: false }, { text: 'سيناء', correct: false }] },
-      { prompt: 'أين كان يوحنا عندما أوحى إليه بسفر الرؤيا ؟', answers: [{ text: 'جزيرة مالطة', correct: false }, { text: 'جزيرة قبرص', correct: false }, { text: 'جزيرة كريت', correct: false }, { text: 'جزيرة بطمس', correct: true }] },
-      { prompt: 'ما هو أول وعد من الله للبشر ؟', answers: [{ text: 'نسل المرأة يسحق رأس الحية', correct: true }, { text: 'أكرم أباك و أمك', correct: false }, { text: 'دخول أرض كنعان', correct: false }, { text: 'هاتوا العشور و جربونى', correct: false }] },
-      { prompt: 'من الذى سمى يوحنا المعمدان بهذا الإسم ؟', answers: [{ text: 'زكريا', correct: false }, { text: 'الملاك', correct: true }, { text: 'المسيح', correct: false }, { text: 'أليصابات', correct: false }] },
-      { prompt: 'ما هى أول طوبى نطق بها السيد المسيح ؟', answers: [{ text: 'طوبى للمساكين بالروح', correct: true }, { text: 'طوبى للودعاء', correct: false }, { text: 'طوبى للباكين و العطاشى إلى البر', correct: false }, { text: 'طوبى للحزانى', correct: false }] },
-      { prompt: 'من هو الراعي الصغير الذي قتل أسدآ ؟', answers: [{ text: 'شمشون', correct: false }, { text: 'عاموس', correct: false }, { text: 'جدعون', correct: false }, { text: 'داود', correct: true }] },
-      { prompt: 'من هو المنتخب الذى فاز ببطولة كأس العالم مرتين متتاليتين ؟', answers: [{ text: 'البرازيل', correct: false }, { text: 'ألمانيا', correct: false }, { text: 'إيطاليا', correct: false }, { text: 'فرنسا', correct: false }, { text: 'البرازيل و إيطاليا', correct: true }] },
-      { prompt: 'عدد أفراد فريق كرة الماء ؟', answers: [{ text: '6 لاعبين', correct: false }, { text: '5 لاعبين', correct: false }, { text: '8 لاعبين', correct: false }, { text: '7 لاعبين', correct: true }] },
-      { prompt: 'تشتهر مصارعة الثيران في أي دولة؟', answers: [{ text: 'فرنسا', correct: false }, { text: 'إسبانيا', correct: true }, { text: 'كوستاريكا', correct: false }, { text: 'إيطاليا', correct: false }] },
-      { prompt: 'أى الوحدات التالية هى الأكبر ؟', answers: [{ text: 'جيجا', correct: false }, { text: 'تيرا', correct: true }, { text: 'بايت', correct: false }, { text: 'ميجا', correct: false }] },
-      { prompt: 'أين تقع غابات الأمازون ؟', answers: [{ text: 'آسيا', correct: false }, { text: 'أمريكا', correct: true }, { text: 'أوروبا', correct: false }, { text: 'أستراليا', correct: false }] },
-      { prompt: 'ما هى القارة العجوز ؟', answers: [{ text: 'أوروبا', correct: true }, { text: 'إفريقيا', correct: false }, { text: 'أستراليا', correct: false }, { text: 'آسيا', correct: false }] },
-      { prompt: 'الدولة التى إستضافت كأس العالم سنة 1990؟', answers: [{ text: 'ألمانيا', correct: false }, { text: 'البرتغال', correct: false }, { text: 'إيطاليا', correct: true }, { text: 'البرازيل', correct: false }] },
-      { prompt: 'مكتشف قاعدة طفو الأجسام هو', answers: [{ text: 'أرشميدس', correct: true }, { text: 'نيوتن', correct: false }, { text: 'أينشتاين', correct: false }, { text: 'أديسون', correct: false }] },
-      { prompt: 'أى من الغازات التالية يستخدم في إطفاء الحرائق ؟', answers: [{ text: 'ثانى أكسيد الكربون', correct: true }, { text: 'الأكسجين', correct: false }, { text: 'الهيدروجين', correct: false }, { text: 'النيتروجين', correct: false }] },
-      { prompt: 'ما هى عدد فقرات جسم الإنسان ؟', answers: [{ text: '33 فقرة', correct: true }, { text: '30 فقرة', correct: false }, { text: '28 فقرة', correct: false }, { text: '32 فقرة', correct: false }] },
-      { prompt: 'من الذي استعمل أشعة الشمس كسلاح في الحرب و قضى بها على الأسطول الروماني ؟', answers: [{ text: 'أرشميدس', correct: true }, { text: 'نيوتن', correct: false }, { text: 'أديسون', correct: false }, { text: 'جاليليو', correct: false }] },
-      { prompt: 'ما هى المادة المسؤلة عن تلون الجسم باللون الداكن ؟', answers: [{ text: 'الميلانين', correct: true }, { text: 'السيروتونين', correct: false }, { text: 'الدوبامين', correct: false }, { text: 'النيوماسيسين', correct: false }] },
-      { prompt: 'ما هى أكبر جزيرة فى البحر المتوسط ؟', answers: [{ text: 'جزيرة صقلية', correct: true }, { text: 'جزيرة كريت', correct: false }, { text: 'جزيرة قبرص', correct: false }, { text: 'جزيرة مالطة', correct: false }] },
-      { prompt: 'أعلى قمة جبل في إفريقيا ؟', answers: [{ text: 'كلمنجارو', correct: true }, { text: 'إفرست', correct: false }, { text: 'الألب', correct: false }, { text: 'هيمالايا', correct: false }] },
-      { prompt: 'ما هى الدولة التى استضافت كأس العالم 1998 ؟', answers: [{ text: 'فرنسا', correct: true }, { text: 'البرازيل', correct: false }, { text: 'الأرجنتين', correct: false }, { text: 'ألمانيا', correct: false }] },
-      { prompt: 'أين يقع مقر منظمة الصحة العالمية ؟', answers: [{ text: 'جنيف', correct: true }, { text: 'لندن', correct: false }, { text: 'روما', correct: false }, { text: 'نيويورك', correct: false }] },
-      { prompt: 'ما هى عاصمة تايلاند ؟', answers: [{ text: 'بانكوك', correct: true }, { text: 'طوكيو', correct: false }, { text: 'بكين', correct: false }, { text: 'كييف', correct: false }] },
-      { prompt: 'ما هو أضخم الحيوانات اللا فقارية ؟', answers: [{ text: 'الحبار', correct: true }, { text: 'الأخطبوط', correct: false }, { text: 'الإستاكوزا', correct: false }, { text: 'الحلزون', correct: false }] },
-      { prompt: 'أبعد كوكب عن الأرض فى المذكورين', answers: [{ text: 'أورانوس', correct: true }, { text: 'المشترى', correct: false }, { text: 'زحل', correct: false }, { text: 'عطارد', correct: false }] },
-    ];
-
-    // Build DB rows
-    const questionRows = templateQuestions.map((q, idx) => ({
-      quiz_id: quiz.id,
-      order_index: idx,
-      type: 'mcq',
-      prompt: q.prompt,
-      media_url: null,
-      media_type: null,
-      time_limit_seconds: 20,
-      points_base: 1000,
-      scoring_type: 'linear',
-      answers: q.answers.map((a, ai) => ({
-        id: String(ai + 1),
-        text: a.text,
-        is_correct: a.correct,
-        color: C[ai % C.length],
-        shape: S[ai % S.length],
-      })),
-    }));
-
     const { error: insertError } = await supabase
       .from('questions')
-      .insert(questionRows);
+      .insert(packToQuestionRows(quiz.id, pack));
 
     if (insertError) throw insertError;
 
     revalidatePath('/dashboard');
     return quiz;
   } catch (err: unknown) {
-    console.error('createTemplateQuiz error:', err);
-    throw new Error(err instanceof Error ? err.message : 'Failed to create template quiz.');
+    console.error('createPackQuiz error:', err);
+    throw new Error(err instanceof Error ? err.message : 'Failed to add pack.');
+  }
+}
+
+export async function createTemplateQuiz() {
+  return createPackQuiz('sunday-school');
+}
+
+export async function enableQuizShare(quizId: string) {
+  try {
+    const { supabase, user } = await getHostAuth();
+    const { data: existing, error: loadError } = await supabase
+      .from('quizzes')
+      .select('id, share_code')
+      .eq('id', quizId)
+      .eq('host_id', user.id)
+      .single();
+    if (loadError || !existing) throw new Error('Quiz not found.');
+    if (existing.share_code) return { shareCode: existing.share_code as string };
+
+    for (let attempt = 0; attempt < 6; attempt += 1) {
+      const shareCode = generateShareCode();
+      const { data, error } = await supabase
+        .from('quizzes')
+        .update({ share_code: shareCode })
+        .eq('id', quizId)
+        .eq('host_id', user.id)
+        .select('share_code')
+        .single();
+      if (!error && data?.share_code) return { shareCode: data.share_code as string };
+      if (error && !/duplicate|unique/i.test(error.message || '')) throw error;
+    }
+    throw new Error('Could not create a share link.');
+  } catch (err: unknown) {
+    console.error('enableQuizShare error:', err);
+    throw new Error(err instanceof Error ? err.message : 'Failed to share quiz.');
+  }
+}
+
+export async function importSharedQuiz(rawCode: string) {
+  try {
+    const { supabase, user } = await getHostAuth();
+    await assertQuizQuota(supabase, user.id);
+    const shareCode = normalizeShareCode(rawCode);
+    if (shareCode.length < 6) throw new Error('Invalid share code.');
+
+    const admin = createAdminClient();
+    const { data: source, error: sourceError } = await admin
+      .from('quizzes')
+      .select('id, host_id, title, description, cover_image_url, theme, randomize_questions, randomize_answers, team_mode, double_points_rounds')
+      .eq('share_code', shareCode)
+      .maybeSingle();
+
+    if (sourceError || !source) throw new Error('That share link is invalid or expired.');
+    if (source.host_id === user.id) throw new Error('This quiz is already in your library.');
+
+    const { data: sourceQuestions, error: questionsError } = await admin
+      .from('questions')
+      .select('order_index, type, prompt, media_url, media_type, time_limit_seconds, points_base, scoring_type, answers')
+      .eq('quiz_id', source.id)
+      .order('order_index', { ascending: true });
+    if (questionsError) throw questionsError;
+
+    const { data: newQuiz, error: insertError } = await supabase
+      .from('quizzes')
+      .insert({
+        host_id: user.id,
+        title: source.title,
+        description: source.description,
+        cover_image_url: source.cover_image_url,
+        theme: source.theme,
+        randomize_questions: source.randomize_questions,
+        randomize_answers: source.randomize_answers,
+        team_mode: source.team_mode,
+        double_points_rounds: source.double_points_rounds,
+      })
+      .select()
+      .single();
+    if (insertError || !newQuiz) throw insertError;
+
+    if (sourceQuestions && sourceQuestions.length > 0) {
+      const { error: copyError } = await supabase.from('questions').insert(
+        sourceQuestions.map((question) => ({
+          quiz_id: newQuiz.id,
+          order_index: question.order_index,
+          type: question.type,
+          prompt: question.prompt,
+          media_url: question.media_url,
+          media_type: question.media_type,
+          time_limit_seconds: question.time_limit_seconds,
+          points_base: question.points_base,
+          scoring_type: question.scoring_type,
+          answers: question.answers,
+        }))
+      );
+      if (copyError) throw copyError;
+    }
+
+    revalidatePath('/dashboard');
+    return newQuiz;
+  } catch (err: unknown) {
+    console.error('importSharedQuiz error:', err);
+    throw new Error(err instanceof Error ? err.message : 'Failed to import quiz.');
   }
 }
