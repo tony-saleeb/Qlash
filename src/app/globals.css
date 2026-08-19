@@ -194,6 +194,10 @@
     animation: arena-breathe 3.2s ease-in-out infinite;
   }
 
+  .motion-wait-bounce {
+    animation: arena-wait-bounce 1.15s ease-in-out infinite;
+  }
+
   .animate-fade-in {
     animation: arena-rise 0.35s ease-out both;
   }
@@ -251,5 +255,21 @@
   }
   50% {
     box-shadow: 0 0 0 12px rgba(200, 245, 66, 0);
+  }
+}
+
+@keyframes arena-wait-bounce {
+  0%,
+  100% {
+    transform: translateY(0);
+  }
+  45% {
+    transform: translateY(-9px);
+  }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .motion-wait-bounce {
+    animation: none;
   }
 }

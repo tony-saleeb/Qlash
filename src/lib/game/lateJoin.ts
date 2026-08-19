@@ -1,7 +1,10 @@
 /** Lobby only — no new players after Start. */
 export const LATE_JOIN_LOBBY_ONLY = -1;
 
-/** Default: new players may join through question 3 (0-based index 2). */
+/**
+ * Stored when late join is on. Any non-negative value means join until the game
+ * ends; players pick up the current question and score from there.
+ */
 export const DEFAULT_LATE_JOIN_THROUGH_INDEX = 2;
 
 export function normalizeLateJoinThroughIndex(value: unknown): number {
@@ -24,10 +27,18 @@ export function canInsertNewPlayer(session: {
 }): boolean {
   if (session.status === 'finished') return false;
   if (session.status === 'lobby') return true;
-  const through = normalizeLateJoinThroughIndex(session.late_join_through_index);
-  if (through < 0) return false;
-  const index = typeof session.current_question_index === 'number' ? session.current_question_index : 0;
-  return index <= through;
+  return isLateJoinEnabled(session.late_join_through_index);
+}
+
+/** True when this player arrived after the current question had already started. */
+export function playerJoinedAfterQuestionStart(
+  joinedAt: string | null | undefined,
+  questionStartedAt: string | null | undefined
+): boolean {
+  const joined = joinedAt ? Date.parse(joinedAt) : NaN;
+  const started = questionStartedAt ? Date.parse(questionStartedAt) : NaN;
+  if (!Number.isFinite(joined) || !Number.isFinite(started)) return false;
+  return joined > started;
 }
 
 export function hostClickerPath(sessionId: string): string {

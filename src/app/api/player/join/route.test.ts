@@ -54,14 +54,14 @@ describe('POST /api/player/join', () => {
     expect(result.body.error).toMatch(/finished/);
   });
 
-  it('blocks new joins after the late-join cutoff and reports GAME_STARTED', async () => {
+  it('blocks new joins mid-game when late join is off and reports GAME_STARTED', async () => {
     admin.setTables({
       game_sessions: {
         data: {
           ...lobbySession,
           status: 'question_active',
           current_question_index: 3,
-          late_join_through_index: 2,
+          late_join_through_index: -1,
         },
         error: null,
       },
@@ -74,7 +74,7 @@ describe('POST /api/player/join', () => {
     expect(result.body.sessionId).toBe('sess-1');
   });
 
-  it('allows a first-time join during the late-join window', async () => {
+  it('allows a first-time join on a later question when late join is on', async () => {
     const player = {
       id: 'p-late',
       session_id: 'sess-1',
@@ -89,7 +89,7 @@ describe('POST /api/player/join', () => {
         data: {
           ...lobbySession,
           status: 'question_active',
-          current_question_index: 1,
+          current_question_index: 8,
           late_join_through_index: 2,
         },
         error: null,

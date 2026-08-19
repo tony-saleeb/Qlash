@@ -41,6 +41,7 @@ export async function POST(request: Request) {
 
     return NextResponse.json({
       success: true,
+      hadSubmission: Boolean(submission),
       submission: submission || { points_awarded: 0, is_correct: false },
       player: player || { score: 0, streak: 0 },
     });

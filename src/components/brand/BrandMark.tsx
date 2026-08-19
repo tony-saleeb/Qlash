@@ -146,6 +146,30 @@ export function ArenaFloor({ className }: { className?: string }) {
   );
 }
 
+const LOBBY_WAIT_MARKS = [
+  { shape: 'slash', color: 'bg-arena-signal', mark: 'text-white' },
+  { shape: 'qring', color: 'bg-[#4a2aff]', mark: 'text-white' },
+  { shape: 'bolt', color: 'bg-arena-acid', mark: 'text-arena-ink' },
+  { shape: 'chevron', color: 'bg-arena-court', mark: 'text-white' },
+] as const;
+
+/** Compact looping marks for the player lobby wait. */
+export function LobbyWaitMarks({ className }: { className?: string }) {
+  return (
+    <div className={cn('flex items-end justify-center gap-2', className)} aria-hidden>
+      {LOBBY_WAIT_MARKS.map((mark, i) => (
+        <span
+          key={mark.shape}
+          className={cn('inline-flex h-10 w-10 items-center justify-center motion-wait-bounce', mark.color)}
+          style={{ animationDelay: `${i * 0.14}s` }}
+        >
+          <AnswerMark shape={mark.shape} className={cn('h-5 w-5', mark.mark)} />
+        </span>
+      ))}
+    </div>
+  );
+}
+
 export function AnswerButton({
   color,
   shape,

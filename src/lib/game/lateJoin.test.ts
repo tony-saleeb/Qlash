@@ -7,10 +7,11 @@ import {
   isHostClickerView,
   isLateJoinEnabled,
   normalizeLateJoinThroughIndex,
+  playerJoinedAfterQuestionStart,
 } from '@/lib/game/lateJoin';
 
 describe('late join', () => {
-  it('defaults missing cutoffs to through question 3', () => {
+  it('defaults missing values to late join on', () => {
     expect(normalizeLateJoinThroughIndex(undefined)).toBe(DEFAULT_LATE_JOIN_THROUGH_INDEX);
     expect(normalizeLateJoinThroughIndex(null)).toBe(DEFAULT_LATE_JOIN_THROUGH_INDEX);
     expect(isLateJoinEnabled(-1)).toBe(false);
@@ -24,7 +25,7 @@ describe('late join', () => {
     );
   });
 
-  it('allows live inserts through the cutoff and blocks after', () => {
+  it('allows live inserts on any question when late join is on', () => {
     expect(
       canInsertNewPlayer({
         status: 'question_active',
@@ -35,17 +36,17 @@ describe('late join', () => {
     expect(
       canInsertNewPlayer({
         status: 'leaderboard',
-        current_question_index: 2,
+        current_question_index: 7,
         late_join_through_index: 2,
       })
     ).toBe(true);
     expect(
       canInsertNewPlayer({
         status: 'question_active',
-        current_question_index: 3,
+        current_question_index: 12,
         late_join_through_index: 2,
       })
-    ).toBe(false);
+    ).toBe(true);
     expect(
       canInsertNewPlayer({
         status: 'question_active',
@@ -53,6 +54,16 @@ describe('late join', () => {
         late_join_through_index: LATE_JOIN_LOBBY_ONLY,
       })
     ).toBe(false);
+  });
+
+  it('treats a join after question start as a later arrival', () => {
+    expect(
+      playerJoinedAfterQuestionStart('2026-08-19T10:00:08.000Z', '2026-08-19T10:00:00.000Z')
+    ).toBe(true);
+    expect(
+      playerJoinedAfterQuestionStart('2026-08-19T10:00:00.000Z', '2026-08-19T10:00:00.000Z')
+    ).toBe(false);
+    expect(playerJoinedAfterQuestionStart(null, '2026-08-19T10:00:00.000Z')).toBe(false);
   });
 
   it('builds the clicker path', () => {

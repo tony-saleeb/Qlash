@@ -99,6 +99,7 @@ describe('PlayerGameClient', () => {
     render(<PlayerGameClient sessionId="sess-1" initialSessionStatus="lobby" />);
     expect(await screen.findByText('Ada')).toBeInTheDocument();
     expect(screen.getByText(/waiting for host/i)).toBeInTheDocument();
+    expect(screen.getByText(/watch the big screen/i)).toBeInTheDocument();
   });
 
   it('renders Qlash answer tiles for an active MCQ', async () => {

@@ -68,7 +68,7 @@ export async function POST(request: Request) {
       hosts: { plan: string } | { plan: string }[] | null;
     };
 
-    // New players: lobby, or live until late_join_through_index. Reconnect is always 409 + /me.
+    // New players: lobby, or any live round when late join is on. Reconnect is always 409 + /me.
     if (!canInsertNewPlayer(sessionWithQuiz)) {
       const { data: existingMidGame } = await admin
         .from('players')

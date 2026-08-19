@@ -903,7 +903,12 @@ export default function HostGameClient({
               Keep this screen visible · PIN <strong className="text-white">{session.pin}</strong>
             </p>
             <label className="flex items-center justify-between gap-3 border border-white/15 bg-white/5 px-3 py-2">
-              <span className="text-xs font-bold text-white/80">{t('lateJoin')}</span>
+              <span>
+                <span className="block text-xs font-bold text-white/80">{t('lateJoin')}</span>
+                <span className="mt-0.5 block text-[10px] font-medium leading-snug text-white/40">
+                  {t('lateJoinHint')}
+                </span>
+              </span>
               <Switch
                 checked={lateJoinOn}
                 onCheckedChange={(enabled) => {

@@ -6,6 +6,7 @@ import {
   AnswerButton,
   ArenaFloor,
   BrandMark,
+  LobbyWaitMarks,
   PinDisplay,
   StageBadge,
   playerChipColor,
@@ -75,6 +76,11 @@ describe('GameShell + chips', () => {
 
   it('renders the four-mark arena floor', () => {
     const { container } = render(<ArenaFloor />);
+    expect(container.querySelectorAll('svg').length).toBe(4);
+  });
+
+  it('renders looping lobby wait marks', () => {
+    const { container } = render(<LobbyWaitMarks />);
     expect(container.querySelectorAll('svg').length).toBe(4);
   });
 });

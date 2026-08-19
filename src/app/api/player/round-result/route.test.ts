@@ -55,6 +55,7 @@ describe('POST /api/player/round-result', () => {
       await POST(jsonRequest({ sessionId: 's', playerId: 'p', token: 'tok', questionId: 'q' }))
     );
     expect(result.status).toBe(200);
+    expect(result.body.hadSubmission).toBe(false);
     expect(result.body.submission).toEqual({ points_awarded: 0, is_correct: false });
     expect(result.body.player).toEqual({ score: 1200, streak: 0 });
   });

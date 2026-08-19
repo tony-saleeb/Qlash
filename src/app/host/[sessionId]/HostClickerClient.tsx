@@ -320,7 +320,7 @@ export default function HostClickerClient({
           <label className="flex items-center justify-between gap-3 border border-white/15 bg-white/5 p-4">
             <span>
               <span className="block text-sm font-bold">{t('lateJoin')}</span>
-              <span className="text-xs text-white/50">Kids who arrive after Start can still enter.</span>
+              <span className="text-xs text-white/50">{t('lateJoinHint')}</span>
             </span>
             <Switch
               checked={lateJoinOn}

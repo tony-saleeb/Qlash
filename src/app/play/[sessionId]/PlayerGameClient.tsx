@@ -8,7 +8,7 @@ import { toast } from 'sonner';
 import { Input } from '@/components/ui/input';
 import { Button } from '@/components/ui/button';
 import { Flame, Wifi, WifiOff, Loader2, Award, CheckCircle, XCircle, Clock, Trophy, Pause, Check, Users, Zap } from 'lucide-react';
-import { BrandMark, AnswerButton } from '@/components/brand/BrandMark';
+import { BrandMark, AnswerButton, LobbyWaitMarks } from '@/components/brand/BrandMark';
 import { GameShell, LiveChip } from '@/components/brand/GameShell';
 import { QLASH_CONFETTI } from '@/lib/game/theme';
 import { AnswerSwatch } from '@/components/brand/AnswerMark';
@@ -32,10 +32,19 @@ import {
 import { remainingFromPausedElapsed, remainingSeconds, startedAtFromRemaining } from '@/lib/game/clock';
 import { answerUsesInk, resolveAnswerColor } from '@/lib/game/marks';
 import { aggregateTeamScores } from '@/lib/game/teams';
+import { playerJoinedAfterQuestionStart } from '@/lib/game/lateJoin';
 import { LocaleToggle } from '@/components/brand/LocaleToggle';
 import { useLocale } from '@/lib/i18n/useLocale';
+import type { MessageKey } from '@/lib/i18n/messages';
 
 type ActiveQuestionPayload = PublicQuestionPayload;
+
+const LOBBY_WAIT_TIPS: MessageKey[] = [
+  'watchBigScreen',
+  'lobbyTipBoard',
+  'lobbyTipFast',
+  'lobbyTipColors',
+];
 
 interface PlayerGameClientProps {
   sessionId: string;
@@ -74,6 +83,7 @@ export default function PlayerGameClient({
   const [clockStartedAt, setClockStartedAt] = useState<string | null>(null);
   const [finalRank, setFinalRank] = useState<number | null>(null);
   const [activeMultiplier, setActiveMultiplier] = useState<number>(1);
+  const [lobbyTipIndex, setLobbyTipIndex] = useState(0);
 
   const playerRef = React.useRef<Player | null>(null);
   const activeQuestionRef = React.useRef<ActiveQuestionPayload | null>(null);
@@ -87,6 +97,8 @@ export default function PlayerGameClient({
   const lastTickSecondRef = React.useRef<number | null>(null);
   const displayedSecondRef = React.useRef<number | null>(null);
   const lobbyFanfarePlayedRef = React.useRef(false);
+  const clockStartedAtRef = React.useRef<string | null>(null);
+  const sawOpenQuestionRef = React.useRef(false);
 
   React.useEffect(() => bindAudioUnlock(), []);
 
@@ -95,6 +107,14 @@ export default function PlayerGameClient({
     lobbyFanfarePlayedRef.current = true;
     playJoinSound();
   }, [player, sessionStatus]);
+
+  React.useEffect(() => {
+    if (sessionStatus !== 'lobby') return;
+    const id = window.setInterval(() => {
+      setLobbyTipIndex((i) => (i + 1) % LOBBY_WAIT_TIPS.length);
+    }, 3400);
+    return () => window.clearInterval(id);
+  }, [sessionStatus]);
 
   React.useEffect(() => {
     playerRef.current = player;
@@ -116,9 +136,11 @@ export default function PlayerGameClient({
 
       if (serverStartedAt && question.time_limit_seconds) {
         setClockStartedAt(serverStartedAt);
+        clockStartedAtRef.current = serverStartedAt;
         setTimeLeft(remainingSeconds(serverStartedAt, question.time_limit_seconds));
       } else {
         setClockStartedAt(null);
+        clockStartedAtRef.current = null;
         setTimeLeft(question.time_limit_seconds);
       }
 
@@ -126,6 +148,8 @@ export default function PlayerGameClient({
       setTypeInputValue('');
       setSubmissionState('idle');
       setRoundResult(null);
+      sawOpenQuestionRef.current =
+        status !== 'question_reveal' && status !== 'leaderboard' && status !== 'finished';
       if (status) setSessionStatus(status);
     },
     []
@@ -152,6 +176,7 @@ export default function PlayerGameClient({
           if (current?.id === data.question.id) {
             if (data.server_started_at && data.question.time_limit_seconds) {
               setClockStartedAt(data.server_started_at);
+              clockStartedAtRef.current = data.server_started_at;
               setTimeLeft(remainingSeconds(data.server_started_at, data.question.time_limit_seconds));
             }
           } else {
@@ -170,19 +195,32 @@ export default function PlayerGameClient({
               }),
             });
             const round = await resResult.json();
-            if (resResult.ok && round.submission) {
-              setRoundResult({
-                isCorrect: Boolean(round.submission.is_correct),
-                pointsAwarded: Number(round.submission.points_awarded) || 0,
-                correctAnswerIds: [],
-                optionCounts: undefined,
-              });
+            if (resResult.ok) {
               if (round.player) {
                 setPlayer((prev) =>
                   prev
                     ? { ...prev, score: round.player.score ?? prev.score, streak: round.player.streak ?? prev.streak }
                     : prev
                 );
+              }
+              const joinedLate = playerJoinedAfterQuestionStart(
+                playerRef.current?.joined_at,
+                data.server_started_at
+              );
+              if (round.hadSubmission && round.submission) {
+                setRoundResult({
+                  isCorrect: Boolean(round.submission.is_correct),
+                  pointsAwarded: Number(round.submission.points_awarded) || 0,
+                  correctAnswerIds: [],
+                  optionCounts: undefined,
+                });
+              } else if (!joinedLate) {
+                setRoundResult({
+                  isCorrect: false,
+                  pointsAwarded: 0,
+                  correctAnswerIds: [],
+                  optionCounts: undefined,
+                });
               }
             }
           }
@@ -267,6 +305,14 @@ export default function PlayerGameClient({
       const submit = lastSubmitRef.current;
       const selected =
         submit && submit.questionId === currentQ?.id ? submit.selected : [];
+      const playedThisRound = Boolean(submit && submit.questionId === currentQ?.id);
+
+      if (!playedThisRound && !sawOpenQuestionRef.current) {
+        setRoundResult(null);
+        setSessionStatus('question_reveal');
+        setSubmissionState('idle');
+        return;
+      }
 
       let isCorrect = false;
       let pointsAwarded = 0;
@@ -407,6 +453,7 @@ export default function PlayerGameClient({
         }
 
         setPlayer(data.player as Player);
+        playerRef.current = data.player as Player;
         if (data.sessionStatus) setSessionStatus(data.sessionStatus);
         setLoading(false);
 
@@ -481,6 +528,7 @@ export default function PlayerGameClient({
                 setTimeLeft(remainingFromPausedElapsed(startedAt, limit));
               } else {
                 setClockStartedAt(startedAt);
+                clockStartedAtRef.current = startedAt;
                 setTimeLeft(remainingSeconds(startedAt, limit));
               }
             }
@@ -710,11 +758,14 @@ export default function PlayerGameClient({
             )}
 
             <div className="mt-6 border-t-2 border-arena-ink/10 pt-5">
-              <div className="mx-auto mb-3 h-1.5 w-24 overflow-hidden bg-arena-mist">
-                <div className="h-full w-1/2 animate-pulse bg-arena-signal" />
-              </div>
+              <LobbyWaitMarks className="mb-4" />
               <p className="font-display text-sm font-bold text-arena-ink">{t('waitingForHost')}</p>
-              <p className="mt-1 text-xs text-arena-ink/50">{t('watchBigScreen')}</p>
+              <p
+                key={LOBBY_WAIT_TIPS[lobbyTipIndex]}
+                className="mt-1 min-h-[2.6rem] text-xs leading-relaxed text-arena-ink/50 animate-fade-in"
+              >
+                {t(LOBBY_WAIT_TIPS[lobbyTipIndex])}
+              </p>
             </div>
           </div>
         </main>
@@ -898,6 +949,29 @@ export default function PlayerGameClient({
           </span>
         </div>
       </div>
+    );
+  }
+
+  // ==========================================
+  // RENDER: LATE JOIN DURING REVEAL / BETWEEN ROUNDS
+  // ==========================================
+  if (sessionStatus === 'question_reveal' && !roundResult) {
+    return (
+      <GameShell className="items-center justify-center">
+        <div className="flex flex-1 flex-col items-center justify-center text-center">
+          <LiveChip tone="acid">{t('youAreIn')}</LiveChip>
+          <h1 className="mt-4 font-display text-2xl font-extrabold text-white">{t('lateJoinNextRound')}</h1>
+          <p className="mt-2 max-w-xs text-sm leading-relaxed text-white/60">{t('watchBigScreen')}</p>
+          <div className="mt-8 w-full max-w-xs border-2 border-white/15 bg-white/[0.06] p-4">
+            <span className="block text-[10px] font-bold uppercase tracking-widest text-white/50">
+              {t('scoreboardTime')}
+            </span>
+            <span className="mt-0.5 block font-display text-2xl font-black tabular-nums text-arena-acid">
+              {player.score.toLocaleString()}
+            </span>
+          </div>
+        </div>
+      </GameShell>
     );
   }
 

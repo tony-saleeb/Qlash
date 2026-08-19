@@ -14,8 +14,10 @@ describe('i18n', () => {
     expect(t('ar', 'joinAGame')).toBe('ادخل لعبة');
     expect(t('ar', 'heroBody')).toContain('اكتب الكود وادخل');
     expect(t('ar', 'gamePin')).toBe('كود الدخول');
-    expect(t('en', 'copyLobbyLink')).toBe('Copy lobby link');
+    expect(t('en', 'lateJoin')).toBe('Late join');
+    expect(t('ar', 'lateJoin')).toBe('اللي يتأخر يدخل');
     expect(t('ar', 'copyLobbyLink')).toBe('انسخ لينك الغرفة');
+    expect(t('ar', 'lobbyTipBoard')).toBe('اسمك ظاهر على الشاشة خلاص.');
     expect(isLocale('ar')).toBe(true);
     expect(normalizeLocale('nope')).toBe('en');
   });
