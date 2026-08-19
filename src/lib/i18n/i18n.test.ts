@@ -11,6 +11,8 @@ describe('i18n', () => {
     expect(t('en', 'startGame')).toBe('Start game');
     expect(t('ar', 'startGame')).toBe('ابدأ اللعب');
     expect(t('ar', 'enterPin')).toBe('اكتب');
+    expect(t('ar', 'joinAGame')).toBe('انضم للعبة');
+    expect(t('ar', 'heroBody')).toContain('أدخل الرمز');
     expect(isLocale('ar')).toBe(true);
     expect(normalizeLocale('nope')).toBe('en');
   });

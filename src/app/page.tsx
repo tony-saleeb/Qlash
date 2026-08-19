@@ -174,21 +174,26 @@ export default function LandingPage() {
       </header>
 
       <main className="relative z-10 mx-auto flex w-full max-w-lg flex-1 flex-col gap-6 px-4 pb-8 pt-1 sm:px-6 lg:mx-0 lg:grid lg:min-h-0 lg:max-w-none lg:flex-1 lg:grid-cols-12 lg:gap-0 lg:px-10 lg:pb-6 lg:pt-0">
-        <section className="order-2 flex flex-col justify-center lg:order-1 lg:col-span-6 lg:px-0 lg:py-6 xl:col-span-5">
-          <p className="motion-rise arena-chip mb-3 w-fit bg-arena-acid lg:mb-6">Pin. Lock. Clash.</p>
+        <section
+          dir={locale === 'ar' ? 'rtl' : 'ltr'}
+          className="order-2 flex flex-col justify-center lg:order-1 lg:col-span-6 lg:px-0 lg:py-6 xl:col-span-5"
+        >
+          <p className={`motion-rise arena-chip mb-3 w-fit bg-arena-acid lg:mb-6 ${locale === 'ar' ? 'normal-case tracking-normal' : ''}`}>
+            {t('pinLockClash')}
+          </p>
           <h1 className="motion-rise font-display text-4xl font-extrabold leading-[0.88] tracking-[-0.05em] text-arena-ink sm:text-5xl lg:text-[clamp(3.25rem,8vw,5.75rem)]">
             Qlash
           </h1>
           <p className="motion-rise-delay mt-3 max-w-sm text-base font-medium leading-snug text-arena-ink/65 sm:text-lg lg:mt-6">
-            Pin in. Lock answers. Own the board — built for the classroom rush.
+            {t('heroBody')}
           </p>
 
           <div className="motion-rise-delay-2 mt-6 hidden flex-wrap gap-3 lg:mt-9 lg:flex">
             <button type="button" className="arena-cta" onClick={() => setPanel('join')}>
-              Join a game
+              {t('joinAGame')}
             </button>
             <button type="button" className="arena-cta-secondary" onClick={() => setPanel('host')}>
-              Host a room
+              {t('hostARoom')}
             </button>
           </div>
         </section>
@@ -251,11 +256,11 @@ export default function LandingPage() {
                     {isTeamQuiz && (
                       <div>
                         <Label htmlFor="teamName" className="text-[11px] font-bold uppercase tracking-[0.18em] text-arena-court">
-                          Team
+                          {t('team')}
                         </Label>
                         <Input
                           id="teamName"
-                          placeholder="Team name"
+                          placeholder={t('teamNamePlaceholder')}
                           maxLength={20}
                           value={teamName}
                           onChange={(e) => setTeamName(e.target.value)}
@@ -273,14 +278,14 @@ export default function LandingPage() {
                   </form>
                 ) : currentHost ? (
                   <div className="space-y-4 text-center">
-                    <p className="text-[11px] font-bold uppercase tracking-[0.18em] text-arena-ink/40">Signed in</p>
+                    <p className="text-[11px] font-bold uppercase tracking-[0.18em] text-arena-ink/40">{t('signedIn')}</p>
                     <p className="truncate font-display text-lg font-bold">{currentHost.email}</p>
                     <Link
                       href="/dashboard"
                       prefetch
                       className="inline-flex h-12 w-full items-center justify-center bg-arena-ink font-display font-extrabold text-white hover:bg-arena-ink/90"
                     >
-                      Open quiz library
+                      {t('openLibrary')}
                     </Link>
                     <button
                       type="button"
@@ -291,7 +296,7 @@ export default function LandingPage() {
                       }}
                       className="text-xs font-semibold text-arena-ink/45 underline-offset-4 hover:underline"
                     >
-                      Sign out
+                      {t('signOut')}
                     </button>
                   </div>
                 ) : (
@@ -318,32 +323,34 @@ export default function LandingPage() {
                         <path fill="#FBBC05" d="M5.84 14.09c-.22-.66-.35-1.36-.35-2.09s.13-1.43.35-2.09V7.07H2.18C1.43 8.55 1 10.22 1 12s.43 3.45 1.18 4.93l3.66-2.84Z" />
                         <path fill="#EA4335" d="M12 5.38c1.62 0 3.06.56 4.21 1.64l3.15-3.15C17.45 2.09 14.97 1 12 1 7.7 1 3.99 3.47 2.18 7.07l3.66 2.84c.87-2.6 3.3-4.53 6.16-4.53Z" />
                       </svg>
-                      Continue with Google
+                      {t('continueGoogle')}
                     </Button>
                     <div className="flex items-center gap-3">
                       <div className="h-px flex-1 bg-arena-line" />
-                      <span className="text-[10px] font-bold uppercase tracking-widest text-arena-ink/35">or email</span>
+                      <span className="text-[10px] font-bold uppercase tracking-widest text-arena-ink/35">{t('orEmail')}</span>
                       <div className="h-px flex-1 bg-arena-line" />
                     </div>
                     <form onSubmit={handleHostAuth} className="space-y-3">
                       {authMode === 'signup' && (
                         <Input
-                          placeholder="Display name"
+                          placeholder={t('displayName')}
                           value={displayName}
                           onChange={(e) => setDisplayName(e.target.value)}
                           className="h-11 rounded-none border-2 border-arena-ink/20"
                         />
                       )}
                       <Input
-                        placeholder="Email"
+                        placeholder={t('email')}
                         type="email"
+                        dir="ltr"
                         value={email}
                         onChange={(e) => setEmail(e.target.value)}
                         className="h-11 rounded-none border-2 border-arena-ink/20"
                       />
                       <Input
-                        placeholder="Password"
+                        placeholder={t('password')}
                         type="password"
+                        dir="ltr"
                         value={password}
                         onChange={(e) => setPassword(e.target.value)}
                         className="h-11 rounded-none border-2 border-arena-ink/20"
@@ -353,14 +360,14 @@ export default function LandingPage() {
                         disabled={authLoading}
                         className="h-12 w-full rounded-none bg-arena-court font-display font-extrabold text-white hover:bg-arena-court/90"
                       >
-                        {authLoading ? 'Please wait…' : authMode === 'login' ? 'Sign in' : 'Create host account'}
+                        {authLoading ? t('pleaseWait') : authMode === 'login' ? t('signIn') : t('createHost')}
                       </Button>
                       <button
                         type="button"
                         onClick={() => setAuthMode(authMode === 'login' ? 'signup' : 'login')}
                         className="w-full text-center text-xs font-semibold text-arena-ink/50 underline-offset-4 hover:underline"
                       >
-                        {authMode === 'login' ? 'Need an account? Sign up' : 'Have an account? Sign in'}
+                        {authMode === 'login' ? t('needAccount') : t('haveAccount')}
                       </button>
                     </form>
                   </div>
@@ -372,16 +379,16 @@ export default function LandingPage() {
       </main>
 
       <div className="relative z-10 mt-auto shrink-0 overflow-hidden border-t-2 border-arena-ink bg-arena-acid py-3">
-        <div className="motion-slide-x flex w-max gap-12 whitespace-nowrap font-display text-sm font-extrabold uppercase tracking-[0.22em] text-arena-ink">
+        <div className={`motion-slide-x flex w-max gap-12 whitespace-nowrap font-display text-sm font-extrabold text-arena-ink ${locale === 'ar' ? 'tracking-normal' : 'uppercase tracking-[0.22em]'}`}>
           {Array.from({ length: 2 }).map((_, i) => (
             <span key={i} className="flex gap-12 px-6">
-              <span>Pin · Play · Score</span>
+              <span>{t('pinPlayScore')}</span>
               <span>Qlash</span>
-              <span>80 players</span>
-              <span>Projector ready</span>
-              <span>Lock answers fast</span>
-              <span>Team mode</span>
-              <span>Pin · Play · Score</span>
+              <span>{t('players80')}</span>
+              <span>{t('projectorReady')}</span>
+              <span>{t('lockAnswersFast')}</span>
+              <span>{t('teamMode')}</span>
+              <span>{t('pinPlayScore')}</span>
             </span>
           ))}
         </div>
