@@ -19,7 +19,7 @@ export const CONTENT_PACKS: ContentPack[] = [
   {
     id: 'sunday-school',
     title: 'مدارس الأحد',
-    description: '11 سؤال كتابي لبدء الحصة',
+    description: '11 سؤال من الكتاب نبدأ بيهم الحصة',
     blurbEn: 'Sunday school — 11 Bible questions',
     questions: [
       { prompt: 'ماهى المعجزة التى تدخلت فيها العذراء لإتمامها ؟', answers: [{ text: 'إقامة ابن أرملة نايين', correct: false }, { text: 'إشباع الجموع', correct: false }, { text: 'عرس قانا الجليل', correct: true }, { text: 'إقامة ابنة يايرس', correct: false }] },
@@ -64,18 +64,18 @@ export const CONTENT_PACKS: ContentPack[] = [
   },
   {
     id: 'warmup',
-    title: 'إحماء الحصة',
-    description: '8 أسئلة سريعة لفتح الغرفة',
+    title: 'تسخين الحصة',
+    description: '8 أسئلة سريعة نفتح بيهم الغرفة',
     blurbEn: 'Warm-up — 8 fast openers',
     questions: [
-      { prompt: 'ما هى عاصمة مصر؟', answers: [{ text: 'القاهرة', correct: true }, { text: 'الإسكندرية', correct: false }, { text: 'أسوان', correct: false }, { text: 'الأقصر', correct: false }] },
-      { prompt: 'كم يوماً في الأسبوع؟', answers: [{ text: '5', correct: false }, { text: '6', correct: false }, { text: '7', correct: true }, { text: '8', correct: false }] },
-      { prompt: 'في أي قارة تقع مصر؟', answers: [{ text: 'آسيا', correct: false }, { text: 'أفريقيا', correct: true }, { text: 'أوروبا', correct: false }, { text: 'أستراليا', correct: false }] },
-      { prompt: 'ما هى عاصمة المملكة العربية السعودية؟', answers: [{ text: 'جدة', correct: false }, { text: 'الرياض', correct: true }, { text: 'مكة', correct: false }, { text: 'الدمام', correct: false }] },
-      { prompt: 'أكبر محيط على الأرض؟', answers: [{ text: 'الأطلسي', correct: false }, { text: 'الهندي', correct: false }, { text: 'الهادئ', correct: true }, { text: 'المتجمد الشمالي', correct: false }] },
-      { prompt: 'كم يساوي 5 + 2؟', answers: [{ text: '6', correct: false }, { text: '7', correct: true }, { text: '8', correct: false }, { text: '9', correct: false }] },
-      { prompt: 'أول إنجيل في العهد الجديد؟', answers: [{ text: 'مرقس', correct: false }, { text: 'لوقا', correct: false }, { text: 'يوحنا', correct: false }, { text: 'متى', correct: true }] },
-      { prompt: 'لون لا يوجد في علم مصر؟', answers: [{ text: 'أحمر', correct: false }, { text: 'أبيض', correct: false }, { text: 'أسود', correct: false }, { text: 'أزرق', correct: true }] },
+      { prompt: 'عاصمة مصر إيه؟', answers: [{ text: 'القاهرة', correct: true }, { text: 'الإسكندرية', correct: false }, { text: 'أسوان', correct: false }, { text: 'الأقصر', correct: false }] },
+      { prompt: 'الأسبوع فيه كام يوم؟', answers: [{ text: '5', correct: false }, { text: '6', correct: false }, { text: '7', correct: true }, { text: '8', correct: false }] },
+      { prompt: 'مصر في أنهي قارة؟', answers: [{ text: 'آسيا', correct: false }, { text: 'أفريقيا', correct: true }, { text: 'أوروبا', correct: false }, { text: 'أستراليا', correct: false }] },
+      { prompt: 'عاصمة السعودية إيه؟', answers: [{ text: 'جدة', correct: false }, { text: 'الرياض', correct: true }, { text: 'مكة', correct: false }, { text: 'الدمام', correct: false }] },
+      { prompt: 'أكبر محيط على الأرض إيه؟', answers: [{ text: 'الأطلسي', correct: false }, { text: 'الهندي', correct: false }, { text: 'الهادئ', correct: true }, { text: 'المتجمد الشمالي', correct: false }] },
+      { prompt: '5 + 2 بكام؟', answers: [{ text: '6', correct: false }, { text: '7', correct: true }, { text: '8', correct: false }, { text: '9', correct: false }] },
+      { prompt: 'أول إنجيل في العهد الجديد إيه؟', answers: [{ text: 'مرقس', correct: false }, { text: 'لوقا', correct: false }, { text: 'يوحنا', correct: false }, { text: 'متى', correct: true }] },
+      { prompt: 'لون مش موجود في علم مصر؟', answers: [{ text: 'أحمر', correct: false }, { text: 'أبيض', correct: false }, { text: 'أسود', correct: false }, { text: 'أزرق', correct: true }] },
     ],
   },
 ];

@@ -132,7 +132,7 @@ export async function createRecapQuiz(sessionId: string) {
       throw new Error('Those questions are no longer in the quiz.');
     }
 
-    const recapLabel = /[\u0600-\u06FF]/.test(report.quizTitle) ? 'مراجعة' : 'recap';
+    const recapLabel = /[\u0600-\u06FF]/.test(report.quizTitle) ? 'تاني مرة' : 'recap';
     const quiz = await createQuiz(`${report.quizTitle} — ${recapLabel}`, `Missed questions from PIN ${report.pin}`);
 
     const { error: insertError } = await supabase.from('questions').insert(

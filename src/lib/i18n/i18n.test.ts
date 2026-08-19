@@ -9,10 +9,10 @@ describe('i18n', () => {
 
   it('translates classroom chrome', () => {
     expect(t('en', 'startGame')).toBe('Start game');
-    expect(t('ar', 'startGame')).toBe('ابدأ اللعب');
+    expect(t('ar', 'startGame')).toBe('يلا نبدأ');
     expect(t('ar', 'enterPin')).toBe('اكتب');
-    expect(t('ar', 'joinAGame')).toBe('انضم للعبة');
-    expect(t('ar', 'heroBody')).toContain('أدخل الرمز');
+    expect(t('ar', 'joinAGame')).toBe('ادخل لعبة');
+    expect(t('ar', 'heroBody')).toContain('دخل الرقم');
     expect(isLocale('ar')).toBe(true);
     expect(normalizeLocale('nope')).toBe('en');
   });

@@ -47,7 +47,7 @@ describe('formatTeachableCopy', () => {
   it('renders Arabic classroom copy from the same reveal', () => {
     const lesson = buildTeachableReveal(answers, { a: 2, b: 10, c: 1 });
     const copy = formatTeachableCopy(lesson, 'ar');
-    expect(copy.headline).toBe('أغلبكم اختار Alexandria.');
-    expect(copy.subline).toBe('الصحيح: Cairo');
+    expect(copy.headline).toBe('أكتركم اختار Alexandria.');
+    expect(copy.subline).toBe('الصح: Cairo');
   });
 });

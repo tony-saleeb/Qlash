@@ -44,7 +44,7 @@ export function LocaleToggle({
         onClick={() => onChange('ar')}
         className={cn('h-8 min-w-8 px-2.5 font-black', locale === 'ar' ? active : idle)}
         aria-pressed={locale === 'ar'}
-        aria-label="العربية"
+        aria-label="المصرية"
       >
         ع
       </button>
