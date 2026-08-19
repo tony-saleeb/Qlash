@@ -31,6 +31,7 @@ import { LocaleToggle } from '@/components/brand/LocaleToggle';
 import { useLocale } from '@/lib/i18n/useLocale';
 import { setHostLocale } from '@/app/actions/host';
 import { CONTENT_PACKS } from '@/lib/content/packs';
+import type { Locale } from '@/lib/i18n/locale';
 
 interface Quiz {
   id: string;
