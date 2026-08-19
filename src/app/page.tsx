@@ -140,7 +140,7 @@ export default function LandingPage() {
   };
 
   return (
-    <div className="relative flex min-h-dvh flex-col overflow-x-hidden bg-arena-canvas lg:h-dvh lg:overflow-hidden">
+    <div dir="ltr" className="relative flex min-h-dvh flex-col overflow-x-hidden bg-arena-canvas lg:h-dvh lg:overflow-hidden">
       <div className="pointer-events-none absolute inset-0 z-0 overflow-hidden arena-noise" aria-hidden />
       <div className="pointer-events-none absolute inset-y-0 right-0 z-0 hidden w-[46%] bg-arena-ink lg:block">
         <div className="absolute inset-0 arena-grid opacity-30" />
@@ -194,8 +194,8 @@ export default function LandingPage() {
         </section>
 
         <section className="order-1 flex items-start lg:order-2 lg:col-span-6 lg:items-center lg:justify-end lg:py-6 xl:col-span-7">
-          <div className="motion-rise-delay w-full max-w-md lg:mr-[min(4vw,2rem)]">
-            <div className="arena-panel overflow-hidden">
+          <div className="motion-rise-delay w-full max-w-md lg:me-[min(4vw,2rem)]">
+            <div className="arena-panel overflow-hidden" dir={locale === 'ar' ? 'rtl' : 'ltr'}>
               <div className="flex border-b-2 border-arena-ink">
                 <button
                   type="button"
@@ -209,7 +209,7 @@ export default function LandingPage() {
                 <button
                   type="button"
                   onClick={() => setPanel('host')}
-                  className={`flex-1 min-h-12 border-l-2 border-arena-ink py-3.5 text-center font-display text-sm font-extrabold uppercase tracking-wide transition ${
+                  className={`flex-1 min-h-12 border-s-2 border-arena-ink py-3.5 text-center font-display text-sm font-extrabold uppercase tracking-wide transition ${
                     panel === 'host' ? 'bg-arena-ink text-white' : 'bg-white text-arena-ink/40 hover:text-arena-ink'
                   }`}
                 >
@@ -229,6 +229,7 @@ export default function LandingPage() {
                         placeholder="······"
                         maxLength={6}
                         inputMode="numeric"
+                        dir="ltr"
                         value={pin}
                         onChange={(e) => setPin(e.target.value.replace(/\D/g, ''))}
                         className="mt-2 h-14 border-2 border-arena-ink bg-arena-mist/40 text-center font-display text-2xl font-extrabold tracking-[0.28em] focus-visible:ring-arena-court sm:h-16 sm:text-3xl sm:tracking-[0.4em]"

@@ -23,6 +23,7 @@ export function LocaleToggle({
 
   return (
     <div
+      dir="ltr"
       className={cn(
         'inline-flex overflow-hidden border-2 text-[11px] font-extrabold tracking-wider',
         track,

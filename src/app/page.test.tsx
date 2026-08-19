@@ -29,7 +29,8 @@ import { joinOrReconnect } from '@/lib/game/joinClient';
 describe('Landing page', () => {
   it('shows player join by default and the Qlash identity', () => {
     supabase.auth.getSession.mockResolvedValue({ data: { session: null } });
-    render(<LandingPage />);
+    const { container } = render(<LandingPage />);
+    expect(container.firstElementChild).toHaveAttribute('dir', 'ltr');
     expect(screen.getAllByText('Qlash').length).toBeGreaterThan(0);
     expect(screen.getByRole('button', { name: /jump in/i })).toBeInTheDocument();
     expect(screen.queryByText(/continue with google/i)).not.toBeInTheDocument();
