@@ -6,6 +6,7 @@ import { createClientMock } from '@/test/supabaseMock';
 
 const router = { push: vi.fn(), prefetch: vi.fn() };
 const supabase = createClientMock();
+const { sendSessionEvent } = vi.hoisted(() => ({ sendSessionEvent: vi.fn() }));
 
 vi.mock('next/navigation', () => ({
   useRouter: () => router,
@@ -16,7 +17,7 @@ vi.mock('@/lib/supabase/client', () => ({
 }));
 
 vi.mock('@/hooks/useSessionChannel', () => ({
-  useSessionChannel: () => ({ send: vi.fn(), ready: true }),
+  useSessionChannel: () => ({ send: sendSessionEvent, ready: true }),
 }));
 
 vi.mock('@/lib/sounds', () => ({
@@ -29,6 +30,10 @@ vi.mock('@/lib/sounds', () => ({
   playLockSound: vi.fn(),
   playQuestionStartSound: vi.fn(),
   playTickSound: vi.fn(),
+  playClashSound: vi.fn(),
+  playHaptic: vi.fn(),
+  isGameAudioMuted: () => false,
+  setGameAudioMuted: vi.fn(),
 }));
 
 vi.mock('canvas-confetti', () => ({
@@ -63,6 +68,7 @@ describe('PlayerGameClient', () => {
   beforeEach(() => {
     localStorage.clear();
     router.push.mockReset();
+    sendSessionEvent.mockReset();
   });
 
   afterEach(() => {
@@ -96,6 +102,29 @@ describe('PlayerGameClient', () => {
     expect(await screen.findByText('Ada')).toBeInTheDocument();
     expect(screen.getByText(/waiting for host/i)).toBeInTheDocument();
     expect(screen.getByText(/watch the big screen/i)).toBeInTheDocument();
+    expect(screen.getByText(/tap a mark/i)).toBeInTheDocument();
+  });
+
+  it('cheers the projector with a Qlash mark', async () => {
+    localStorage.setItem('quizarena_token_sess-1', 'tok');
+    vi.stubGlobal(
+      'fetch',
+      vi.fn(async (input: RequestInfo | URL) => {
+        const url = String(input);
+        if (url.includes('/api/player/me')) {
+          return jsonResponse({ player, sessionStatus: 'lobby' });
+        }
+        return jsonResponse({}, 404);
+      })
+    );
+    const user = userEvent.setup();
+    render(<PlayerGameClient sessionId="sess-1" initialSessionStatus="lobby" />);
+    await user.click(await screen.findByRole('button', { name: 'slash' }));
+    expect(sendSessionEvent).toHaveBeenCalledWith('lobby:react', {
+      mark: 'slash',
+      nickname: 'Ada',
+      playerId: 'p1',
+    });
   });
 
   it('renders Qlash answer tiles for an active MCQ', async () => {

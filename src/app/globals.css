@@ -268,8 +268,28 @@
   }
 }
 
+@keyframes arena-reaction-float {
+  0% {
+    opacity: 0;
+    transform: translateY(16px) scale(0.72);
+  }
+  14% {
+    opacity: 1;
+    transform: translateY(0) scale(1);
+  }
+  100% {
+    opacity: 0;
+    transform: translateY(-130px) scale(1.08);
+  }
+}
+
+.motion-reaction-float {
+  animation: arena-reaction-float 2.4s ease-out forwards;
+}
+
 @media (prefers-reduced-motion: reduce) {
-  .motion-wait-bounce {
+  .motion-wait-bounce,
+  .motion-reaction-float {
     animation: none;
   }
 }

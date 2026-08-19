@@ -83,6 +83,14 @@ describe('GameShell + chips', () => {
     const { container } = render(<LobbyWaitMarks />);
     expect(container.querySelectorAll('svg').length).toBe(4);
   });
+
+  it('lets a player tap a lobby mark', async () => {
+    const onPick = vi.fn();
+    const user = userEvent.setup();
+    render(<LobbyWaitMarks onPick={onPick} />);
+    await user.click(screen.getByRole('button', { name: 'bolt' }));
+    expect(onPick).toHaveBeenCalledWith('bolt');
+  });
 });
 
 describe('playerChipColor', () => {

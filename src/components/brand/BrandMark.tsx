@@ -2,6 +2,7 @@ import type { ReactNode } from 'react';
 import { cn } from '@/lib/utils';
 import { AnswerMark } from '@/components/brand/AnswerMark';
 import { answerMarkClass, answerUsesInk, resolveAnswerColor } from '@/lib/game/marks';
+import { LOBBY_REACTION_MARKS, type LobbyReactionId } from '@/lib/game/reactions';
 
 export const BRAND_NAME = 'Qlash';
 
@@ -146,26 +147,42 @@ export function ArenaFloor({ className }: { className?: string }) {
   );
 }
 
-const LOBBY_WAIT_MARKS = [
-  { shape: 'slash', color: 'bg-arena-signal', mark: 'text-white' },
-  { shape: 'qring', color: 'bg-[#4a2aff]', mark: 'text-white' },
-  { shape: 'bolt', color: 'bg-arena-acid', mark: 'text-arena-ink' },
-  { shape: 'chevron', color: 'bg-arena-court', mark: 'text-white' },
-] as const;
-
-/** Compact looping marks for the player lobby wait. */
-export function LobbyWaitMarks({ className }: { className?: string }) {
+/** Compact looping marks for the player lobby wait. Tappable when onPick is set. */
+export function LobbyWaitMarks({
+  className,
+  onPick,
+}: {
+  className?: string;
+  onPick?: (mark: LobbyReactionId) => void;
+}) {
+  const interactive = Boolean(onPick);
   return (
-    <div className={cn('flex items-end justify-center gap-2', className)} aria-hidden>
-      {LOBBY_WAIT_MARKS.map((mark, i) => (
-        <span
-          key={mark.shape}
-          className={cn('inline-flex h-10 w-10 items-center justify-center motion-wait-bounce', mark.color)}
-          style={{ animationDelay: `${i * 0.14}s` }}
-        >
-          <AnswerMark shape={mark.shape} className={cn('h-5 w-5', mark.mark)} />
-        </span>
-      ))}
+    <div
+      className={cn('flex items-end justify-center gap-2', className)}
+      aria-hidden={!interactive}
+    >
+      {LOBBY_REACTION_MARKS.map((mark, i) => {
+        const body = (
+          <span
+            className={cn('inline-flex h-11 w-11 items-center justify-center motion-wait-bounce', mark.colorClass)}
+            style={{ animationDelay: `${i * 0.14}s` }}
+          >
+            <AnswerMark shape={mark.id} className={cn('h-5 w-5', mark.markClass)} />
+          </span>
+        );
+        if (!onPick) return <span key={mark.id}>{body}</span>;
+        return (
+          <button
+            key={mark.id}
+            type="button"
+            onClick={() => onPick(mark.id)}
+            aria-label={mark.id}
+            className="rounded-none focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-arena-ink"
+          >
+            {body}
+          </button>
+        );
+      })}
     </div>
   );
 }

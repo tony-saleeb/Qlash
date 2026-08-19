@@ -6,9 +6,10 @@ import { createClient } from '@/lib/supabase/client';
 import { toast } from 'sonner';
 import { Input } from '@/components/ui/input';
 import { Button } from '@/components/ui/button';
-import { Flame, Wifi, WifiOff, Loader2, Award, CheckCircle, XCircle, Clock, Trophy, Pause, Check, Users, Zap, LogOut } from 'lucide-react';
+import { Flame, Wifi, WifiOff, Loader2, Award, CheckCircle, XCircle, Clock, Trophy, Pause, Check, Users, Zap, LogOut, Volume2, VolumeX } from 'lucide-react';
 import { BrandMark, AnswerButton, LobbyWaitMarks } from '@/components/brand/BrandMark';
 import { GameShell, LiveChip } from '@/components/brand/GameShell';
+import { ClashCountdownOverlay } from '@/components/brand/ClashCountdown';
 import { QLASH_CONFETTI } from '@/lib/game/theme';
 import { AnswerSwatch } from '@/components/brand/AnswerMark';
 import {
@@ -20,7 +21,10 @@ import {
   playLockSound,
   playQuestionStartSound,
   playTickSound,
+  playHaptic,
   unlockGameAudio,
+  isGameAudioMuted,
+  setGameAudioMuted,
 } from '@/lib/sounds';
 import confetti from 'canvas-confetti';
 import { useSessionChannel } from '@/hooks/useSessionChannel';
@@ -32,6 +36,7 @@ import { remainingFromPausedElapsed, remainingSeconds, startedAtFromRemaining } 
 import { answerUsesInk, resolveAnswerColor } from '@/lib/game/marks';
 import { aggregateTeamScores } from '@/lib/game/teams';
 import { playerJoinedAfterQuestionStart } from '@/lib/game/lateJoin';
+import { canSendReaction, type LobbyReactionId } from '@/lib/game/reactions';
 import { LocaleToggle } from '@/components/brand/LocaleToggle';
 import { useLocale } from '@/lib/i18n/useLocale';
 import type { MessageKey } from '@/lib/i18n/messages';
@@ -83,6 +88,9 @@ export default function PlayerGameClient({
   const [finalRank, setFinalRank] = useState<number | null>(null);
   const [activeMultiplier, setActiveMultiplier] = useState<number>(1);
   const [lobbyTipIndex, setLobbyTipIndex] = useState(0);
+  const [clashPlay, setClashPlay] = useState(false);
+  const [soundMuted, setSoundMuted] = useState(() => isGameAudioMuted());
+  const [liveRank, setLiveRank] = useState<number | null>(null);
 
   const playerRef = React.useRef<Player | null>(null);
   const activeQuestionRef = React.useRef<ActiveQuestionPayload | null>(null);
@@ -98,6 +106,8 @@ export default function PlayerGameClient({
   const lobbyFanfarePlayedRef = React.useRef(false);
   const clockStartedAtRef = React.useRef<string | null>(null);
   const sawOpenQuestionRef = React.useRef(false);
+  const lastReactionAtRef = React.useRef(0);
+  const lockedRemainingRef = React.useRef<number | null>(null);
 
   React.useEffect(() => bindAudioUnlock(), []);
 
@@ -105,6 +115,7 @@ export default function PlayerGameClient({
     if (!player || sessionStatus !== 'lobby' || lobbyFanfarePlayedRef.current) return;
     lobbyFanfarePlayedRef.current = true;
     playJoinSound();
+    playHaptic(20);
   }, [player, sessionStatus]);
 
   React.useEffect(() => {
@@ -114,6 +125,24 @@ export default function PlayerGameClient({
     }, 3400);
     return () => window.clearInterval(id);
   }, [sessionStatus]);
+
+  React.useEffect(() => {
+    if (sessionStatus !== 'leaderboard' || !player?.id) return;
+    let cancelled = false;
+    void supabase
+      .from('players')
+      .select('id')
+      .eq('session_id', sessionId)
+      .order('score', { ascending: false })
+      .then(({ data }) => {
+        if (cancelled || !data) return;
+        const rank = data.findIndex((row) => row.id === player.id) + 1;
+        setLiveRank(rank > 0 ? rank : null);
+      });
+    return () => {
+      cancelled = true;
+    };
+  }, [sessionStatus, player?.id, sessionId, supabase]);
 
   React.useEffect(() => {
     playerRef.current = player;
@@ -324,8 +353,13 @@ export default function PlayerGameClient({
         isCorrect = sel.length === cor.length && sel.every((id, i) => id === cor[i]);
       }
 
-      if (isCorrect) playCorrectSound();
-      else playIncorrectSound();
+      if (isCorrect) {
+        playCorrectSound();
+        playHaptic(isCorrect && (lockedRemainingRef.current ?? 99) <= 3 ? [24, 40, 24] : 24);
+      } else {
+        playIncorrectSound();
+        playHaptic(8);
+      }
 
       setRoundResult({
         isCorrect,
@@ -344,13 +378,17 @@ export default function PlayerGameClient({
     [syncOfficialScore]
   );
 
-  useSessionChannel(sessionId, {
+  const { send: sendSessionEvent } = useSessionChannel(sessionId, {
     supabase,
     onEvents: {
+      'clash:countdown': () => {
+        setClashPlay(true);
+      },
       'question:start': (msg) => {
         const payload = msg.payload;
         const questionId = payload.question_id as string | undefined;
         if (!questionId) return;
+        setClashPlay(false);
         applyQuestionPayload(
           {
             id: questionId,
@@ -663,6 +701,27 @@ export default function PlayerGameClient({
     router.push('/play');
   };
 
+  const toggleSound = () => {
+    const next = !soundMuted;
+    setSoundMuted(next);
+    setGameAudioMuted(next);
+    if (!next) void unlockGameAudio();
+  };
+
+  const sendLobbyReaction = (mark: LobbyReactionId) => {
+    if (!player) return;
+    void unlockGameAudio();
+    const now = Date.now();
+    if (!canSendReaction(lastReactionAtRef.current, now)) return;
+    lastReactionAtRef.current = now;
+    playHaptic(12);
+    void sendSessionEvent('lobby:react', {
+      mark,
+      nickname: player.nickname,
+      playerId: player.id,
+    });
+  };
+
   // Instant lock-in UX — never wait on the network to feel responsive
   const submitAnswer = async (answersToSubmit: string[]) => {
     if (!player || !activeQuestion || submissionState !== 'idle') return;
@@ -678,6 +737,8 @@ export default function PlayerGameClient({
       isCorrect: null,
       pointsAwarded: 0,
     };
+    lockedRemainingRef.current = timeLeft;
+    playHaptic(16);
 
     try {
       const response = await fetch('/api/submit-answer', {
@@ -767,9 +828,20 @@ export default function PlayerGameClient({
   if (sessionStatus === 'lobby') {
     return (
       <GameShell>
+        <ClashCountdownOverlay play={clashPlay} clashWord={t('clash')} onDone={() => setClashPlay(false)} />
         <header className="flex items-center justify-between py-2">
           <BrandMark tone="light" size="sm" />
-          <LocaleToggle locale={locale} onChange={setLocale} tone="light" />
+          <div className="flex items-center gap-2">
+            <button
+              type="button"
+              onClick={toggleSound}
+              className="flex h-9 w-9 items-center justify-center border border-white/20 bg-white/10 text-white"
+              aria-label={soundMuted ? t('soundOff') : t('soundOn')}
+            >
+              {soundMuted ? <VolumeX className="h-4 w-4" /> : <Volume2 className="h-4 w-4" />}
+            </button>
+            <LocaleToggle locale={locale} onChange={setLocale} tone="light" />
+          </div>
         </header>
 
         <main className="my-auto flex w-full max-w-sm flex-col items-center gap-6 text-center">
@@ -794,8 +866,9 @@ export default function PlayerGameClient({
             )}
 
             <div className="mt-6 border-t-2 border-arena-ink/10 pt-5">
-              <LobbyWaitMarks className="mb-4" />
-              <p className="font-display text-sm font-bold text-arena-ink">{t('waitingForHost')}</p>
+              <LobbyWaitMarks className="mb-3" onPick={sendLobbyReaction} />
+              <p className="text-[10px] font-bold uppercase tracking-[0.16em] text-arena-ink/35">{t('tapToCheer')}</p>
+              <p className="mt-3 font-display text-sm font-bold text-arena-ink">{t('waitingForHost')}</p>
               <p
                 key={LOBBY_WAIT_TIPS[lobbyTipIndex]}
                 className="mt-1 min-h-[2.6rem] text-xs leading-relaxed text-arena-ink/50 animate-fade-in"
@@ -856,6 +929,11 @@ export default function PlayerGameClient({
               <Flame className="h-4 w-4 fill-current" />
               <span>Streak: {player.streak}</span>
             </div>
+          )}
+          {isCorrect && (lockedRemainingRef.current ?? 99) <= 3 && (
+            <p className="font-display text-sm font-black uppercase tracking-[0.18em] text-arena-ink/80">
+              {t('clutch')}
+            </p>
           )}
         </div>
 
@@ -1031,6 +1109,11 @@ export default function PlayerGameClient({
           <p className="mt-2 max-w-xs text-sm leading-relaxed text-white/60">
             {t('lookAtProjector')}
           </p>
+          {liveRank ? (
+            <p className="mt-4 font-display text-4xl font-black text-arena-acid">
+              {t('yourRankPrefix')}{liveRank}
+            </p>
+          ) : null}
           <div className="mt-8 w-full max-w-xs border-2 border-white/15 bg-white/[0.06] p-4">
             <span className="block text-[10px] font-bold uppercase tracking-widest text-white/50">
               Your score

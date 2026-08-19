@@ -28,6 +28,8 @@ import QRCode from 'qrcode';
 import { bindAudioUnlock, playJoinSound, playTickSound, playRevealSound, playFanfareSound, unlockGameAudio } from '@/lib/sounds';
 import { BrandMark, PinDisplay, StageBadge, playerChipColor } from '@/components/brand/BrandMark';
 import { GameShell, LiveChip, StatBox } from '@/components/brand/GameShell';
+import { ClashCountdownOverlay } from '@/components/brand/ClashCountdown';
+import { LobbyReactionLayer, type FloatingReaction } from '@/components/brand/LobbyReactionLayer';
 import { QLASH_CONFETTI } from '@/lib/game/theme';
 import { cn } from '@/lib/utils';
 import {
@@ -59,6 +61,12 @@ import { hostClickerPath, isLateJoinEnabled, DEFAULT_LATE_JOIN_THROUGH_INDEX, LA
 import { lobbyJoinPath } from '@/lib/game/lobbyLink';
 import { waitingPlayers } from '@/lib/game/waitingPlayers';
 import { buildTeachableReveal, formatTeachableCopy } from '@/lib/game/teachableReveal';
+import {
+  isLobbyReactionId,
+  MAX_FLOATING_REACTIONS,
+  REACTION_FLOAT_MS,
+  reactionLeftPercent,
+} from '@/lib/game/reactions';
 import { LocaleToggle } from '@/components/brand/LocaleToggle';
 import { useLocale } from '@/lib/i18n/useLocale';
 import { setHostLocale } from '@/app/actions/host';
@@ -95,7 +103,31 @@ export default function HostGameClient({
 }: HostGameClientProps) {
   const router = useRouter();
   const supabase = createClient();
-  const { send: sendSessionEvent } = useSessionChannel(initialSession.id, { supabase });
+  const sessionStatusRef = useRef(initialSession.status);
+  const { send: sendSessionEvent } = useSessionChannel(initialSession.id, {
+    supabase,
+    onEvents: {
+      'lobby:react': (msg) => {
+        if (sessionStatusRef.current !== 'lobby') return;
+        const mark = msg.payload.mark;
+        const nickname = String(msg.payload.nickname || '').trim().slice(0, 15);
+        if (!isLobbyReactionId(mark) || !nickname) return;
+        const item: FloatingReaction = {
+          id: `${Date.now()}-${Math.random().toString(36).slice(2, 7)}`,
+          mark,
+          nickname,
+          left: reactionLeftPercent(Math.floor(Math.random() * 84)),
+        };
+        setLobbyReactions((prev) => [...prev.slice(-(MAX_FLOATING_REACTIONS - 1)), item]);
+        window.setTimeout(() => {
+          setLobbyReactions((prev) => prev.filter((row) => row.id !== item.id));
+        }, REACTION_FLOAT_MS);
+      },
+      'clash:countdown': () => {
+        setClashRunning(true);
+      },
+    },
+  });
   const { locale, setLocale, t } = useLocale(initialLocale);
   const persistLocale = (next: Locale) => {
     setLocale(next);
@@ -104,6 +136,7 @@ export default function HostGameClient({
 
   // Core game states
   const [session, setSession] = useState(initialSession);
+  sessionStatusRef.current = session.status;
   const [players, setPlayers] = useState<Player[]>(initialPlayers);
   const playersRef = useRef(players);
   playersRef.current = players;
@@ -148,6 +181,9 @@ export default function HostGameClient({
 
   // Question Jumper state
   const [isJumperOpen, setIsJumperOpen] = useState(false);
+  const [clashRunning, setClashRunning] = useState(false);
+  const clashLockRef = useRef(false);
+  const [lobbyReactions, setLobbyReactions] = useState<FloatingReaction[]>([]);
 
   // QR Code State
   const [qrDataUrl, setQrDataUrl] = useState<string>('');
@@ -551,18 +587,8 @@ export default function HostGameClient({
     );
   }, [orderKey, questions, prepareQuestionForPlay, session.question_order]);
 
-  // Start Game
-  const handleStartGame = async () => {
-    void unlockGameAudio();
-    if (!questions || questions.length === 0) {
-      toast.error('You cannot start a game with 0 questions.');
-      return;
-    }
-    if (players.length === 0) {
-      toast.error('You cannot start a game with 0 players.');
-      return;
-    }
-
+  // Start Game — 3-2-1 Clash, then the clock starts
+  const commitStartGame = useCallback(async () => {
     try {
       const ordered = maybeSeededShuffle(questions, randomizeQuestions, `${session.id}:order`).map(
         prepareQuestionForPlay
@@ -586,7 +612,26 @@ export default function HostGameClient({
       );
     } catch (err) {
       toast.error(err instanceof Error ? err.message : 'Failed to start game.');
+    } finally {
+      setClashRunning(false);
+      clashLockRef.current = false;
     }
+  }, [questions, randomizeQuestions, session.id, prepareQuestionForPlay, sendSessionEvent]);
+
+  const handleStartGame = async () => {
+    void unlockGameAudio();
+    if (clashLockRef.current || clashRunning) return;
+    if (!questions || questions.length === 0) {
+      toast.error('You cannot start a game with 0 questions.');
+      return;
+    }
+    if (players.length === 0) {
+      toast.error('You cannot start a game with 0 players.');
+      return;
+    }
+    clashLockRef.current = true;
+    setClashRunning(true);
+    void sendSessionEvent('clash:countdown', { at: Date.now() });
   };
 
 
@@ -777,6 +822,15 @@ export default function HostGameClient({
   if (session.status === 'lobby') {
     return (
       <div className="arena-stage arena-noise relative flex min-h-dvh w-full flex-col justify-between overflow-hidden font-sans">
+        <LobbyReactionLayer items={lobbyReactions} />
+        <ClashCountdownOverlay
+          play={clashRunning}
+          clashWord={t('clash')}
+          onDone={() => {
+            if (clashLockRef.current) void commitStartGame();
+            else setClashRunning(false);
+          }}
+        />
         <div className="pointer-events-none absolute inset-0 arena-grid opacity-[0.18]" />
         <div className="pointer-events-none absolute -right-16 top-16 h-48 w-48 rotate-[14deg] bg-arena-acid motion-breathe" />
         <div className="pointer-events-none absolute bottom-28 -left-6 h-24 w-24 -rotate-6 bg-arena-signal" />
@@ -970,10 +1024,10 @@ export default function HostGameClient({
             </Button>
             <Button
               onClick={handleStartGame}
-              disabled={players.length === 0 || !questions || questions.length === 0}
+              disabled={clashRunning || players.length === 0 || !questions || questions.length === 0}
               className="h-14 w-full rounded-none bg-arena-acid px-10 font-display text-lg font-extrabold text-arena-ink shadow-[6px_6px_0_rgba(200,245,66,0.25)] hover:brightness-105 sm:w-auto"
             >
-              <Play className="mr-2 h-5 w-5 fill-current" /> {t('startGame')}
+              <Play className="mr-2 h-5 w-5 fill-current" /> {clashRunning ? t('starting') : t('startGame')}
             </Button>
           </div>
         </footer>

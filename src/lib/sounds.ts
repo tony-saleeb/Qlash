@@ -1,5 +1,8 @@
 let audioCtx: AudioContext | null = null;
 let silentEl: HTMLAudioElement | null = null;
+let muted = false;
+
+const MUTE_STORAGE_KEY = 'qlash_mute';
 
 /** Tiny silent WAV so iOS keeps the audio session alive after a tap. */
 const SILENT_WAV =
@@ -72,12 +75,42 @@ export function bindAudioUnlock(): () => void {
 }
 
 function getAudioContext(): AudioContext | null {
+  if (muted) return null;
   const ctx = createContext();
   if (!ctx) return null;
   if (ctx.state === 'suspended') {
     void ctx.resume();
   }
   return ctx;
+}
+
+export function isGameAudioMuted(): boolean {
+  if (typeof window === 'undefined') return muted;
+  try {
+    if (window.localStorage.getItem(MUTE_STORAGE_KEY) === '1') muted = true;
+  } catch {
+    // ignore
+  }
+  return muted;
+}
+
+export function setGameAudioMuted(next: boolean) {
+  muted = next;
+  if (typeof window === 'undefined') return;
+  try {
+    window.localStorage.setItem(MUTE_STORAGE_KEY, next ? '1' : '0');
+  } catch {
+    // ignore
+  }
+}
+
+export function playHaptic(pattern: number | number[] = 18) {
+  if (typeof navigator === 'undefined' || typeof navigator.vibrate !== 'function') return;
+  try {
+    navigator.vibrate(pattern);
+  } catch {
+    // ignore
+  }
 }
 
 function tone(
@@ -192,4 +225,13 @@ export function playFanfareSound() {
       tone(ctx, { type: 'triangle', freq, start: now + timeOffset, duration, gain: 0.1 });
     });
   });
+}
+
+export function playClashSound() {
+  const ctx = getAudioContext();
+  if (!ctx) return;
+  const now = ctx.currentTime;
+  tone(ctx, { type: 'square', freq: 220, endFreq: 880, start: now, duration: 0.22, gain: 0.16 });
+  tone(ctx, { type: 'triangle', freq: 523.25, start: now + 0.12, duration: 0.28, gain: 0.18 });
+  tone(ctx, { type: 'triangle', freq: 783.99, start: now + 0.2, duration: 0.32, gain: 0.16 });
 }

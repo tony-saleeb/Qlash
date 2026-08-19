@@ -20,6 +20,7 @@ import {
 } from '@/app/actions/game';
 import { ArrowRight, Clock, Link2, Monitor, Pause, Play, Trophy, Users } from 'lucide-react';
 import { BrandMark, PinDisplay } from '@/components/brand/BrandMark';
+import { ClashCountdownOverlay } from '@/components/brand/ClashCountdown';
 import { useSessionChannel } from '@/hooks/useSessionChannel';
 import {
   buildQuestionStartPayload,
@@ -72,7 +73,12 @@ export default function HostClickerClient({
 }: HostClickerClientProps) {
   const router = useRouter();
   const supabase = createClient();
-  const { send: sendSessionEvent } = useSessionChannel(initialSession.id, { supabase });
+  const { send: sendSessionEvent } = useSessionChannel(initialSession.id, {
+    supabase,
+    onEvents: {
+      'clash:countdown': () => setClashRunning(true),
+    },
+  });
   const { locale, setLocale, t } = useLocale(initialLocale);
   const persistLocale = (next: Locale) => {
     setLocale(next);
@@ -90,6 +96,8 @@ export default function HostClickerClient({
   const [busy, setBusy] = useState(false);
   const [clockNow, setClockNow] = useState(() => Date.now());
   const revealingRef = useRef(false);
+  const [clashRunning, setClashRunning] = useState(false);
+  const clashLockRef = useRef(false);
 
   const randomizeQuestions = Boolean(quiz.randomize_questions);
   const randomizeAnswers = Boolean(quiz.randomize_answers);
@@ -226,8 +234,16 @@ export default function HostClickerClient({
 
   const handleStart = () =>
     run(async () => {
+      if (clashLockRef.current || clashRunning) return;
       if (!questions.length) throw new Error('Add questions before starting.');
       if (players.length === 0) throw new Error('Wait for at least one player.');
+      clashLockRef.current = true;
+      setClashRunning(true);
+      void sendSessionEvent('clash:countdown', { at: Date.now() });
+    });
+
+  const commitStart = useCallback(async () => {
+    try {
       const ordered = maybeSeededShuffle(questions, randomizeQuestions, `${session.id}:order`).map(
         prepareQuestionForPlay
       );
@@ -238,7 +254,14 @@ export default function HostClickerClient({
       );
       revealingRef.current = false;
       void sendSessionEvent('question:start', buildQuestionStartPayload(ordered[0], 0, serverStartedAt));
-    });
+    } catch (err) {
+      toast.error(err instanceof Error ? err.message : 'Could not update the room.');
+    } finally {
+      setClashRunning(false);
+      clashLockRef.current = false;
+      setBusy(false);
+    }
+  }, [questions, randomizeQuestions, session.id, prepareQuestionForPlay, sendSessionEvent]);
 
   const handlePauseResume = () =>
     run(async () => {
@@ -306,6 +329,14 @@ export default function HostClickerClient({
 
   return (
     <div className="flex min-h-dvh flex-col bg-arena-stage px-4 py-5 text-white">
+      <ClashCountdownOverlay
+        play={clashRunning}
+        clashWord={t('clash')}
+        onDone={() => {
+          if (clashLockRef.current) void commitStart();
+          else setClashRunning(false);
+        }}
+      />
       <header className="mb-5 flex items-center justify-between gap-3">
         <BrandMark tone="light" size="sm" />
         <div className="flex items-center gap-2">
@@ -362,11 +393,11 @@ export default function HostClickerClient({
           </Button>
           <Button
             type="button"
-            disabled={busy || players.length === 0 || questions.length === 0}
+            disabled={busy || clashRunning || players.length === 0 || questions.length === 0}
             onClick={handleStart}
             className={`${bigBtn} bg-arena-acid text-arena-ink`}
           >
-            <Play className="mr-2 h-6 w-6 fill-current" /> {t('start')}
+            <Play className="mr-2 h-6 w-6 fill-current" /> {clashRunning ? t('starting') : t('start')}
           </Button>
         </div>
       )}
