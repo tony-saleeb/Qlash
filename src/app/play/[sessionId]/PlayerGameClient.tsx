@@ -37,6 +37,8 @@ import { answerUsesInk, resolveAnswerColor } from '@/lib/game/marks';
 import { aggregateTeamScores } from '@/lib/game/teams';
 import { playerJoinedAfterQuestionStart } from '@/lib/game/lateJoin';
 import { canSendReaction, type LobbyReactionId } from '@/lib/game/reactions';
+import { rankMove, rankOfPlayer } from '@/lib/game/rankMove';
+import { roundCallout } from '@/lib/game/roundCallout';
 import { LocaleToggle } from '@/components/brand/LocaleToggle';
 import { useLocale } from '@/lib/i18n/useLocale';
 import type { MessageKey } from '@/lib/i18n/messages';
@@ -48,6 +50,12 @@ const LOBBY_WAIT_TIPS: MessageKey[] = [
   'lobbyTipBoard',
   'lobbyTipFast',
   'lobbyTipColors',
+];
+
+const LOCK_WAIT_TIPS: MessageKey[] = [
+  'lockTipWatch',
+  'lockTipCheer',
+  'lockTipHold',
 ];
 
 interface PlayerGameClientProps {
@@ -91,6 +99,7 @@ export default function PlayerGameClient({
   const [clashPlay, setClashPlay] = useState(false);
   const [soundMuted, setSoundMuted] = useState(() => isGameAudioMuted());
   const [liveRank, setLiveRank] = useState<number | null>(null);
+  const [lockTipIndex, setLockTipIndex] = useState(0);
 
   const playerRef = React.useRef<Player | null>(null);
   const activeQuestionRef = React.useRef<ActiveQuestionPayload | null>(null);
@@ -108,6 +117,10 @@ export default function PlayerGameClient({
   const sawOpenQuestionRef = React.useRef(false);
   const lastReactionAtRef = React.useRef(0);
   const lockedRemainingRef = React.useRef<number | null>(null);
+  const liveRankRef = React.useRef<number | null>(null);
+  const previousRankRef = React.useRef<number | null>(null);
+  const previousStreakRef = React.useRef(0);
+  liveRankRef.current = liveRank;
 
   React.useEffect(() => bindAudioUnlock(), []);
 
@@ -125,6 +138,14 @@ export default function PlayerGameClient({
     }, 3400);
     return () => window.clearInterval(id);
   }, [sessionStatus]);
+
+  React.useEffect(() => {
+    if (submissionState !== 'submitted') return;
+    const id = window.setInterval(() => {
+      setLockTipIndex((i) => (i + 1) % LOCK_WAIT_TIPS.length);
+    }, 2800);
+    return () => window.clearInterval(id);
+  }, [submissionState]);
 
   React.useEffect(() => {
     if (sessionStatus !== 'leaderboard' || !player?.id) return;
@@ -178,6 +199,8 @@ export default function PlayerGameClient({
       setRoundResult(null);
       sawOpenQuestionRef.current =
         status !== 'question_reveal' && status !== 'leaderboard' && status !== 'finished';
+      previousRankRef.current = liveRankRef.current;
+      previousStreakRef.current = playerRef.current?.streak ?? 0;
       if (status) setSessionStatus(status);
     },
     []
@@ -293,6 +316,11 @@ export default function PlayerGameClient({
             prev ? { ...prev, score: data.player.score, streak: data.player.streak } : null
           );
         }
+        const { data: rows } = await supabase
+          .from('players')
+          .select('id, score')
+          .eq('session_id', sessionId);
+        if (rows) setLiveRank(rankOfPlayer(rows, playerId));
         if (data.submission) {
           setRoundResult((prev) =>
             prev
@@ -308,7 +336,7 @@ export default function PlayerGameClient({
         console.error('Failed to sync official score', err);
       }
     },
-    [sessionId]
+    [sessionId, supabase]
   );
 
   const applyRevealInstant = useCallback(
@@ -353,9 +381,17 @@ export default function PlayerGameClient({
         isCorrect = sel.length === cor.length && sel.every((id, i) => id === cor[i]);
       }
 
+      const callout = roundCallout({
+        isCorrect,
+        isPoll: currentQ?.type === 'poll',
+        lockedRemaining: lockedRemainingRef.current,
+        timeLimit: currentQ?.time_limit_seconds ?? 0,
+        previousStreak: previousStreakRef.current,
+      });
+
       if (isCorrect) {
         playCorrectSound();
-        playHaptic(isCorrect && (lockedRemainingRef.current ?? 99) <= 3 ? [24, 40, 24] : 24);
+        playHaptic(callout === 'clutch' ? [24, 40, 24] : callout === 'lightning' ? [16, 30, 16] : 24);
       } else {
         playIncorrectSound();
         playHaptic(8);
@@ -816,7 +852,7 @@ export default function PlayerGameClient({
       <GameShell className="items-center justify-center" padded>
         <div className="flex flex-1 flex-col items-center justify-center text-center">
           <Loader2 className="mb-4 h-10 w-10 animate-spin text-arena-acid" />
-          <p className="text-sm font-semibold text-white/60">Locking you into the room…</p>
+          <p className="text-sm font-semibold text-white/60">{t('lockingYouIn')}</p>
         </div>
       </GameShell>
     );
@@ -901,6 +937,14 @@ export default function PlayerGameClient({
   if (roundResult && activeQuestion) {
     const isCorrect = roundResult.isCorrect;
     const points = roundResult.pointsAwarded;
+    const move = rankMove(previousRankRef.current, liveRank);
+    const callout = roundCallout({
+      isCorrect,
+      isPoll: activeQuestion.type === 'poll',
+      lockedRemaining: lockedRemainingRef.current,
+      timeLimit: activeQuestion.time_limit_seconds,
+      previousStreak: previousStreakRef.current,
+    });
 
     return (
       <div
@@ -919,22 +963,38 @@ export default function PlayerGameClient({
             )}
           </div>
           <h1 className="font-display text-4xl font-extrabold uppercase tracking-tight sm:text-5xl">
-            {isCorrect ? 'Correct' : 'Missed'}
+            {isCorrect ? t('correct') : t('missed')}
           </h1>
           <p className={`font-display text-xl font-bold ${isCorrect ? 'text-arena-ink/80' : 'text-white/85'}`}>
-            {isCorrect ? `+${points.toLocaleString()} pts` : '+0 pts'}
+            {isCorrect ? `+${points.toLocaleString()} ${t('pointsWord')}` : `+0 ${t('pointsWord')}`}
           </p>
           {player.streak > 1 && isCorrect && (
             <div className="inline-flex animate-bounce items-center gap-1.5 border-2 border-arena-ink bg-white px-4 py-1.5 text-sm font-extrabold text-arena-ink">
               <Flame className="h-4 w-4 fill-current" />
-              <span>Streak: {player.streak}</span>
+              <span>{t('streakWord')}: {player.streak}</span>
             </div>
           )}
-          {isCorrect && (lockedRemainingRef.current ?? 99) <= 3 && (
+          {callout === 'clutch' && (
             <p className="font-display text-sm font-black uppercase tracking-[0.18em] text-arena-ink/80">
               {t('clutch')}
             </p>
           )}
+          {callout === 'lightning' && (
+            <p className="inline-flex items-center gap-1 font-display text-sm font-black uppercase tracking-[0.18em] text-arena-ink/80">
+              <Zap className="h-4 w-4" /> {t('lightning')}
+            </p>
+          )}
+          {callout === 'streakBroken' && (
+            <p className="font-display text-sm font-black uppercase tracking-[0.18em] text-white/85">
+              {t('streakBroken')}
+            </p>
+          )}
+          {move ? (
+            <p className={`font-display text-lg font-black ${isCorrect ? 'text-arena-ink' : 'text-white'}`}>
+              {move.kind === 'up' ? `↑ ${move.delta} · ` : move.kind === 'down' ? `↓ ${Math.abs(move.delta)} · ` : ''}
+              {t('yourRankPrefix')}{move.current}
+            </p>
+          ) : null}
         </div>
 
         {(() => {
@@ -947,7 +1007,7 @@ export default function PlayerGameClient({
               isCorrect ? 'border-arena-ink/20 bg-black/10' : 'border-white/20 bg-black/25'
             }`}>
               <h3 className={`text-[10px] font-black uppercase tracking-[0.18em] ${isCorrect ? 'text-arena-ink/55' : 'text-white/55'}`}>
-                How the room voted
+                {t('howTheRoomVoted')}
               </h3>
 
               <div className={`flex h-36 w-full items-end justify-center gap-3.5 border-b px-2 pb-1 ${
@@ -996,12 +1056,12 @@ export default function PlayerGameClient({
           <h3 className={`border-b pb-2 text-xs font-extrabold uppercase tracking-wider ${
             isCorrect ? 'border-arena-ink/15 text-arena-ink/50' : 'border-white/10 text-white/50'
           }`}>
-            Round summary
+            {t('roundSummary')}
           </h3>
           
           <div className="space-y-1">
             <span className={`block text-[10px] font-black uppercase tracking-widest ${isCorrect ? 'text-arena-ink/40' : 'text-white/40'}`}>
-              Your choice
+              {t('yourChoice')}
             </span>
             {selectedAnswerIds.length > 0 ? (
               <div className="mt-1 flex flex-wrap gap-2">
@@ -1027,14 +1087,14 @@ export default function PlayerGameClient({
               </div>
             ) : (
               <p className={`mt-0.5 text-sm font-semibold ${isCorrect ? 'text-arena-ink' : 'text-white'}`}>
-                <Clock className="mr-0.5 inline-block h-3.5 w-3.5" /> Time out — no answer
+                <Clock className="mr-0.5 inline-block h-3.5 w-3.5" /> {t('timeOutNoAnswer')}
               </p>
             )}
           </div>
 
           <div className="space-y-1 pt-1">
             <span className={`block text-[10px] font-black uppercase tracking-widest ${isCorrect ? 'text-arena-ink/40' : 'text-white/40'}`}>
-              Correct answer
+              {t('correctAnswer')}
             </span>
             <div className="mt-1 flex flex-wrap gap-2">
               {activeQuestion.answers
@@ -1064,7 +1124,7 @@ export default function PlayerGameClient({
           isCorrect ? 'border-arena-ink/25 bg-white/40' : 'border-white/20 bg-black/20'
         }`}>
           <span className={`block text-[10px] font-bold uppercase tracking-widest ${isCorrect ? 'text-arena-ink/50' : 'text-white/50'}`}>
-            Total score
+            {t('totalScore')}
           </span>
           <span className="mt-0.5 block font-display text-2xl font-black tabular-nums">
             {player.score.toLocaleString()}
@@ -1111,12 +1171,18 @@ export default function PlayerGameClient({
           </p>
           {liveRank ? (
             <p className="mt-4 font-display text-4xl font-black text-arena-acid">
-              {t('yourRankPrefix')}{liveRank}
+              {(() => {
+                const move = rankMove(previousRankRef.current, liveRank);
+                if (!move) return `${t('yourRankPrefix')}${liveRank}`;
+                const arrow =
+                  move.kind === 'up' ? `↑ ${move.delta} · ` : move.kind === 'down' ? `↓ ${Math.abs(move.delta)} · ` : '';
+                return `${arrow}${t('yourRankPrefix')}${move.current}`;
+              })()}
             </p>
           ) : null}
           <div className="mt-8 w-full max-w-xs border-2 border-white/15 bg-white/[0.06] p-4">
             <span className="block text-[10px] font-bold uppercase tracking-widest text-white/50">
-              Your score
+              {t('yourScore')}
             </span>
             <span className="mt-0.5 block font-display text-2xl font-black tabular-nums text-arena-acid">
               {player.score.toLocaleString()}
@@ -1143,7 +1209,7 @@ export default function PlayerGameClient({
     return (
       <GameShell>
         <div className="mt-2 flex w-full max-w-md items-center justify-between gap-4">
-          <LiveChip tone="acid">Final standings</LiveChip>
+          <LiveChip tone="acid">{t('finalStandings')}</LiveChip>
           <BrandMark tone="light" size="sm" wordmark={false} />
         </div>
 
@@ -1210,10 +1276,10 @@ export default function PlayerGameClient({
         <div className="z-10 mb-4 w-full max-w-xs space-y-3 border-2 border-white/15 bg-white/[0.05] p-4">
           <div className="flex items-center justify-between border-b border-white/15 pb-2">
             <span className="text-[10px] font-bold uppercase tracking-widest text-white/50">
-              Your performance
+              {t('yourPerformance')}
             </span>
             <span className="text-xs font-black text-arena-acid">
-              #{finalRank ?? '-'} Rank
+              #{finalRank ?? '-'} {t('rankWord')}
             </span>
           </div>
           {teamMode && player?.team_name && (
@@ -1225,13 +1291,13 @@ export default function PlayerGameClient({
             </div>
           )}
           <div className="flex items-center justify-between">
-            <span className="text-xs text-white/60">Final points</span>
+            <span className="text-xs text-white/60">{t('finalPoints')}</span>
             <span className="font-display text-lg font-black tabular-nums text-white">
               {player.score.toLocaleString()}
             </span>
           </div>
           <div className="flex items-center justify-between">
-            <span className="text-xs text-white/60">Answer streak</span>
+            <span className="text-xs text-white/60">{t('answerStreak')}</span>
             <span className="flex items-center gap-0.5 text-sm font-bold text-arena-acid">
               <Flame className="h-4 w-4 fill-current" /> {player.streak}
             </span>
@@ -1239,7 +1305,7 @@ export default function PlayerGameClient({
           {teamMode && teamRows.length > 0 && (
             <div className="space-y-1.5 border-t border-white/15 pt-2">
               <span className="text-[10px] font-bold uppercase tracking-widest text-white/50">
-                Team standings
+                {t('teamStandings')}
               </span>
               {teamRows.slice(0, 5).map((team, idx) => (
                 <div key={team.team_name} className="flex justify-between text-xs">
@@ -1260,7 +1326,7 @@ export default function PlayerGameClient({
           }}
           className="z-10 mb-4 h-11 w-full max-w-xs rounded-none border-2 border-white/30 bg-white/10 text-xs font-bold text-white hover:border-arena-acid hover:bg-arena-acid hover:text-arena-ink"
         >
-          Return to join
+          {t('returnToJoin')}
         </Button>
       </GameShell>
     );
@@ -1278,7 +1344,7 @@ export default function PlayerGameClient({
             <div className="mb-6 flex h-16 w-16 items-center justify-center bg-arena-acid font-display text-2xl font-extrabold text-arena-ink motion-pulse-soft">
               ✓
             </div>
-            <h1 className="font-display text-3xl font-extrabold text-white">Answer locked</h1>
+            <h1 className="font-display text-3xl font-extrabold text-white">{t('answerLocked')}</h1>
             <p dir="auto" className="mt-2 text-sm font-bold text-arena-acid">{player.nickname}</p>
             {timeLeft > 0 && (
               <div className="mt-6 flex justify-center">
@@ -1294,13 +1360,23 @@ export default function PlayerGameClient({
                   >
                     {timeLeft}
                   </span>
-                  <span className="text-[9px] font-bold uppercase tracking-wider text-white/45">sec</span>
+                  <span className="text-[9px] font-bold uppercase tracking-wider text-white/45">{t('seconds')}</span>
                 </div>
               </div>
             )}
             <p className="mt-6 max-w-xs text-sm text-white/55">
-              Waiting for the room — results hit when the host reveals.
+              {t('waitingForReveal')}
             </p>
+            <p
+              key={LOCK_WAIT_TIPS[lockTipIndex]}
+              className="mt-2 min-h-[2.4rem] max-w-xs text-xs leading-relaxed text-white/40 animate-fade-in"
+            >
+              {t(LOCK_WAIT_TIPS[lockTipIndex])}
+            </p>
+            <div className="mt-6 w-full max-w-xs border border-white/15 bg-white/[0.06] p-4">
+              <LobbyWaitMarks className="mb-2" onPick={sendLobbyReaction} />
+              <p className="text-[10px] font-bold uppercase tracking-[0.16em] text-white/40">{t('tapToCheer')}</p>
+            </div>
           </div>
         </GameShell>
       );
@@ -1311,7 +1387,7 @@ export default function PlayerGameClient({
         <GameShell className="items-center justify-center">
           <div className="flex flex-1 flex-col items-center justify-center text-center">
             <Loader2 className="mb-4 h-10 w-10 animate-spin text-arena-acid" />
-            <p className="text-sm font-semibold text-white/60">Locking answer…</p>
+            <p className="text-sm font-semibold text-white/60">{t('lockingAnswer')}</p>
           </div>
         </GameShell>
       );
@@ -1323,9 +1399,9 @@ export default function PlayerGameClient({
         {sessionStatus === 'question_paused' && (
           <div className="absolute inset-0 z-50 flex flex-col items-center justify-center bg-arena-stage/85 p-6 text-center animate-fade-in">
             <Pause className="mb-3 h-12 w-12 text-arena-acid motion-pulse-soft" />
-            <h2 className="mb-1 font-display text-xl font-bold text-white">Paused</h2>
+            <h2 className="mb-1 font-display text-xl font-bold text-white">{t('paused')}</h2>
             <p className="max-w-xs text-xs text-white/60">
-              The host paused the timer. Submissions resume when they hit play.
+              {t('pausedHint')}
             </p>
           </div>
         )}
@@ -1341,7 +1417,7 @@ export default function PlayerGameClient({
           <div className="mb-6 flex max-w-sm flex-col items-center space-y-4 text-center">
             {activeMultiplier > 1 && (
               <div className="mb-1 flex items-center gap-1 bg-arena-acid px-3 py-1.5 text-xs font-black uppercase tracking-wider text-arena-ink motion-pulse-soft">
-                <Zap className="h-3.5 w-3.5" /> {activeMultiplier}x points
+                <Zap className="h-3.5 w-3.5" /> {activeMultiplier}x {t('pointsWord')}
               </div>
             )}
             
@@ -1427,7 +1503,7 @@ export default function PlayerGameClient({
                 onClick={handleMultiSubmit}
                 className="h-12 w-full rounded-none bg-arena-signal text-base font-bold text-white shadow-[4px_4px_0_rgba(0,0,0,0.3)] hover:brightness-110"
               >
-                Lock answers
+                {t('lockAnswers')}
               </Button>
             </div>
           ) : (
@@ -1448,7 +1524,7 @@ export default function PlayerGameClient({
 
         <div className="flex items-center justify-center gap-1.5 border-t border-white/10 py-4 text-center text-xs font-semibold text-white/50">
           <Clock className="h-4 w-4" />
-          <span>Faster lock = bigger speed bonus</span>
+          <span>{t('fasterLockHint')}</span>
         </div>
         </div>
       </GameShell>
@@ -1459,7 +1535,7 @@ export default function PlayerGameClient({
     <GameShell className="items-center justify-center">
       <div className="flex flex-1 flex-col items-center justify-center text-center">
         <Loader2 className="mb-4 h-10 w-10 animate-spin text-arena-acid" />
-        <p className="text-sm font-semibold text-white/60">Loading the room…</p>
+        <p className="text-sm font-semibold text-white/60">{t('loadingRoom')}</p>
       </div>
     </GameShell>
   );

@@ -25,6 +25,11 @@ export function canSendReaction(lastSentAt: number, now: number): boolean {
   return now - lastSentAt >= REACTION_COOLDOWN_MS;
 }
 
+/** Cheers belong in the lobby and in the lock-wait before reveal. */
+export function canCheerOnProjector(status: string): boolean {
+  return status === 'lobby' || status === 'question_active' || status === 'question_paused';
+}
+
 export function reactionLeftPercent(seed: number): string {
   const n = Number.isFinite(seed) ? Math.abs(seed) : 0;
   return `${8 + (n % 84)}%`;

@@ -37,6 +37,7 @@ import {
 } from '@/lib/game/lateJoin';
 import { waitingPlayers } from '@/lib/game/waitingPlayers';
 import { isPlayerConnected } from '@/lib/game/emptyLobby';
+import { answerPulsePercent, isRoomLocked } from '@/lib/game/roomPulse';
 import { lobbyJoinPath } from '@/lib/game/lobbyLink';
 import { useAutoCloseEmptyLobby } from '@/hooks/useAutoCloseEmptyLobby';
 import { LocaleToggle } from '@/components/brand/LocaleToggle';
@@ -116,6 +117,8 @@ export default function HostClickerClient({
   activeQuestionRef.current = activeQuestion;
 
   const waiting = useMemo(() => waitingPlayers(players, answeredIds), [players, answeredIds]);
+  const pulsePercent = answerPulsePercent(answeredIds.size, players.length);
+  const roomLocked = isRoomLocked(answeredIds.size, players.length);
   const lateJoinOn = isLateJoinEnabled(session.late_join_through_index);
   const remaining = displayRemaining(session, activeQuestion, clockNow);
   const orderKey = Array.isArray(session.question_order) ? session.question_order.join(',') : '';
@@ -431,8 +434,15 @@ export default function HostClickerClient({
           </p>
           <p className="font-display text-6xl font-extrabold tabular-nums text-arena-acid">{remaining}</p>
           <p className="text-sm font-bold text-white/70">
-            {answeredIds.size}/{players.length} answered · {waiting.length} {t('waiting')}
+            {answeredIds.size}/{players.length} {t('answersCount')}
+            {roomLocked ? ` · ${t('roomLocked')}` : ` · ${waiting.length} ${t('waiting')}`}
           </p>
+          <div className="h-2 overflow-hidden bg-white/10">
+            <div
+              className={`h-full transition-all duration-500 ${roomLocked ? 'bg-arena-acid' : 'bg-arena-court'}`}
+              style={{ width: `${pulsePercent}%` }}
+            />
+          </div>
           <ul className="max-h-40 flex-1 space-y-1 overflow-y-auto border border-white/10 bg-black/25 p-3">
             {waiting.length === 0 ? (
               <li className="text-sm text-white/50">Everyone in. Reveal when you are ready.</li>

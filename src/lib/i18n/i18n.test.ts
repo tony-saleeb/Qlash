@@ -22,6 +22,10 @@ describe('i18n', () => {
     expect(t('en', 'quitRoom')).toBe('Quit');
     expect(t('ar', 'quitRoom')).toBe('قفل الغرفة');
     expect(t('ar', 'tapToCheer')).toContain('اضغط علامة');
+    expect(t('en', 'lightning')).toBe('Lightning!');
+    expect(t('ar', 'lightning')).toBe('برق!');
+    expect(t('ar', 'firstLock')).toBe('أول قفل');
+    expect(t('ar', 'answerLocked')).toBe('الإجابة اتقفلت');
     expect(isLocale('ar')).toBe(true);
     expect(normalizeLocale('nope')).toBe('en');
   });

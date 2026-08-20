@@ -212,6 +212,14 @@ describe('PlayerGameClient', () => {
     render(<PlayerGameClient sessionId="sess-1" initialSessionStatus="question_active" />);
     await user.click(await screen.findByRole('button', { name: /^4$/ }));
     expect(await screen.findByText(/answer locked/i)).toBeInTheDocument();
+    expect(screen.getByRole('button', { name: 'slash' })).toBeInTheDocument();
+    expect(screen.getByText(/tap a mark/i)).toBeInTheDocument();
+    await user.click(screen.getByRole('button', { name: 'slash' }));
+    expect(sendSessionEvent).toHaveBeenCalledWith('lobby:react', {
+      mark: 'slash',
+      nickname: 'Ada',
+      playerId: 'p1',
+    });
   });
 
   it('lets a lobby player leave and clears their token', async () => {

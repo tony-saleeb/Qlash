@@ -63,11 +63,19 @@ import { waitingPlayers } from '@/lib/game/waitingPlayers';
 import { connectedPlayerCount, isPlayerConnected } from '@/lib/game/emptyLobby';
 import { buildTeachableReveal, formatTeachableCopy } from '@/lib/game/teachableReveal';
 import {
+  canCheerOnProjector,
   isLobbyReactionId,
   MAX_FLOATING_REACTIONS,
   REACTION_FLOAT_MS,
   reactionLeftPercent,
 } from '@/lib/game/reactions';
+import {
+  FIRST_LOCK_BANNER_MS,
+  answerPulsePercent,
+  hottestStreak,
+  isRoomLocked,
+  shouldAnnounceFirstLock,
+} from '@/lib/game/roomPulse';
 import { LocaleToggle } from '@/components/brand/LocaleToggle';
 import { useLocale } from '@/lib/i18n/useLocale';
 import { setHostLocale } from '@/app/actions/host';
@@ -109,7 +117,7 @@ export default function HostGameClient({
     supabase,
     onEvents: {
       'lobby:react': (msg) => {
-        if (sessionStatusRef.current !== 'lobby') return;
+        if (!canCheerOnProjector(sessionStatusRef.current)) return;
         const mark = msg.payload.mark;
         const nickname = String(msg.payload.nickname || '').trim().slice(0, 15);
         if (!isLobbyReactionId(mark) || !nickname) return;
@@ -155,6 +163,8 @@ export default function HostGameClient({
   // Active question loop variables
   const [timeLeft, setTimeLeft] = useState<number>(20);
   const [answeredIds, setAnsweredIds] = useState<Set<string>>(new Set());
+  const [firstLockName, setFirstLockName] = useState<string | null>(null);
+  const firstLockTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
   const [revealData, setRevealData] = useState<{
     optionCounts: Record<string, number>;
     leaderboard: LeaderboardPlayer[];
@@ -223,6 +233,8 @@ export default function HostGameClient({
   activeQuestionRef.current = activeQuestion;
   const submissionsCount = answeredIds.size;
   const waiting = waitingPlayers(players, answeredIds);
+  const pulsePercent = answerPulsePercent(submissionsCount, players.length);
+  const roomLocked = isRoomLocked(submissionsCount, players.length);
   const lateJoinOn = isLateJoinEnabled(session.late_join_through_index);
   const copyLobbyLink = useCallback(async () => {
     const url = `${window.location.origin}${lobbyJoinPath(session.pin)}`;
@@ -259,6 +271,7 @@ export default function HostGameClient({
     return () => {
       if (activityTimerRef.current) clearTimeout(activityTimerRef.current);
       if (playersFlushTimerRef.current) clearTimeout(playersFlushTimerRef.current);
+      if (firstLockTimerRef.current) clearTimeout(firstLockTimerRef.current);
     };
   }, []);
 
@@ -388,13 +401,20 @@ export default function HostGameClient({
           const question = activeQuestionRef.current;
           if (question && payload.new.question_id === question.id) {
             const playerId = payload.new.player_id as string;
+            const answerer = playersRef.current.find((p) => p.id === playerId);
+            let becameFirst = false;
             setAnsweredIds((prev) => {
               if (prev.has(playerId)) return prev;
+              becameFirst = shouldAnnounceFirstLock(prev.size, prev.size + 1);
               const next = new Set(prev);
               next.add(playerId);
               return next;
             });
-            const answerer = playersRef.current.find((p) => p.id === playerId);
+            if (becameFirst && answerer) {
+              setFirstLockName(answerer.nickname);
+              if (firstLockTimerRef.current) clearTimeout(firstLockTimerRef.current);
+              firstLockTimerRef.current = setTimeout(() => setFirstLockName(null), FIRST_LOCK_BANNER_MS);
+            }
             if (answerer) addActivityEntry('answer', `${answerer.nickname} submitted an answer`);
           }
         }
@@ -414,10 +434,12 @@ export default function HostGameClient({
     const questionId = activeQuestion?.id;
     if (!questionId) {
       setAnsweredIds(new Set());
+      setFirstLockName(null);
       return;
     }
     let cancelled = false;
     setAnsweredIds(new Set());
+    setFirstLockName(null);
     void supabase
       .from('answers_submitted')
       .select('player_id')
@@ -1060,7 +1082,14 @@ export default function HostGameClient({
     const isPaused = session.status === 'question_paused';
     return (
       <GameShell>
-        {/* Title bar / Index + Question Jumper */}
+        <LobbyReactionLayer items={lobbyReactions} />
+        {firstLockName && (
+          <div className="pointer-events-none absolute inset-x-0 top-20 z-30 flex justify-center px-4">
+            <div className="border-2 border-arena-acid bg-arena-acid px-5 py-2 font-display text-sm font-black uppercase tracking-[0.16em] text-arena-ink shadow-[6px_6px_0_rgba(0,0,0,0.35)] animate-scale-in">
+              {t('firstLock')} · {firstLockName}
+            </div>
+          </div>
+        )}
         <div className="z-10 flex items-center justify-between gap-4">
           <div className="flex flex-wrap items-center gap-2">
             <LiveChip>
@@ -1121,7 +1150,7 @@ export default function HostGameClient({
           <div className="order-2 flex flex-col items-center justify-center text-center md:order-1 md:col-span-3">
             <StatBox
               value={timeLeft}
-              label={isPaused ? 'Paused' : 'Seconds'}
+              label={isPaused ? t('paused') : t('seconds')}
               tone={timeLeft <= 5 && !isPaused ? 'signal' : 'acid'}
               pulse={isPaused || timeLeft <= 5}
             />
@@ -1157,9 +1186,22 @@ export default function HostGameClient({
           </div>
 
           <div className="order-3 flex flex-col items-center justify-center text-center md:col-span-3">
-            <StatBox value={submissionsCount} label="Answers" tone="court" />
+            <StatBox
+              value={submissionsCount}
+              label={t('answersCount')}
+              tone={roomLocked ? 'acid' : 'court'}
+              pulse={roomLocked}
+            />
+            <div className="mt-3 h-2 w-32 overflow-hidden bg-white/10">
+              <div
+                className={`h-full transition-all duration-500 ${roomLocked ? 'bg-arena-acid' : 'bg-arena-court'}`}
+                style={{ width: `${pulsePercent}%` }}
+              />
+            </div>
             <span className="mt-2 text-xs font-medium text-white/55">
-              {waiting.length} waiting · {players.length} in room
+              {roomLocked
+                ? t('roomLocked')
+                : `${waiting.length} ${t('waiting')} · ${players.length} ${t('inRoom')}`}
             </span>
           </div>
         </div>
@@ -1571,11 +1613,12 @@ export default function HostGameClient({
   if (session.status === 'leaderboard') {
     const leaderboardPlayers = revealData?.leaderboard || players.slice(0, 5).sort((a, b) => b.score - a.score);
     const teamRows = teamMode ? aggregateTeamScores(players).slice(0, 5) : [];
+    const fire = hottestStreak(players);
 
     return (
       <GameShell>
         <div className="z-10 flex items-center justify-between gap-4">
-          <LiveChip tone="court">Scoreboard</LiveChip>
+          <LiveChip tone="court">{t('scoreboard')}</LiveChip>
           <div className="flex items-center gap-2">
             {quitControl}
             <BrandMark tone="light" size="sm" wordmark={false} />
@@ -1589,6 +1632,11 @@ export default function HostGameClient({
           <p className="mt-1 text-xs text-white/50">
             {teamMode ? 'Combined team scores' : 'Top players this round'}
           </p>
+          {fire ? (
+            <p className="mt-3 inline-flex items-center gap-1.5 border-2 border-arena-acid bg-arena-acid px-3 py-1 font-display text-xs font-black uppercase tracking-[0.14em] text-arena-ink">
+              <Flame className="h-3.5 w-3.5 fill-current" /> {t('onFire')} · {fire.nickname} · {fire.streak}
+            </p>
+          ) : null}
         </div>
 
         <div className="z-10 mx-auto flex w-full max-w-2xl flex-1 flex-col justify-center gap-4 py-6">

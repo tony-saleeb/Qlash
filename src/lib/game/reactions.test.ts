@@ -1,5 +1,6 @@
 import { describe, expect, it } from 'vitest';
 import {
+  canCheerOnProjector,
   canSendReaction,
   isLobbyReactionId,
   reactionLeftPercent,
@@ -21,5 +22,13 @@ describe('lobby reactions', () => {
   it('scatters floaters across the board', () => {
     expect(reactionLeftPercent(0)).toBe('8%');
     expect(reactionLeftPercent(83)).toBe('91%');
+  });
+
+  it('lets cheers hit the projector in lobby and lock-wait', () => {
+    expect(canCheerOnProjector('lobby')).toBe(true);
+    expect(canCheerOnProjector('question_active')).toBe(true);
+    expect(canCheerOnProjector('question_paused')).toBe(true);
+    expect(canCheerOnProjector('question_reveal')).toBe(false);
+    expect(canCheerOnProjector('finished')).toBe(false);
   });
 });
