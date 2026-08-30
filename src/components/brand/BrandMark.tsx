@@ -1,4 +1,4 @@
-import type { ReactNode } from 'react';
+import type { ReactNode, SVGProps } from 'react';
 import { cn } from '@/lib/utils';
 import { AnswerMark } from '@/components/brand/AnswerMark';
 import { answerMarkClass, answerUsesInk, resolveAnswerColor } from '@/lib/game/marks';
@@ -10,12 +10,14 @@ export const BRAND_NAME = 'Qlash';
 export function BrandLogo({
   className,
   slashClassName,
-}: {
-  className?: string;
+  slashFill,
+  ...svgProps
+}: SVGProps<SVGSVGElement> & {
   slashClassName?: string;
+  slashFill?: string;
 }) {
   return (
-    <svg viewBox="0 0 32 32" className={className} fill="none" aria-hidden>
+    <svg viewBox="0 0 32 32" className={className} fill="none" aria-hidden {...svgProps}>
       <path
         fill="currentColor"
         fillRule="evenodd"
@@ -23,10 +25,12 @@ export function BrandLogo({
       />
       <path
         className={slashClassName}
+        fill={slashFill}
         d="M16.8 18.4 25.6 27.2l2.8-2.8-8.8-8.8-2.8 2.8Z"
       />
       <path
         className={slashClassName}
+        fill={slashFill}
         d="M21.2 15.6 29.2 23.6 31 21.8 23 13.8 21.2 15.6Z"
       />
     </svg>
@@ -90,8 +94,9 @@ export function PinDisplay({
   const digits = pin.padEnd(6, '·').slice(0, 6).split('');
   return (
     <div
+      dir="ltr"
       className={cn(
-        'flex items-center justify-center gap-1.5 sm:gap-2',
+        'ltr-isolate flex items-center justify-center gap-1.5 sm:gap-2',
         className
       )}
       aria-label={`PIN ${pin}`}
@@ -101,7 +106,7 @@ export function PinDisplay({
           key={i}
           className={cn(
             'inline-flex items-center justify-center border-2 border-arena-ink bg-white font-display font-extrabold tabular-nums text-arena-ink',
-            large ? 'h-14 w-11 text-3xl sm:h-16 sm:w-12 sm:text-4xl' : 'h-10 w-8 text-xl',
+            large ? 'h-11 w-8 text-2xl sm:h-14 sm:w-11 sm:text-3xl lg:h-16 lg:w-12 lg:text-4xl' : 'h-10 w-8 text-xl',
             i === 3 && 'ml-1.5 sm:ml-2'
           )}
         >

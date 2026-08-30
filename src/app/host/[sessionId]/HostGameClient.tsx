@@ -22,11 +22,11 @@ import {
   addQuestionTime,
   setLateJoinThroughIndex,
 } from '@/app/actions/game';
-import { Flame, Users, Play, Pause, UserX, AlertCircle, Trophy, ArrowRight, Home, CheckCircle2, Clock, Settings, Edit3, Zap, SkipForward, Send, Activity, ChevronDown, ChevronUp, MessageSquare, X, ClipboardList, Smartphone, Link2, LogOut } from 'lucide-react';
+import { Flame, Users, Play, Pause, UserX, AlertCircle, Trophy, ArrowRight, Home, CheckCircle2, Clock, Settings, Edit3, Zap, SkipForward, Send, Activity, ChevronDown, ChevronUp, MessageSquare, X, ClipboardList, Smartphone, Link2, LogOut, MessageCircle } from 'lucide-react';
 import confetti from 'canvas-confetti';
-import QRCode from 'qrcode';
 import { bindAudioUnlock, playJoinSound, playTickSound, playRevealSound, playFanfareSound, unlockGameAudio } from '@/lib/sounds';
 import { BrandMark, PinDisplay, StageBadge, playerChipColor } from '@/components/brand/BrandMark';
+import { LobbyQr } from '@/components/brand/LobbyQr';
 import { GameShell, LiveChip, StatBox } from '@/components/brand/GameShell';
 import { ClashCountdownOverlay } from '@/components/brand/ClashCountdown';
 import { LobbyReactionLayer, type FloatingReaction } from '@/components/brand/LobbyReactionLayer';
@@ -58,7 +58,8 @@ import { answerUsesInk, resolveAnswerColor } from '@/lib/game/marks';
 import { AnswerSwatch } from '@/components/brand/AnswerMark';
 import { Switch } from '@/components/ui/switch';
 import { hostClickerPath, isLateJoinEnabled, DEFAULT_LATE_JOIN_THROUGH_INDEX, LATE_JOIN_LOBBY_ONLY } from '@/lib/game/lateJoin';
-import { lobbyJoinPath } from '@/lib/game/lobbyLink';
+import { lobbyJoinPath, lobbyWhatsAppHref } from '@/lib/game/lobbyLink';
+import { podiumPath, podiumWhatsAppHref } from '@/lib/game/podiumShare';
 import { waitingPlayers } from '@/lib/game/waitingPlayers';
 import { connectedPlayerCount, isPlayerConnected } from '@/lib/game/emptyLobby';
 import { buildTeachableReveal, formatTeachableCopy } from '@/lib/game/teachableReveal';
@@ -196,34 +197,13 @@ export default function HostGameClient({
   const clashLockRef = useRef(false);
   const [lobbyReactions, setLobbyReactions] = useState<FloatingReaction[]>([]);
 
-  // QR Code State
-  const [qrDataUrl, setQrDataUrl] = useState<string>('');
+  const [joinOrigin, setJoinOrigin] = useState('');
 
   useEffect(() => bindAudioUnlock(), []);
 
   useEffect(() => {
-    if (session.status === 'lobby' && session.pin) {
-      const joinUrl = `${window.location.origin}${lobbyJoinPath(session.pin)}`;
-      QRCode.toDataURL(
-        joinUrl,
-        {
-          width: 256,
-          margin: 2,
-          color: {
-            dark: '#0e1116',
-            light: '#ffffff',
-          },
-        },
-        (err, url) => {
-          if (!err && url) {
-            setQrDataUrl(url);
-          } else if (err) {
-            console.error('Failed to generate QR Code:', err);
-          }
-        }
-      );
-    }
-  }, [session.status, session.pin]);
+    setJoinOrigin(window.location.origin);
+  }, []);
 
   const activeQuestionIndex = session.current_question_index;
   const activeQuestion = (playQuestions && playQuestions.length > 0)
@@ -245,6 +225,28 @@ export default function HostGameClient({
       window.prompt(t('copyLobbyLink'), url);
     }
   }, [session.pin, t]);
+  const shareLobbyWhatsApp = useCallback(() => {
+    window.open(lobbyWhatsAppHref(window.location.origin, session.pin, locale), '_blank', 'noopener,noreferrer');
+  }, [locale, session.pin]);
+  const sharePodiumWhatsApp = useCallback(
+    (top: { nickname: string; score: number }[]) => {
+      window.open(
+        podiumWhatsAppHref(window.location.origin, session.id, locale, quiz.title, top),
+        '_blank',
+        'noopener,noreferrer'
+      );
+    },
+    [locale, quiz.title, session.id]
+  );
+  const copyPodiumLink = useCallback(async () => {
+    const url = `${window.location.origin}${podiumPath(session.id)}`;
+    try {
+      await navigator.clipboard.writeText(url);
+      toast.success(t('podiumShareCopied'));
+    } catch {
+      window.prompt(t('sharePodium'), url);
+    }
+  }, [session.id, t]);
   const closeEmptyLobby = useCallback(() => {
     void endGameSession(session.id)
       .catch(() => undefined)
@@ -857,7 +859,7 @@ export default function HostGameClient({
   // ==========================================
   if (session.status === 'lobby') {
     return (
-      <div className="arena-stage arena-noise relative flex min-h-dvh w-full flex-col justify-between overflow-hidden font-sans">
+      <div className="arena-stage arena-noise relative flex min-h-dvh w-full flex-col justify-between overflow-x-hidden font-sans">
         <LobbyReactionLayer items={lobbyReactions} />
         <ClashCountdownOverlay
           play={clashRunning}
@@ -868,11 +870,11 @@ export default function HostGameClient({
           }}
         />
         <div className="pointer-events-none absolute inset-0 arena-grid opacity-[0.18]" />
-        <div className="pointer-events-none absolute -right-16 top-16 h-48 w-48 rotate-[14deg] bg-arena-acid motion-breathe" />
-        <div className="pointer-events-none absolute bottom-28 -left-6 h-24 w-24 -rotate-6 bg-arena-signal" />
-        <div className="pointer-events-none absolute bottom-16 left-24 h-10 w-40 bg-arena-court" />
+        <div className="pointer-events-none absolute -right-16 top-16 hidden h-48 w-48 rotate-[14deg] bg-arena-acid motion-breathe sm:block" />
+        <div className="pointer-events-none absolute bottom-28 -left-6 hidden h-24 w-24 -rotate-6 bg-arena-signal sm:block" />
+        <div className="pointer-events-none absolute bottom-16 left-24 hidden h-10 w-40 bg-arena-court sm:block" />
 
-        <header className="relative z-10 flex items-center justify-between border-b border-white/10 px-6 py-5">
+        <header className="relative z-10 flex items-center justify-between border-b border-white/10 px-4 py-3 sm:px-6 sm:py-5">
           <div className="flex items-center gap-4">
             <BrandMark tone="light" size="sm" />
             <div className="hidden border-l border-white/15 pl-4 sm:block">
@@ -890,39 +892,55 @@ export default function HostGameClient({
           </div>
         </header>
 
-        <main className="relative z-10 mx-auto grid w-full max-w-6xl flex-1 grid-cols-1 items-center gap-8 px-6 py-10 lg:grid-cols-12">
-          <div className="flex flex-col justify-center gap-8 text-center lg:col-span-4 lg:text-left">
+        <main className="relative z-10 mx-auto grid w-full max-w-7xl flex-1 grid-cols-1 items-center gap-4 px-4 py-4 sm:gap-6 sm:px-6 sm:py-6 lg:grid-cols-12 lg:gap-8 lg:py-10">
+          <div className="order-1 flex flex-col justify-center gap-3 text-center sm:gap-5 lg:order-1 lg:col-span-3 lg:gap-8 lg:text-left">
             <div>
-              <p className="text-[11px] font-bold uppercase tracking-[0.28em] text-arena-acid">{t('joinOnPhone')}</p>
-              <h2 className="mt-3 font-display text-5xl font-extrabold leading-[0.9] tracking-[-0.03em] text-white sm:text-6xl">
+              <p className="text-[10px] font-bold uppercase tracking-[0.22em] text-arena-acid sm:text-[11px] sm:tracking-[0.28em]">
+                {t('joinOnPhone')}
+              </p>
+              <h2 className="mt-3 hidden font-display text-5xl font-extrabold leading-[0.9] tracking-[-0.03em] text-white lg:block lg:text-6xl">
                 {t('enterPin')}
                 <span className="mt-1 block text-arena-acid">{t('thePin')}</span>
               </h2>
-              <p className="mx-auto mt-4 max-w-sm text-sm font-medium text-white/50 lg:mx-0">
+              <p className="mx-auto mt-4 hidden max-w-sm text-sm font-medium text-white/50 lg:mx-0 lg:block">
                 {t('lobbyHint')}
               </p>
             </div>
 
-            <div className="mx-auto w-full max-w-md border-2 border-arena-ink bg-white p-5 text-center shadow-[8px_8px_0_rgba(0,0,0,0.35)] lg:mx-0">
+            <div className="mx-auto w-full max-w-md border-2 border-arena-ink bg-white p-3 text-center shadow-[8px_8px_0_rgba(0,0,0,0.35)] sm:p-5 lg:mx-0">
               <p className="text-[10px] font-bold uppercase tracking-[0.22em] text-arena-ink/40">{t('roomPin')}</p>
-              <div className="mt-3">
+              <div className="mt-2 sm:mt-3">
                 <PinDisplay pin={session.pin} large />
               </div>
             </div>
           </div>
 
-          <div className="relative z-20 flex items-center justify-center lg:col-span-3">
-            <div className="flex h-52 w-52 shrink-0 flex-col items-center justify-center border-2 border-arena-acid bg-white p-3 shadow-[6px_6px_0_rgba(200,245,66,0.35)]">
-              {qrDataUrl ? (
-                <img src={qrDataUrl} alt="Lobby QR Code" className="h-40 w-40 object-contain" />
-              ) : (
-                <div className="h-40 w-40 animate-pulse bg-arena-mist" aria-hidden />
-              )}
-              <span className="mt-1 text-[9px] font-black uppercase tracking-[0.2em] text-arena-ink/45">{t('scan')}</span>
+          <div className="order-2 flex flex-col items-center justify-center gap-3 lg:col-span-5">
+            <LobbyQr
+              value={joinOrigin ? `${joinOrigin}${lobbyJoinPath(session.pin)}` : ''}
+              caption={t('scan')}
+            />
+            <div className="flex w-[min(100%,22rem)] gap-2 lg:hidden">
+              <Button
+                type="button"
+                variant="ghost"
+                className={`${hostCtrl} min-h-12 flex-1`}
+                onClick={() => void copyLobbyLink()}
+              >
+                <Link2 className="h-4 w-4" /> {t('copyLobbyLink')}
+              </Button>
+              <Button
+                type="button"
+                variant="ghost"
+                className={`${hostCtrl} min-h-12 flex-1`}
+                onClick={shareLobbyWhatsApp}
+              >
+                <MessageCircle className="h-4 w-4" /> {t('shareWhatsApp')}
+              </Button>
             </div>
           </div>
 
-          <div className="relative z-10 flex min-h-[48vh] flex-col gap-4 self-stretch border border-white/12 bg-white/[0.04] p-6 backdrop-blur-[2px] lg:col-span-5">
+          <div className="order-3 relative z-10 flex min-h-0 flex-col gap-4 self-stretch border border-white/12 bg-white/[0.04] p-4 backdrop-blur-[2px] sm:p-6 lg:col-span-4 lg:min-h-[48vh]">
             <div className="flex items-center justify-between border-b border-white/10 pb-3">
               <span className="flex items-center gap-2 text-xs font-bold uppercase tracking-[0.2em] text-white/55">
                 <Users className="h-4 w-4 text-arena-acid" /> {t('players')}
@@ -955,17 +973,22 @@ export default function HostGameClient({
                 </div>
                 <p className="font-display text-xl font-bold text-white">{t('waitingForPlayers')}</p>
                 <p className="mt-2 max-w-xs text-xs text-white/40">{t('nicknamesLand')}</p>
-                <Button
-                  type="button"
-                  variant="ghost"
-                  className={`${hostCtrl} mt-6`}
-                  onClick={() => void copyLobbyLink()}
-                >
-                  <Link2 className="h-4 w-4" /> {t('copyLobbyLink')}
-                </Button>
+                <div className="mt-6 flex flex-col gap-2 sm:flex-row">
+                  <Button
+                    type="button"
+                    variant="ghost"
+                    className={hostCtrl}
+                    onClick={() => void copyLobbyLink()}
+                  >
+                    <Link2 className="h-4 w-4" /> {t('copyLobbyLink')}
+                  </Button>
+                  <Button type="button" variant="ghost" className={hostCtrl} onClick={shareLobbyWhatsApp}>
+                    <MessageCircle className="h-4 w-4" /> {t('shareWhatsApp')}
+                  </Button>
+                </div>
               </div>
             ) : (
-              <div className="max-h-[52vh] flex-1 overflow-y-auto pr-1">
+              <div className="max-h-40 flex-1 overflow-y-auto pr-1 sm:max-h-[52vh]">
                 <div className="grid grid-cols-2 gap-2.5 sm:grid-cols-3">
                   {players.map((p) => (
                     <div
@@ -1003,15 +1026,15 @@ export default function HostGameClient({
           </div>
         </main>
 
-        <footer className="relative z-10 flex flex-col items-stretch justify-between gap-4 border-t border-white/10 bg-black/20 px-6 py-5 sm:flex-row sm:items-center">
+        <footer className="sticky bottom-0 z-20 flex flex-col items-stretch justify-between gap-3 border-t border-white/10 bg-arena-stage/95 px-4 py-3 pb-[max(0.75rem,env(safe-area-inset-bottom))] backdrop-blur-sm sm:gap-4 sm:px-6 sm:py-5 sm:flex-row sm:items-center lg:static lg:bg-black/20 lg:backdrop-blur-none">
           <div className="flex flex-col gap-3 sm:max-w-md">
-            <p className="text-center text-xs uppercase tracking-[0.14em] text-white/40 sm:text-left">
-              Keep this screen visible · PIN <strong className="text-white">{session.pin}</strong>
+            <p className="hidden text-center text-xs uppercase tracking-[0.14em] text-white/40 sm:block sm:text-left">
+              Keep this screen visible · PIN <bdi className="text-white font-bold">{session.pin}</bdi>
             </p>
             <label className="flex items-center justify-between gap-3 border border-white/15 bg-white/5 px-3 py-2">
               <span>
                 <span className="block text-xs font-bold text-white/80">{t('lateJoin')}</span>
-                <span className="mt-0.5 block text-[10px] font-medium leading-snug text-white/40">
+                <span className="mt-0.5 hidden text-[10px] font-medium leading-snug text-white/40 sm:block">
                   {t('lateJoinHint')}
                 </span>
               </span>
@@ -1043,6 +1066,9 @@ export default function HostGameClient({
               onClick={() => void copyLobbyLink()}
             >
               <Link2 className="h-4 w-4" /> {t('copyLobbyLink')}
+            </Button>
+            <Button type="button" variant="ghost" className={hostCtrl} onClick={shareLobbyWhatsApp}>
+              <MessageCircle className="h-4 w-4" /> {t('shareWhatsApp')}
             </Button>
             <Button
               type="button"
@@ -1230,7 +1256,7 @@ export default function HostGameClient({
         {/* Host controls footer */}
         <div className="z-10 mt-6 flex flex-wrap items-center justify-between gap-3 border-t border-white/10 pt-4">
           <span className="text-xs font-semibold text-white/50">
-            PIN: {session.pin}
+            PIN: <bdi>{session.pin}</bdi>
           </span>
           <div className="flex flex-wrap items-center gap-2">
             <Dialog open={isWaitingOpen} onOpenChange={setIsWaitingOpen}>
@@ -1597,7 +1623,7 @@ export default function HostGameClient({
 
         <div className="z-10 mt-6 flex items-center justify-between border-t border-white/10 pt-4">
           <span className="text-xs font-semibold text-white/50">
-            PIN {session.pin}
+            PIN <bdi>{session.pin}</bdi>
           </span>
           <Button onClick={handleShowLeaderboard} className={hostCta}>
             Show Leaderboard <ArrowRight className="h-4 w-4" />
@@ -1717,7 +1743,7 @@ export default function HostGameClient({
 
         <div className="z-10 mt-6 flex items-center justify-between border-t border-white/10 pt-4">
           <span className="text-xs font-semibold text-white/50">
-            PIN {session.pin}
+            PIN <bdi>{session.pin}</bdi>
           </span>
           {isLastQuestion ? (
             <Button onClick={handleShowPodium} className={hostCta}>
@@ -1813,9 +1839,20 @@ export default function HostGameClient({
           )}
         </div>
 
-        <div className="z-10 mt-6 flex w-full flex-col items-center justify-center gap-3 border-t border-white/10 pt-4 sm:flex-row">
-          <Button onClick={handleOpenReport} className={hostCta}>
-            <ClipboardList className="h-4 w-4" /> Class report
+        <div className="z-10 mt-6 flex w-full flex-col items-center justify-center gap-3 border-t border-white/10 pt-4 sm:flex-row sm:flex-wrap">
+          <Button
+            onClick={() =>
+              sharePodiumWhatsApp(podiumWinners.map((player) => ({ nickname: player.nickname, score: player.score })))
+            }
+            className={hostCta}
+          >
+            <MessageCircle className="h-4 w-4" /> {t('sharePodium')}
+          </Button>
+          <Button onClick={() => void copyPodiumLink()} className={hostCtrl}>
+            <Link2 className="h-4 w-4" /> {t('copyLink')}
+          </Button>
+          <Button onClick={handleOpenReport} className={hostCtrl}>
+            <ClipboardList className="h-4 w-4" /> {t('classReport')}
           </Button>
           <Button onClick={handlePlayAgain} className={hostCtrl}>
             <Play className="h-4 w-4 fill-current" /> Play again

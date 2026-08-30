@@ -3,9 +3,8 @@
 import { useCallback, useEffect, useState } from 'react';
 import {
   applyDocumentLocale,
-  detectBrowserLocale,
   normalizeLocale,
-  readStoredLocale,
+  resolveClientLocale,
   writeStoredLocale,
   type Locale,
 } from '@/lib/i18n/locale';
@@ -15,7 +14,7 @@ export function useLocale(initial?: Locale) {
   const [locale, setLocaleState] = useState<Locale>(() => normalizeLocale(initial));
 
   useEffect(() => {
-    const next = readStoredLocale() ?? (initial ? normalizeLocale(initial) : detectBrowserLocale());
+    const next = resolveClientLocale(initial);
     setLocaleState(next);
     applyDocumentLocale(next);
   }, [initial]);

@@ -1,5 +1,5 @@
 import { afterEach, describe, expect, it, vi } from 'vitest';
-import { authCallbackUrl, publicSiteUrl } from '@/lib/siteUrl';
+import { authCallbackUrl, metadataBaseUrl, publicSiteUrl } from '@/lib/siteUrl';
 
 describe('publicSiteUrl', () => {
   afterEach(() => {
@@ -15,5 +15,12 @@ describe('publicSiteUrl', () => {
   it('returns empty on the server when unset', () => {
     vi.stubEnv('NEXT_PUBLIC_SITE_URL', '');
     expect(publicSiteUrl()).toBe('');
+  });
+
+  it('uses NEXT_PUBLIC_SITE_URL for metadataBase and falls back to localhost', () => {
+    vi.stubEnv('NEXT_PUBLIC_SITE_URL', 'https://qlash.app/');
+    expect(metadataBaseUrl().origin).toBe('https://qlash.app');
+    vi.stubEnv('NEXT_PUBLIC_SITE_URL', '');
+    expect(metadataBaseUrl().origin).toBe('http://localhost:3000');
   });
 });

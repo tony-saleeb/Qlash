@@ -152,7 +152,7 @@ export default function DashboardClient({
     const loadingToast = toast.loading('Preparing share link…');
     try {
       const { shareCode } = await enableQuizShare(quiz.id);
-      const url = `${window.location.origin}/import/${shareCode}`;
+      const url = `${window.location.origin}/q/${shareCode}`;
       await navigator.clipboard.writeText(url);
       setQuizzes((current) =>
         current.map((row) => (row.id === quiz.id ? { ...row, share_code: shareCode } : row))
@@ -360,7 +360,7 @@ export default function DashboardClient({
                     <div>
                       <p dir="auto" className="font-display text-lg font-bold">{quizTitleFromSession(session)}</p>
                       <p className="text-xs text-arena-ink/45">
-                        PIN {session.pin} · {playerCount} {playerCount === 1 ? 'player' : 'players'} ·{' '}
+                        PIN <bdi>{session.pin}</bdi> · {playerCount} {playerCount === 1 ? 'player' : 'players'} ·{' '}
                         {new Date(session.created_at).toLocaleString()}
                       </p>
                     </div>

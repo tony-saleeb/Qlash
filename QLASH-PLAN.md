@@ -1,5 +1,12 @@
 # Qlash — summary plan
 
+> **Status board:** the Cursor growth review canvas
+> (`qlash-growth-review.canvas.tsx`) is the order of work. This file is
+> strategy background. Do not treat the tables below as current status —
+> reports, RTL, image upload, CI lint/test/build, Arabic first paint,
+> share cards (`/q`, `/p`, WhatsApp), player PWA, and Sentry have
+> shipped. Next is seasonal packs, paste-from-chat, and a demo PIN.
+
 Qlash is already a **real live quiz**, not a mock. Hosts auth, players join with a PIN, scoring is a Postgres RPC, rooms cap at **80**, and the Qlash stage is distinctive.
 
 You will not beat Kahoot by copying Kahoot. You make money by owning one job Kahoot does badly: **Arabic / church / classroom rooms that just work on school Wi‑Fi**.

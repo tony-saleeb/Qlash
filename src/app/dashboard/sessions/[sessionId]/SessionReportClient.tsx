@@ -2,13 +2,14 @@
 
 import { useRouter } from 'next/navigation';
 import { toast } from 'sonner';
-import { ArrowLeft, Download, Play } from 'lucide-react';
+import { ArrowLeft, Download, MessageCircle, Play, Printer } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { BrandMark } from '@/components/brand/BrandMark';
 import { LocaleToggle } from '@/components/brand/LocaleToggle';
 import { createGameSession } from '@/app/actions/game';
 import { createRecapQuiz } from '@/app/actions/reports';
 import { recapQuestionIds } from '@/lib/game/sessionReport';
+import { reportWhatsAppHref } from '@/lib/game/reportShare';
 import { setHostLocale } from '@/app/actions/host';
 import { useLocale } from '@/lib/i18n/useLocale';
 import type { Locale } from '@/lib/i18n/locale';
@@ -89,15 +90,31 @@ export default function SessionReportClient({
             <Button
               variant="ghost"
               size="icon"
-              className="rounded-none border-2 border-arena-ink"
+              className="no-print rounded-none border-2 border-arena-ink"
               onClick={() => router.push('/dashboard')}
             >
               <ArrowLeft className="h-4 w-4" />
             </Button>
             <BrandMark size="sm" />
           </div>
-          <div className="flex shrink-0 items-center gap-2">
+          <div className="no-print flex shrink-0 flex-wrap items-center justify-end gap-2">
             <LocaleToggle locale={locale} onChange={persistLocale} />
+            <Button
+              variant="ghost"
+              className="h-10 rounded-none border-2 border-arena-ink font-bold"
+              onClick={() =>
+                window.open(reportWhatsAppHref(window.location.origin, locale, report), '_blank', 'noopener,noreferrer')
+              }
+            >
+              <MessageCircle className="mr-1.5 h-4 w-4" /> {t('shareWhatsApp')}
+            </Button>
+            <Button
+              variant="ghost"
+              className="h-10 rounded-none border-2 border-arena-ink font-bold"
+              onClick={() => window.print()}
+            >
+              <Printer className="mr-1.5 h-4 w-4" /> {t('printReport')}
+            </Button>
             <Button
               variant="ghost"
               className="h-10 rounded-none border-2 border-arena-ink font-bold"
@@ -207,7 +224,7 @@ export default function SessionReportClient({
           </div>
         </section>
 
-        <section className="space-y-4">
+        <section className="no-print space-y-4">
           <h2 className="font-display text-2xl font-extrabold">Who missed what</h2>
           {report.questions.length === 0 ? (
             <p className="text-sm text-arena-ink/50">Question breakdown is unavailable for this room.</p>

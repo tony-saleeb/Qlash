@@ -1,4 +1,4 @@
-import type { ReactNode } from 'react';
+import type { ReactNode, SVGProps } from 'react';
 import { cn } from '@/lib/utils';
 import {
   answerMarkClass,
@@ -47,13 +47,14 @@ const MARK_PATHS: Record<AnswerMarkId, ReactNode> = {
 export function AnswerMark({
   shape,
   className,
+  ...svgProps
 }: {
   shape: string;
   className?: string;
-}) {
+} & SVGProps<SVGSVGElement>) {
   const id = resolveMarkId(shape);
   return (
-    <svg viewBox="0 0 32 32" className={className} fill="currentColor" aria-hidden>
+    <svg viewBox="0 0 32 32" className={className} fill="currentColor" aria-hidden {...svgProps}>
       {MARK_PATHS[id]}
     </svg>
   );

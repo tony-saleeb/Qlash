@@ -24,7 +24,7 @@ vi.mock('@/lib/game/joinClient', () => ({
   joinOrReconnect: vi.fn(),
 }));
 
-import PlayerJoinPage from '@/app/play/page';
+import PlayJoinClient from '@/app/play/PlayJoinClient';
 import { joinOrReconnect } from '@/lib/game/joinClient';
 
 describe('Player join page', () => {
@@ -38,7 +38,7 @@ describe('Player join page', () => {
 
   it('hides the PIN field when opened from a lobby invite link', async () => {
     window.history.replaceState({}, '', '/play?pin=847291');
-    render(<PlayerJoinPage />);
+    render(<PlayJoinClient />);
     expect(await screen.findByText(MESSAGES.en.inviteOnlyHint)).toBeInTheDocument();
     expect(screen.queryByPlaceholderText('······')).not.toBeInTheDocument();
     expect(screen.getByPlaceholderText(MESSAGES.en.nicknamePlaceholder)).toBeInTheDocument();
@@ -48,7 +48,7 @@ describe('Player join page', () => {
     vi.mocked(joinOrReconnect).mockResolvedValue({ sessionId: 'sess-1', reconnected: false });
     window.history.replaceState({}, '', '/play?pin=847291');
     const user = userEvent.setup();
-    render(<PlayerJoinPage />);
+    render(<PlayJoinClient />);
     await screen.findByText(MESSAGES.en.inviteOnlyHint);
     await user.type(screen.getByPlaceholderText(MESSAGES.en.nicknamePlaceholder), 'Nour');
     await user.click(screen.getByRole('button', { name: /jump in/i }));
@@ -58,5 +58,14 @@ describe('Player join page', () => {
       teamName: undefined,
     });
     expect(router.replace).toHaveBeenCalledWith('/play/sess-1');
+  });
+
+  it('blocks join when the phone is offline', async () => {
+    Object.defineProperty(window.navigator, 'onLine', { configurable: true, value: false });
+    window.history.replaceState({}, '', '/play?pin=847291');
+    render(<PlayJoinClient />);
+    expect(await screen.findByText(MESSAGES.en.youAreOffline, { exact: false })).toBeInTheDocument();
+    expect(screen.getByRole('button', { name: /jump in/i })).toBeDisabled();
+    Object.defineProperty(window.navigator, 'onLine', { configurable: true, value: true });
   });
 });

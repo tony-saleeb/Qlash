@@ -73,6 +73,17 @@
     unicode-bidi: plaintext;
   }
 
+  /* PINs and QR seals must not inherit html[dir=rtl] — flex rows and SVG axes flip. */
+  .ltr-isolate {
+    direction: ltr;
+    unicode-bidi: isolate;
+  }
+
+  .ltr-isolate svg {
+    direction: ltr;
+    unicode-bidi: isolate;
+  }
+
   ::selection {
     background: var(--arena-acid);
     color: var(--arena-ink);
@@ -194,6 +205,30 @@
     animation: arena-breathe 3.2s ease-in-out infinite;
   }
 
+  .motion-seal-well {
+    transform-box: fill-box;
+    transform-origin: center;
+    animation: arena-seal-glow 2.2s ease-in-out infinite;
+  }
+
+  .motion-seal-logo {
+    transform-box: fill-box;
+    transform-origin: center;
+    animation: arena-pulse-soft 2.8s ease-in-out infinite;
+  }
+
+  .motion-seal-tile {
+    transform-box: fill-box;
+    transform-origin: center;
+    animation: arena-seal-tile 1.5s ease-in-out infinite;
+  }
+
+  .motion-seal-slash {
+    transform-box: fill-box;
+    transform-origin: 80% 70%;
+    animation: arena-seal-slash 2.4s ease-in-out infinite;
+  }
+
   .motion-wait-bounce {
     animation: arena-wait-bounce 1.15s ease-in-out infinite;
   }
@@ -258,6 +293,36 @@
   }
 }
 
+@keyframes arena-seal-glow {
+  0%,
+  100% {
+    opacity: 1;
+  }
+  50% {
+    opacity: 0.45;
+  }
+}
+
+@keyframes arena-seal-tile {
+  0%,
+  100% {
+    transform: translateY(0);
+  }
+  50% {
+    transform: translateY(-2.2px);
+  }
+}
+
+@keyframes arena-seal-slash {
+  0%,
+  100% {
+    transform: translate(0, 0);
+  }
+  50% {
+    transform: translate(1.4px, 1.4px);
+  }
+}
+
 @keyframes arena-wait-bounce {
   0%,
   100% {
@@ -287,9 +352,24 @@
   animation: arena-reaction-float 2.4s ease-out forwards;
 }
 
+@media print {
+  .no-print {
+    display: none !important;
+  }
+
+  body {
+    background: #fff !important;
+  }
+}
+
 @media (prefers-reduced-motion: reduce) {
   .motion-wait-bounce,
-  .motion-reaction-float {
+  .motion-reaction-float,
+  .motion-seal-well,
+  .motion-seal-logo,
+  .motion-seal-tile,
+  .motion-seal-slash,
+  .motion-pulse-soft {
     animation: none;
   }
 }

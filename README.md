@@ -34,7 +34,7 @@ Run these in the Supabase SQL editor, in order, on a new project:
 4. `schema-p2b-capacity.sql`
 5. `schema-fast-submit.sql`
 6. `schema-p3-live-hardening.sql`
-7. `schema-p4-ops.sql`
+7. `schema-p4-ops.sql` — then confirm with `scripts/verify-rate-limit.sql`
 8. `schema-media.sql`
 9. `schema-p5-classroom.sql`
 10. `schema-p6-locale.sql`
@@ -53,7 +53,13 @@ NEXT_PUBLIC_SITE_URL=https://your-domain.com
 NEXT_PUBLIC_SUPABASE_URL=...
 NEXT_PUBLIC_SUPABASE_ANON_KEY=...
 SUPABASE_SERVICE_ROLE_KEY=...
+NEXT_PUBLIC_SENTRY_DSN=...
+SENTRY_DSN=...
 ```
+
+After `schema-p4-ops.sql`, run `scripts/verify-rate-limit.sql`. If `consume_rate_limit` is missing, join/submit limits are per Vercel instance only.
+
+Players can add `/play` to the home screen (PWA). Live rooms still need a network.
 
 Supabase **Authentication → URL configuration**:
 

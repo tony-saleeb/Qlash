@@ -1,0 +1,41 @@
+---
+description: Stay on the Qlash growth sequence. Do not invent a different roadmap.
+alwaysApply: true
+---
+
+# Qlash growth rails
+
+Product status and order of work live in the growth review canvas
+(`qlash-growth-review.canvas.tsx`). Follow it. Do not start a parallel plan.
+`QLASH-PLAN.md` is background only — its status tables are stale.
+
+## Next build (do this, nothing else)
+
+2–3 seasonal packs, paste-from-chat importer, always-on demo PIN.
+That is Month 2.
+
+When the user says "next" / "continue the plan", implement the next
+**unshipped** row in Suggested sequence. After it ships, mark that row
+shipped on the canvas in the same change.
+
+## Already shipped — do not rebuild
+
+Live loop, reports / CSV / recap, Arabic first paint + LTR PIN/QR,
+OG / sitemap, WhatsApp lobby, `/q/[code]`, `/p/[session]`, report
+WhatsApp + print, share import, room seal, player PWA (`/play`),
+Sentry (no-op without DSN), CI lint/test/build, rate-limit RPC test
++ `scripts/verify-rate-limit.sql`.
+
+## Do not build
+
+Stripe before a teacher hits a cap. Player logins. 300-seat rooms.
+AI question mills. Native app. Custom live themes. Public quiz feed.
+Splitting `HostGameClient` / `PlayerGameClient`.
+
+## Invariants
+
+PIN-only players. Cap 80. Host is the clock. Players never trust host UI.
+Charge the host after a cap, not before.
+
+If a request fights this sequence, say so and do the next sequence item
+(or the smallest fix that unblocks a live room).

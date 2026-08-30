@@ -17,6 +17,8 @@ describe('i18n', () => {
     expect(t('en', 'lateJoin')).toBe('Late join');
     expect(t('ar', 'lateJoin')).toBe('اللي يتأخر يدخل');
     expect(t('ar', 'copyLobbyLink')).toBe('انسخ لينك الغرفة');
+    expect(t('en', 'shareWhatsApp')).toBe('WhatsApp');
+    expect(t('ar', 'shareWhatsApp')).toBe('واتساب');
     expect(t('ar', 'lobbyTipBoard')).toBe('اسمك ظاهر على الشاشة خلاص.');
     expect(t('ar', 'leaveLobby')).toBe('خروج');
     expect(t('en', 'quitRoom')).toBe('Quit');

@@ -1,5 +1,13 @@
-import { describe, expect, it, vi } from 'vitest';
-import { clientIpFromRequest, rateLimitMemory } from '@/lib/rate-limit';
+import { beforeEach, describe, expect, it, vi } from 'vitest';
+import { createClientMock } from '@/test/supabaseMock';
+import { createAdminClient } from '@/lib/supabase/admin';
+import { clientIpFromRequest, rateLimit, rateLimitMemory } from '@/lib/rate-limit';
+
+vi.mock('@/lib/supabase/admin', () => ({
+  createAdminClient: vi.fn(),
+}));
+
+const admin = createClientMock();
 
 describe('rateLimitMemory', () => {
   it('allows the first hit and subsequent hits under the cap', () => {
@@ -29,6 +37,33 @@ describe('rateLimitMemory', () => {
     expect(rateLimitMemory({ key, limit: 1, windowMs: 1000 }).ok).toBe(false);
     nowSpy.mockReturnValue(now + 1000);
     expect(rateLimitMemory({ key, limit: 1, windowMs: 1000 }).ok).toBe(true);
+  });
+});
+
+describe('rateLimit remote', () => {
+  beforeEach(() => {
+    admin.reset();
+    vi.mocked(createAdminClient).mockReturnValue(admin as never);
+    process.env.SUPABASE_SERVICE_ROLE_KEY = 'service-role';
+    process.env.NEXT_PUBLIC_SUPABASE_URL = 'https://example.supabase.co';
+  });
+
+  it('uses consume_rate_limit when the RPC answers', async () => {
+    admin.setRpc('consume_rate_limit', { data: { ok: true }, error: null });
+    await expect(rateLimit({ key: 'join:10.0.0.1', limit: 10, windowMs: 1000 })).resolves.toEqual({ ok: true });
+    expect(admin.rpc).toHaveBeenCalledWith('consume_rate_limit', {
+      p_key: 'join:10.0.0.1',
+      p_limit: 10,
+      p_window_ms: 1000,
+    });
+  });
+
+  it('falls back to memory when the RPC is missing', async () => {
+    admin.setRpc('consume_rate_limit', { data: null, error: { message: 'function does not exist' } });
+    const key = `fallback-${Math.random()}`;
+    await expect(rateLimit({ key, limit: 1, windowMs: 30_000 })).resolves.toEqual({ ok: true });
+    const blocked = await rateLimit({ key, limit: 1, windowMs: 30_000 });
+    expect(blocked.ok).toBe(false);
   });
 });
 

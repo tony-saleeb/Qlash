@@ -18,8 +18,9 @@ import {
   startGameSession,
   endGameSession,
 } from '@/app/actions/game';
-import { ArrowRight, Clock, Link2, LogOut, Monitor, Pause, Play, Trophy, Users } from 'lucide-react';
+import { ArrowRight, Clock, Link2, LogOut, MessageCircle, Monitor, Pause, Play, Trophy, Users } from 'lucide-react';
 import { BrandMark, PinDisplay } from '@/components/brand/BrandMark';
+import { LobbyQr } from '@/components/brand/LobbyQr';
 import { ClashCountdownOverlay } from '@/components/brand/ClashCountdown';
 import { useSessionChannel } from '@/hooks/useSessionChannel';
 import {
@@ -38,7 +39,8 @@ import {
 import { waitingPlayers } from '@/lib/game/waitingPlayers';
 import { isPlayerConnected } from '@/lib/game/emptyLobby';
 import { answerPulsePercent, isRoomLocked } from '@/lib/game/roomPulse';
-import { lobbyJoinPath } from '@/lib/game/lobbyLink';
+import { lobbyJoinPath, lobbyWhatsAppHref } from '@/lib/game/lobbyLink';
+import { podiumWhatsAppHref } from '@/lib/game/podiumShare';
 import { useAutoCloseEmptyLobby } from '@/hooks/useAutoCloseEmptyLobby';
 import { LocaleToggle } from '@/components/brand/LocaleToggle';
 import { useLocale } from '@/lib/i18n/useLocale';
@@ -100,6 +102,11 @@ export default function HostClickerClient({
   const revealingRef = useRef(false);
   const [clashRunning, setClashRunning] = useState(false);
   const clashLockRef = useRef(false);
+  const [joinOrigin, setJoinOrigin] = useState('');
+
+  useEffect(() => {
+    setJoinOrigin(window.location.origin);
+  }, []);
 
   const randomizeQuestions = Boolean(quiz.randomize_questions);
   const randomizeAnswers = Boolean(quiz.randomize_answers);
@@ -341,7 +348,7 @@ export default function HostClickerClient({
     'h-16 w-full rounded-none font-display text-lg font-extrabold uppercase tracking-wide';
 
   return (
-    <div className="flex min-h-dvh flex-col bg-arena-stage px-4 py-5 text-white">
+    <div className="flex min-h-dvh flex-col bg-arena-stage px-4 py-4 pb-[max(1rem,env(safe-area-inset-bottom))] text-white">
       <ClashCountdownOverlay
         play={clashRunning}
         clashWord={t('clash')}
@@ -381,8 +388,13 @@ export default function HostClickerClient({
       </div>
 
       {session.status === 'lobby' && (
-        <div className="mt-6 flex flex-1 flex-col gap-5">
-          <p className="flex items-center gap-2 font-display text-2xl font-extrabold">
+        <div className="mt-4 flex flex-1 flex-col gap-4">
+          <LobbyQr
+            value={joinOrigin ? `${joinOrigin}${lobbyJoinPath(session.pin)}` : ''}
+            caption={t('scan')}
+            className="mx-auto w-[min(100%,18rem,68svw,calc(38svh*80/90))]"
+          />
+          <p className="flex items-center gap-2 font-display text-xl font-extrabold sm:text-2xl">
             <Users className="h-6 w-6 text-arena-acid" /> {players.length} {t('inLobby')}
           </p>
           <label className="flex items-center justify-between gap-3 border border-white/15 bg-white/5 p-4">
@@ -411,6 +423,16 @@ export default function HostClickerClient({
             }}
           >
             <Link2 className="mr-2 h-5 w-5" /> {t('copyLobbyLink')}
+          </Button>
+          <Button
+            type="button"
+            variant="ghost"
+            className="h-14 w-full rounded-none border-2 border-white/30 bg-white/10 font-display text-sm font-extrabold uppercase tracking-wider text-white"
+            onClick={() => {
+              window.open(lobbyWhatsAppHref(window.location.origin, session.pin, locale), '_blank', 'noopener,noreferrer');
+            }}
+          >
+            <MessageCircle className="mr-2 h-5 w-5" /> {t('shareWhatsApp')}
           </Button>
           <Button
             type="button"
@@ -521,10 +543,32 @@ export default function HostClickerClient({
       )}
 
       {session.status === 'finished' && (
-        <div className="mt-8">
+        <div className="mt-8 flex flex-col gap-2">
           <Button
             type="button"
             className={`${bigBtn} bg-arena-acid text-arena-ink`}
+            onClick={() =>
+              window.open(
+                podiumWhatsAppHref(
+                  window.location.origin,
+                  session.id,
+                  locale,
+                  quiz.title,
+                  [...players]
+                    .sort((a, b) => b.score - a.score)
+                    .slice(0, 3)
+                    .map((player) => ({ nickname: player.nickname, score: player.score }))
+                ),
+                '_blank',
+                'noopener,noreferrer'
+              )
+            }
+          >
+            <MessageCircle className="h-4 w-4" /> {t('sharePodium')}
+          </Button>
+          <Button
+            type="button"
+            className={`${bigBtn} border-2 border-white/20 bg-transparent text-white`}
             onClick={() => router.push(`/dashboard/sessions/${session.id}`)}
           >
             {t('classReport')}

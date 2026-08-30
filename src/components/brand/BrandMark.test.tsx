@@ -11,6 +11,7 @@ import {
   StageBadge,
   playerChipColor,
 } from '@/components/brand/BrandMark';
+import { LobbyQr } from '@/components/brand/LobbyQr';
 import { AnswerMark, AnswerSwatch } from '@/components/brand/AnswerMark';
 import { GameShell, LiveChip, StatBox } from '@/components/brand/GameShell';
 
@@ -33,6 +34,18 @@ describe('PinDisplay', () => {
     for (const digit of '847291') {
       expect(screen.getAllByText(digit).length).toBeGreaterThan(0);
     }
+  });
+
+  it('keeps PIN digits left-to-right inside an RTL page', () => {
+    render(
+      <div dir="rtl">
+        <PinDisplay pin="847291" />
+      </div>
+    );
+    const row = screen.getByLabelText('PIN 847291');
+    expect(row).toHaveAttribute('dir', 'ltr');
+    expect(row).toHaveClass('ltr-isolate');
+    expect([...row.querySelectorAll(':scope > span')].map((cell) => cell.textContent).join('')).toBe('847291');
   });
 });
 
@@ -90,6 +103,27 @@ describe('GameShell + chips', () => {
     render(<LobbyWaitMarks onPick={onPick} />);
     await user.click(screen.getByRole('button', { name: 'bolt' }));
     expect(onPick).toHaveBeenCalledWith('bolt');
+  });
+});
+
+describe('LobbyQr', () => {
+  it('renders a themed room mark with the Qlash logo in the center', () => {
+    render(<LobbyQr value="https://qlash.test/play?pin=847291" caption="Scan" />);
+    const mark = screen.getByRole('img', { name: 'Lobby QR code' });
+    expect(mark).toBeInTheDocument();
+    expect(mark.querySelectorAll('circle').length).toBeGreaterThan(20);
+    expect(screen.getByText('Scan')).toBeInTheDocument();
+  });
+
+  it('isolates the seal from an RTL page so the pattern does not mirror', () => {
+    const { container } = render(
+      <div dir="rtl">
+        <LobbyQr value="https://qlash.test/play?pin=847291" />
+      </div>
+    );
+    const wrap = container.querySelector('.ltr-isolate');
+    expect(wrap).toHaveAttribute('dir', 'ltr');
+    expect(wrap).toHaveClass('ltr-isolate');
   });
 });
 
