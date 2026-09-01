@@ -4,10 +4,12 @@ import robots from '@/app/robots';
 import { PLAY_TITLE, SITE_DESCRIPTION, SITE_TITLE } from '@/lib/siteMeta';
 
 describe('public site metadata', () => {
-  it('leads with Arabic in the default title and description', () => {
-    expect(SITE_TITLE.startsWith('قلاش')).toBe(true);
+  it('keeps the browser title in English', () => {
+    expect(SITE_TITLE).toBe('Qlash — live classroom quiz');
+    expect(SITE_TITLE).not.toMatch(/[\u0600-\u06FF]/);
+    expect(PLAY_TITLE).toBe('Join a Qlash room');
+    expect(PLAY_TITLE).not.toMatch(/[\u0600-\u06FF]/);
     expect(SITE_DESCRIPTION).toContain('كويز حي');
-    expect(PLAY_TITLE).toContain('ادخل الغرفة');
   });
 
   it('lists only public routes on the sitemap', () => {
