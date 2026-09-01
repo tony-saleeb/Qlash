@@ -44,7 +44,7 @@ export default function QuestionEditorPane({
   onRemoveAnswer,
 }: QuestionEditorPaneProps) {
   return (
-    <main className="md:col-span-9 p-6 overflow-y-auto max-h-[calc(100vh-73px)] space-y-6">
+    <main className="space-y-6 p-4 md:col-span-9 md:max-h-[calc(100dvh-4.5rem)] md:overflow-y-auto md:p-6">
       {/* Question Meta Row */}
       <div className="grid grid-cols-1 sm:grid-cols-4 gap-4 bg-arena-mist/40 p-4 border border-arena-line rounded-2xl items-center">
         {/* Question Type */}

@@ -26,13 +26,13 @@ export default function QuestionListSidebar({
   onAdd,
 }: QuestionListSidebarProps) {
   return (
-    <aside className="md:col-span-3 border-r border-arena-line bg-white/40 p-4 flex flex-col justify-between overflow-y-auto max-h-[calc(100vh-73px)]">
-      <div className="space-y-3">
-        <span className="text-xs text-arena-ink/45 uppercase tracking-widest font-bold">
+    <aside className="flex flex-col border-b border-arena-line bg-white/40 md:col-span-3 md:max-h-[calc(100dvh-4.5rem)] md:justify-between md:overflow-y-auto md:border-b-0 md:border-r">
+      <div className="space-y-3 p-3 md:p-4">
+        <span className="text-xs font-bold uppercase tracking-widest text-arena-ink/45">
           Questions
         </span>
 
-        <div className="space-y-2.5 max-h-[60vh] overflow-y-auto pr-1">
+        <div className="flex gap-2 overflow-x-auto pb-1 md:max-h-[60vh] md:flex-col md:space-y-2.5 md:overflow-x-visible md:overflow-y-auto md:pr-1">
           {questions.map((q, idx) => {
             const isSelected = idx === activeIndex;
             const isDouble = doublePointsRounds.includes(idx.toString());
@@ -41,10 +41,10 @@ export default function QuestionListSidebar({
               <div
                 key={idx}
                 onClick={() => onSelect(idx)}
-                className={`p-3 rounded-xl border cursor-pointer transition-all flex items-start justify-between gap-3 group relative ${
+                className={`relative flex min-w-[11.5rem] shrink-0 cursor-pointer items-start justify-between gap-3 rounded-xl border p-3 transition-all group md:min-w-0 md:w-full ${
                   isSelected
-                    ? 'bg-arena-signal/10 border-arena-signal text-arena-ink shadow-lg'
-                    : 'bg-arena-mist/40 border-arena-line hover:border-arena-ink/20 text-arena-ink/55 hover:text-arena-ink'
+                    ? 'border-arena-signal bg-arena-signal/10 text-arena-ink shadow-lg'
+                    : 'border-arena-line bg-arena-mist/40 text-arena-ink/55 hover:border-arena-ink/20 hover:text-arena-ink'
                 }`}
               >
                 <div className="flex items-start gap-2.5 w-full">
@@ -62,7 +62,7 @@ export default function QuestionListSidebar({
                 </div>
 
                 {/* Move and delete controls inside thumbnail hover */}
-                <div className="opacity-0 group-hover:opacity-100 transition-opacity flex items-center gap-1 shrink-0 absolute right-2 top-2 bg-arena-mist/90 border border-arena-line p-0.5 rounded-lg">
+                <div className="absolute right-2 top-2 flex items-center gap-1 rounded-lg border border-arena-line bg-arena-mist/90 p-0.5 opacity-100 transition-opacity md:opacity-0 md:group-hover:opacity-100">
                   <button
                     onClick={(e) => {
                       e.stopPropagation();
@@ -111,7 +111,7 @@ export default function QuestionListSidebar({
       </div>
 
       {/* Quick Add Question Panel */}
-      <div className="pt-4 border-t border-arena-line space-y-2 mt-4 bg-white/80 sticky bottom-0">
+      <div className="sticky bottom-0 mt-0 space-y-2 border-t border-arena-line bg-white/80 p-3 pt-3 md:mt-4 md:bg-white/80">
         <span className="text-[10px] text-arena-ink/45 font-bold uppercase tracking-wider block">
           Add Question
         </span>

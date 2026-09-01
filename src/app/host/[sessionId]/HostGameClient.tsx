@@ -874,19 +874,19 @@ export default function HostGameClient({
         <div className="pointer-events-none absolute bottom-28 -left-6 hidden h-24 w-24 -rotate-6 bg-arena-signal sm:block" />
         <div className="pointer-events-none absolute bottom-16 left-24 hidden h-10 w-40 bg-arena-court sm:block" />
 
-        <header className="relative z-10 flex items-center justify-between border-b border-white/10 px-4 py-3 sm:px-6 sm:py-5">
-          <div className="flex items-center gap-4">
+        <header className="relative z-10 flex flex-wrap items-center justify-between gap-2 border-b border-white/10 px-3 py-3 sm:px-6 sm:py-5">
+          <div className="flex min-w-0 items-center gap-3">
             <BrandMark tone="light" size="sm" />
-            <div className="hidden border-l border-white/15 pl-4 sm:block">
-              <p dir="auto" className="font-display text-sm font-bold text-white">{quiz.title}</p>
+            <div className="hidden min-w-0 border-l border-white/15 pl-4 sm:block">
+              <p dir="auto" className="truncate font-display text-sm font-bold text-white">{quiz.title}</p>
               <p className="text-[11px] font-medium uppercase tracking-[0.18em] text-white/40">{t('liveLobby')}</p>
             </div>
           </div>
-          <div className="flex items-center gap-3">
+          <div className="flex flex-wrap items-center justify-end gap-2 sm:gap-3">
             <LocaleToggle locale={locale} onChange={persistLocale} tone="light" />
-            {quitControl}
-            <StageBadge className="motion-pulse-soft">
-              <Users className="h-3.5 w-3.5" />
+            <div className="hidden sm:block">{quitControl}</div>
+            <StageBadge className="motion-pulse-soft max-w-[11rem] truncate sm:max-w-none">
+              <Users className="h-3.5 w-3.5 shrink-0" />
               {connectedCount}/{players.length} · max {playerCap}
             </StageBadge>
           </div>
@@ -1111,7 +1111,7 @@ export default function HostGameClient({
         <LobbyReactionLayer items={lobbyReactions} />
         {firstLockName && (
           <div className="pointer-events-none absolute inset-x-0 top-20 z-30 flex justify-center px-4">
-            <div className="border-2 border-arena-acid bg-arena-acid px-5 py-2 font-display text-sm font-black uppercase tracking-[0.16em] text-arena-ink shadow-[6px_6px_0_rgba(0,0,0,0.35)] animate-scale-in">
+            <div className="border-2 border-arena-acid bg-arena-acid px-3 py-2 font-display text-xs font-black uppercase tracking-[0.16em] text-arena-ink shadow-[6px_6px_0_rgba(0,0,0,0.35)] animate-scale-in sm:px-5 sm:text-sm">
               {t('firstLock')} · {firstLockName}
             </div>
           </div>
@@ -1167,12 +1167,12 @@ export default function HostGameClient({
         </div>
 
         <div className="z-10 mx-auto my-6 max-w-4xl text-center">
-          <h1 dir="auto" className="font-display text-3xl font-extrabold leading-tight tracking-tight text-white sm:text-4xl lg:text-5xl">
+          <h1 dir="auto" className="font-display text-2xl font-extrabold leading-tight tracking-tight text-white sm:text-4xl lg:text-5xl">
             {activeQuestion.prompt}
           </h1>
         </div>
 
-        <div className="z-10 mx-auto grid w-full max-w-5xl flex-1 items-center justify-center gap-8 md:grid-cols-12">
+        <div className="z-10 mx-auto grid w-full max-w-5xl flex-1 grid-cols-2 items-center justify-center gap-4 md:grid-cols-12 md:gap-8">
           <div className="order-2 flex flex-col items-center justify-center text-center md:order-1 md:col-span-3">
             <StatBox
               value={timeLeft}
@@ -1182,7 +1182,7 @@ export default function HostGameClient({
             />
           </div>
 
-          <div className="order-1 flex h-64 w-full items-center justify-center sm:h-80 md:order-2 md:col-span-6">
+          <div className="order-1 col-span-2 flex h-40 w-full items-center justify-center sm:h-64 md:order-2 md:col-span-6 md:h-80">
             {activeQuestion.media_url ? (
               activeQuestion.media_type === 'video' ? (
                 <video

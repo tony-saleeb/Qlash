@@ -90,7 +90,7 @@ export default function RootLayout({
       suppressHydrationWarning
       className={`${display.variable} ${sans.variable} ${arabic.variable} ${geistMono.variable}`}
     >
-      <body className="min-h-screen font-sans text-arena-ink antialiased">
+      <body className="min-h-dvh max-w-[100vw] overflow-x-clip font-sans text-arena-ink antialiased">
         <Script
           id="qlash-locale-boot"
           strategy="beforeInteractive"

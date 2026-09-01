@@ -357,25 +357,25 @@ export default function HostClickerClient({
           else setClashRunning(false);
         }}
       />
-      <header className="mb-5 flex items-center justify-between gap-3">
+      <header className="mb-5 flex flex-wrap items-center justify-between gap-2">
         <BrandMark tone="light" size="sm" />
-        <div className="flex items-center gap-2">
+        <div className="flex flex-wrap items-center justify-end gap-2">
           <LocaleToggle locale={locale} onChange={persistLocale} tone="light" />
           <Button
             type="button"
             variant="ghost"
-            className="h-10 rounded-none border-2 border-white/30 bg-white/10 px-3 text-xs font-bold uppercase tracking-wider text-white"
+            className="h-10 rounded-none border-2 border-white/30 bg-white/10 px-2 text-xs font-bold uppercase tracking-wider text-white sm:px-3"
             onClick={() => void handleQuitRoom()}
           >
-            <LogOut className="mr-1.5 h-4 w-4" /> {t('quitRoom')}
+            <LogOut className="h-4 w-4 sm:mr-1.5" /> <span className="hidden sm:inline">{t('quitRoom')}</span>
           </Button>
           <Button
             type="button"
             variant="ghost"
-            className="h-10 rounded-none border-2 border-white/30 bg-white/10 px-3 text-xs font-bold uppercase tracking-wider text-white"
+            className="h-10 rounded-none border-2 border-white/30 bg-white/10 px-2 text-xs font-bold uppercase tracking-wider text-white sm:px-3"
             onClick={openStage}
           >
-            <Monitor className="mr-1.5 h-4 w-4" /> {t('projector')}
+            <Monitor className="h-4 w-4 sm:mr-1.5" /> <span className="hidden sm:inline">{t('projector')}</span>
           </Button>
         </div>
       </header>

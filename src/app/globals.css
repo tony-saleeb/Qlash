@@ -40,9 +40,16 @@
     @apply border-border;
   }
 
+  html {
+    @apply font-sans;
+    overflow-x: clip;
+  }
+
   body {
     @apply bg-background text-foreground antialiased;
     background-color: var(--arena-canvas);
+    overflow-x: clip;
+    max-width: 100%;
   }
 
   /* Skip the 300ms tap delay on older mobile WebViews. */
@@ -54,10 +61,6 @@
   select,
   label {
     touch-action: manipulation;
-  }
-
-  html {
-    @apply font-sans;
   }
 
   h1,

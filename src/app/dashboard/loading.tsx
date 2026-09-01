@@ -1,6 +1,6 @@
 export default function DashboardLoading() {
   return (
-    <div className="min-h-screen bg-[var(--arena-canvas)] px-6 py-10">
+    <div className="min-h-dvh bg-[var(--arena-canvas)] px-6 py-10">
       <div className="mx-auto max-w-6xl">
         <div className="mb-8 h-4 w-28 animate-pulse rounded bg-arena-mist" />
         <div className="mb-3 h-10 w-48 animate-pulse rounded-lg bg-arena-mist" />

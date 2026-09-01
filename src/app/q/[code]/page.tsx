@@ -60,7 +60,7 @@ export default async function SharedQuizPage({ params }: PageProps) {
       </header>
       <main className="mx-auto flex w-full max-w-lg flex-1 flex-col justify-center px-4 py-12">
         <p className="arena-chip mb-4 w-fit bg-arena-acid">{t(locale, 'sharedQuiz')}</p>
-        <h1 dir="auto" className="font-display text-4xl font-extrabold tracking-tight sm:text-5xl">
+        <h1 dir="auto" className="font-display text-3xl font-extrabold tracking-tight sm:text-5xl">
           {preview.title}
         </h1>
         {preview.description ? (

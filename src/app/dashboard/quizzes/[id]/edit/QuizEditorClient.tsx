@@ -307,7 +307,7 @@ export default function QuizEditorClient({
   };
 
   return (
-    <div className="min-h-screen bg-white text-arena-ink flex flex-col font-sans">
+    <div className="flex min-h-dvh flex-col bg-white font-sans text-arena-ink">
       <QuizEditorHeader
         title={title}
         questionCount={questions.length}
@@ -319,7 +319,7 @@ export default function QuizEditorClient({
       />
 
       {/* Editor Body Grid */}
-      <div className="flex-1 grid md:grid-cols-12 overflow-hidden">
+      <div className="flex min-h-0 flex-1 flex-col md:grid md:grid-cols-12 md:overflow-hidden">
         <QuestionListSidebar
           questions={questions}
           activeIndex={activeIndex}

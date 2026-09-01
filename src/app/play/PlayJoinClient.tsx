@@ -98,12 +98,12 @@ export default function PlayJoinClient({ initialLocale }: { initialLocale?: Loca
   };
 
   return (
-    <div dir={pageDir} className="arena-noise relative flex min-h-screen flex-col overflow-hidden bg-arena-canvas">
+    <div dir={pageDir} className="arena-noise relative flex min-h-dvh flex-col overflow-x-clip bg-arena-canvas">
       <div className="pointer-events-none absolute inset-x-0 top-0 h-52 bg-arena-ink" />
       <div className="pointer-events-none absolute end-8 top-24 h-24 w-24 rotate-12 bg-arena-acid" />
       <div className="pointer-events-none absolute start-6 top-36 h-12 w-12 -rotate-6 bg-arena-signal" />
 
-      <header className="relative z-10 flex items-center justify-between px-6 py-8">
+      <header className="relative z-10 flex items-center justify-between gap-3 px-4 py-6 sm:px-6 sm:py-8">
         <button type="button" onClick={() => router.push('/')}>
           <BrandMark tone="light" />
         </button>
@@ -137,7 +137,7 @@ export default function PlayJoinClient({ initialLocale }: { initialLocale?: Loca
                   dir="ltr"
                   value={pin}
                   onChange={(e) => setPin(e.target.value.replace(/\D/g, ''))}
-                  className="mt-2 h-16 border-2 border-arena-ink text-center font-display text-3xl font-extrabold tracking-[0.4em]"
+                  className="mt-2 h-14 border-2 border-arena-ink text-center font-display text-2xl font-extrabold tracking-[0.28em] sm:h-16 sm:text-3xl sm:tracking-[0.4em]"
                 />
                 <p className="mt-2 text-xs font-medium text-arena-ink/45">
                   {t('demoPinHint')}{' '}

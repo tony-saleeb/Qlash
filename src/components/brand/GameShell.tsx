@@ -13,7 +13,7 @@ export function GameShell({
   return (
     <div
       className={cn(
-        'arena-stage arena-noise relative flex min-h-dvh w-full flex-col overflow-hidden font-sans',
+        'arena-stage arena-noise relative flex min-h-dvh w-full flex-col overflow-x-hidden overflow-y-auto font-sans',
         className
       )}
     >
@@ -76,12 +76,12 @@ export function StatBox({
   return (
     <div
       className={cn(
-        'flex h-32 w-32 flex-col items-center justify-center border-4 bg-black/40 shadow-[6px_6px_0_rgba(0,0,0,0.35)]',
+        'flex h-24 w-24 flex-col items-center justify-center border-4 bg-black/40 shadow-[6px_6px_0_rgba(0,0,0,0.35)] sm:h-32 sm:w-32',
         border,
         pulse && 'animate-pulse'
       )}
     >
-      <span className={cn('font-display text-4xl font-extrabold tabular-nums', valueColor)}>{value}</span>
+      <span className={cn('font-display text-3xl font-extrabold tabular-nums sm:text-4xl', valueColor)}>{value}</span>
       <span className="mt-0.5 text-[10px] font-bold uppercase tracking-[0.18em] text-white/50">{label}</span>
     </div>
   );

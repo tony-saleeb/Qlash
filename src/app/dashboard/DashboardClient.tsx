@@ -202,11 +202,11 @@ export default function DashboardClient({
   };
 
   return (
-    <div className="arena-noise relative min-h-screen bg-arena-canvas">
+    <div className="arena-noise relative min-h-dvh bg-arena-canvas">
       <div className="pointer-events-none absolute inset-0 arena-grid opacity-40" />
 
       <header className="sticky top-0 z-20 border-b-2 border-arena-ink bg-white/90 backdrop-blur-md">
-        <div className="mx-auto flex max-w-6xl items-center justify-between px-6 py-4">
+        <div className="mx-auto flex max-w-6xl items-center justify-between gap-3 px-4 py-3 sm:px-6 sm:py-4">
           <button type="button" onClick={() => router.push('/')}>
             <BrandMark size="sm" />
           </button>
@@ -231,11 +231,11 @@ export default function DashboardClient({
         </div>
       </header>
 
-      <main className="relative z-10 mx-auto max-w-6xl px-6 py-10">
+      <main className="relative z-10 mx-auto max-w-6xl px-4 py-8 sm:px-6 sm:py-10">
         <div className="mb-10 flex flex-col gap-5 sm:flex-row sm:items-end sm:justify-between">
           <div>
             <p className="arena-chip mb-3 bg-arena-acid">Your library</p>
-            <h1 className="font-display text-5xl font-extrabold tracking-[-0.03em] text-arena-ink">Quizzes</h1>
+            <h1 className="font-display text-3xl font-extrabold tracking-[-0.03em] text-arena-ink sm:text-5xl">Quizzes</h1>
             <p className="mt-2 max-w-md text-sm font-medium text-arena-ink/55">
               Build once. Host live. Open the class report after the podium.
               {' '}
@@ -297,10 +297,10 @@ export default function DashboardClient({
                       {new Date(quiz.created_at).toLocaleDateString()}
                     </p>
 
-                    <div className="mt-5 flex items-center gap-2 border-t-2 border-arena-ink/10 pt-4">
+                    <div className="mt-5 flex flex-wrap items-center gap-2 border-t-2 border-arena-ink/10 pt-4">
                       <Button
                         onClick={() => handleHostGame(quiz.id)}
-                        className="h-10 flex-1 rounded-none bg-arena-ink font-display font-extrabold text-white hover:bg-arena-ink/90"
+                        className="h-10 min-w-[5.5rem] flex-1 rounded-none bg-arena-ink font-display font-extrabold text-white hover:bg-arena-ink/90"
                       >
                         <Play className="mr-1 h-3.5 w-3.5 fill-current" /> Host
                       </Button>
@@ -390,7 +390,7 @@ export default function DashboardClient({
       </main>
 
       <Dialog open={packsOpen} onOpenChange={setPacksOpen}>
-        <DialogContent className="max-w-lg rounded-none border-2 border-arena-ink bg-white text-arena-ink">
+        <DialogContent className="max-h-[min(90dvh,40rem)] max-w-lg overflow-y-auto rounded-none border-2 border-arena-ink bg-white text-arena-ink">
           <DialogHeader>
             <DialogTitle className="font-display text-xl font-extrabold">{t('packs')}</DialogTitle>
             <DialogDescription className="text-arena-ink/55">

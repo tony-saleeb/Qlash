@@ -35,7 +35,7 @@ export default function DemoPage() {
       <main className="relative z-10 mx-auto grid w-full max-w-6xl flex-1 grid-cols-1 items-center gap-8 px-4 py-6 sm:px-8 lg:grid-cols-12 lg:gap-10">
         <div className="flex flex-col items-center gap-5 text-center lg:col-span-5 lg:items-start lg:text-start">
           <p className="arena-chip w-fit bg-arena-acid text-arena-ink">{t(locale, 'demoRoom')}</p>
-          <h1 className="font-display text-4xl font-extrabold tracking-tight sm:text-5xl">
+          <h1 className="font-display text-3xl font-extrabold tracking-tight sm:text-5xl">
             {t(locale, 'tryDemo')}
           </h1>
           <p className="max-w-sm text-sm font-medium text-white/55">{t(locale, 'demoTeaser')}</p>

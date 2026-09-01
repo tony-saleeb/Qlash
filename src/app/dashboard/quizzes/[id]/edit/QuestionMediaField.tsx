@@ -114,7 +114,7 @@ export default function QuestionMediaField({
           placeholder="or paste an image / video URL"
           value={mediaUrl || ''}
           onChange={(e) => applyUrl(e.target.value)}
-          className="bg-arena-mist/60 border-arena-line h-10 focus-visible:ring-arena-court rounded-xl min-w-[12rem] flex-1"
+          className="h-10 min-w-0 flex-1 rounded-xl border-arena-line bg-arena-mist/60 focus-visible:ring-arena-court sm:min-w-[12rem]"
         />
         {mediaUrl && (
           <Select

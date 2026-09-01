@@ -214,7 +214,7 @@ export function AnswerButton({
       type="button"
       onClick={onClick}
       className={cn(
-        'arena-answer group relative flex min-h-[7.5rem] flex-col items-center justify-center gap-2 overflow-hidden p-4 text-center transition active:translate-y-1 active:shadow-none',
+        'arena-answer group relative flex min-h-[6.25rem] flex-col items-center justify-center gap-2 overflow-hidden p-3 text-center transition active:translate-y-1 active:shadow-none sm:min-h-[7.5rem] sm:p-4',
         answerUsesInk(bg) ? 'text-arena-ink' : 'text-white',
         selected && 'ring-4 ring-white ring-offset-2 ring-offset-transparent',
         className

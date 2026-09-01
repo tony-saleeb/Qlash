@@ -1395,7 +1395,7 @@ export default function PlayerGameClient({
 
     return (
       <GameShell padded={false}>
-        <div className="relative flex min-h-dvh flex-col justify-between p-4">
+        <div className="relative flex min-h-dvh flex-col justify-between p-4 pb-[max(1rem,env(safe-area-inset-bottom))]">
         {sessionStatus === 'question_paused' && (
           <div className="absolute inset-0 z-50 flex flex-col items-center justify-center bg-arena-stage/85 p-6 text-center animate-fade-in">
             <Pause className="mb-3 h-12 w-12 text-arena-acid motion-pulse-soft" />
@@ -1442,7 +1442,7 @@ export default function PlayerGameClient({
               </div>
             )}
 
-            <h2 dir="auto" className="font-display text-xl font-extrabold leading-snug tracking-tight text-white">
+            <h2 dir="auto" className="font-display text-lg font-extrabold leading-snug tracking-tight text-white sm:text-xl">
               {activeQuestion.prompt}
             </h2>
           </div>
@@ -1493,7 +1493,7 @@ export default function PlayerGameClient({
                       label={ans.text}
                       selected={isChecked}
                       onClick={() => handleCheckboxToggle(ans.id)}
-                      className="min-h-[9rem]"
+                      className="min-h-[6.5rem] sm:min-h-[9rem]"
                     />
                   );
                 })}
@@ -1515,7 +1515,7 @@ export default function PlayerGameClient({
                   shape={ans.shape}
                   label={ans.text}
                   onClick={() => handleChoiceTap(ans.id)}
-                  className="min-h-[9.5rem]"
+                  className="min-h-[6.75rem] sm:min-h-[9.5rem]"
                 />
               ))}
             </div>

@@ -51,14 +51,14 @@ export default async function PodiumSharePage({ params }: PageProps) {
       </header>
       <main className="mx-auto flex w-full max-w-3xl flex-1 flex-col items-center justify-center px-4 pb-16">
         <p className="text-[11px] font-bold uppercase tracking-[0.22em] text-arena-acid">{t(locale, 'podium')}</p>
-        <h1 className="mt-3 text-center font-display text-4xl font-extrabold tracking-tight sm:text-5xl">
+        <h1 className="mt-3 text-center font-display text-3xl font-extrabold tracking-tight sm:text-5xl">
           {t(locale, 'championsOf')}{' '}
           <span dir="auto" className="text-arena-acid">
             {podium.quizTitle}
           </span>
         </h1>
 
-        <div className="mt-12 flex w-full items-end justify-center gap-3 sm:gap-6">
+        <div className="mt-12 flex w-full min-w-0 items-end justify-center gap-2 sm:gap-6">
           {second ? (
             <Place rank={2} nickname={second.nickname} score={second.score} height="h-32" tone="bg-[#4a2aff]" />
           ) : null}
@@ -105,7 +105,7 @@ function Place({
   tone: string;
 }) {
   return (
-    <div className="flex w-1/3 min-w-[5.5rem] max-w-[10rem] flex-col items-center gap-3">
+    <div className="flex w-1/3 min-w-0 max-w-[10rem] flex-col items-center gap-3">
       <div className="w-full min-w-0 text-center">
         <p dir="auto" className="truncate font-display text-sm font-extrabold sm:text-base">
           {nickname}

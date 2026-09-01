@@ -189,7 +189,7 @@ export default function LandingClient({ initialLocale }: { initialLocale?: Local
   };
 
   return (
-    <div dir={pageDir} className="relative flex min-h-dvh flex-col overflow-x-hidden bg-arena-canvas lg:h-dvh lg:overflow-hidden">
+    <div dir={pageDir} className="relative flex min-h-dvh flex-col overflow-x-clip bg-arena-canvas lg:min-h-dvh">
       <div className="pointer-events-none absolute inset-0 z-0 overflow-hidden arena-noise" aria-hidden />
       <div className="pointer-events-none absolute inset-y-0 end-0 z-0 hidden w-[46%] bg-arena-ink lg:block">
         <div className="absolute inset-0 arena-grid opacity-30" />
@@ -198,15 +198,15 @@ export default function LandingClient({ initialLocale }: { initialLocale?: Local
         </div>
       </div>
 
-      <header className="relative z-10 mx-auto flex w-full max-w-6xl shrink-0 items-center justify-between px-4 py-3 sm:px-6 sm:py-4 lg:max-w-none lg:px-10">
+      <header className="relative z-10 mx-auto flex w-full max-w-6xl shrink-0 items-center justify-between gap-2 px-3 py-3 sm:px-6 sm:py-4 lg:max-w-none lg:px-10">
         <BrandMark />
-        <div className="flex items-center gap-3">
+        <div className="flex min-w-0 shrink-0 items-center gap-2 sm:gap-3">
           <LocaleToggle locale={locale} onChange={setLocale} />
           {currentHost ? (
             <Link
               href="/dashboard"
               prefetch
-              className="inline-flex h-11 min-h-11 items-center border-2 border-arena-ink bg-white px-4 text-sm font-bold text-arena-ink transition hover:bg-arena-ink hover:text-white"
+              className="inline-flex h-11 min-h-11 items-center border-2 border-arena-ink bg-white px-3 text-xs font-bold text-arena-ink transition hover:bg-arena-ink hover:text-white sm:px-4 sm:text-sm"
             >
               {t('library')}
             </Link>
@@ -214,7 +214,7 @@ export default function LandingClient({ initialLocale }: { initialLocale?: Local
             <button
               type="button"
               onClick={() => setPanel('host')}
-              className="inline-flex h-11 min-h-11 items-center border-2 border-arena-ink bg-white px-4 text-sm font-bold text-arena-ink transition hover:bg-arena-ink hover:text-white"
+              className="inline-flex h-11 min-h-11 items-center border-2 border-arena-ink bg-white px-3 text-xs font-bold text-arena-ink transition hover:bg-arena-ink hover:text-white sm:px-4 sm:text-sm"
             >
               {t('hostSignIn')}
             </button>
@@ -230,7 +230,7 @@ export default function LandingClient({ initialLocale }: { initialLocale?: Local
           <p className={`motion-rise arena-chip mb-3 w-fit bg-arena-acid lg:mb-6 ${locale === 'ar' ? 'normal-case tracking-normal' : ''}`}>
             {t('pinLockClash')}
           </p>
-          <h1 className="motion-rise font-display text-4xl font-extrabold leading-[0.88] tracking-[-0.05em] text-arena-ink sm:text-5xl lg:text-[clamp(3.25rem,8vw,5.75rem)]">
+          <h1 className="motion-rise font-display text-[clamp(2.35rem,12vw,3.5rem)] font-extrabold leading-[0.88] tracking-[-0.05em] text-arena-ink sm:text-5xl lg:text-[clamp(3.25rem,8vw,5.75rem)]">
             Qlash
           </h1>
           <p className="motion-rise-delay mt-3 max-w-sm text-base font-medium leading-snug text-arena-ink/65 sm:text-lg lg:mt-6">

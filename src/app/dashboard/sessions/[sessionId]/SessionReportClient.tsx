@@ -81,7 +81,7 @@ export default function SessionReportClient({
   const previousWhen = compare ? new Date(compare.previousCreatedAt).toLocaleDateString() : '';
 
   return (
-    <div className="min-h-screen bg-arena-canvas text-arena-ink">
+    <div className="min-h-dvh bg-arena-canvas text-arena-ink">
       <header className="sticky top-0 z-10 border-b-2 border-arena-ink bg-white/90 backdrop-blur-md">
         <div className="mx-auto flex max-w-5xl items-center justify-between gap-3 px-4 py-3 sm:px-6">
           <div className="flex min-w-0 items-center gap-3">
@@ -93,7 +93,7 @@ export default function SessionReportClient({
             >
               <ArrowLeft className="h-4 w-4" />
             </Button>
-            <BrandMark size="sm" />
+            <BrandMark size="sm" className="hidden min-[420px]:inline-flex" />
           </div>
           <div className="no-print flex shrink-0 flex-wrap items-center justify-end gap-2">
             <LocaleToggle locale={locale} onChange={persistLocale} />
@@ -104,14 +104,14 @@ export default function SessionReportClient({
                 window.open(reportWhatsAppHref(window.location.origin, locale, report), '_blank', 'noopener,noreferrer')
               }
             >
-              <MessageCircle className="mr-1.5 h-4 w-4" /> {t('shareWhatsApp')}
+              <MessageCircle className="mr-0 h-4 w-4 sm:mr-1.5" /> <span className="hidden sm:inline">{t('shareWhatsApp')}</span>
             </Button>
             <Button
               variant="ghost"
               className="h-10 rounded-none border-2 border-arena-ink font-bold"
               onClick={() => window.print()}
             >
-              <Printer className="mr-1.5 h-4 w-4" /> {t('printReport')}
+              <Printer className="mr-0 h-4 w-4 sm:mr-1.5" /> <span className="hidden sm:inline">{t('printReport')}</span>
             </Button>
             <Button
               variant="ghost"
@@ -144,7 +144,7 @@ export default function SessionReportClient({
       <main className="mx-auto max-w-5xl space-y-8 px-4 py-8 sm:px-6">
         <div>
           <p className="arena-chip mb-3 w-fit bg-arena-acid">{t('classReport')}</p>
-          <h1 dir="auto" className="font-display text-4xl font-extrabold tracking-tight sm:text-5xl">{report.quizTitle}</h1>
+          <h1 dir="auto" className="font-display text-3xl font-extrabold tracking-tight sm:text-5xl">{report.quizTitle}</h1>
           <p className="mt-2 text-sm text-arena-ink/55">
             PIN {report.pin} · {when} · {report.playerCount} {t('players').toLowerCase()} · {report.questionCount} questions
             {report.avgAccuracy !== null ? ` · ${report.avgAccuracy}% class accuracy` : ''}
