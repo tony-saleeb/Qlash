@@ -60,11 +60,11 @@ describe('Player join page', () => {
     expect(router.replace).toHaveBeenCalledWith('/play/sess-1');
   });
 
-  it('hints at the always-on demo PIN when joining by hand', async () => {
+  it('shows the PIN field when joining by hand', async () => {
     window.history.replaceState({}, '', '/play');
     render(<PlayJoinClient />);
-    expect(await screen.findByRole('link', { name: MESSAGES.en.tryDemo })).toBeInTheDocument();
     expect(screen.getByPlaceholderText('······')).toBeInTheDocument();
+    expect(screen.queryByText(MESSAGES.en.tryDemo)).not.toBeInTheDocument();
   });
 
   it('blocks join when the phone is offline', async () => {

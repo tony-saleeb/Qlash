@@ -1,7 +1,6 @@
 'use client';
 
 import React, { useState, useEffect } from 'react';
-import Link from 'next/link';
 import { useRouter } from 'next/navigation';
 import { createClient } from '@/lib/supabase/client';
 import { Input } from '@/components/ui/input';
@@ -139,12 +138,6 @@ export default function PlayJoinClient({ initialLocale }: { initialLocale?: Loca
                   onChange={(e) => setPin(e.target.value.replace(/\D/g, ''))}
                   className="mt-2 h-14 border-2 border-arena-ink text-center font-display text-2xl font-extrabold tracking-[0.28em] sm:h-16 sm:text-3xl sm:tracking-[0.4em]"
                 />
-                <p className="mt-2 text-xs font-medium text-arena-ink/45">
-                  {t('demoPinHint')}{' '}
-                  <Link href="/demo" className="font-bold text-arena-ink underline-offset-2 hover:underline">
-                    {t('tryDemo')}
-                  </Link>
-                </p>
               </div>
             )}
             <div>

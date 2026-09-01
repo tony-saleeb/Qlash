@@ -291,12 +291,6 @@ export default function LandingClient({ initialLocale }: { initialLocale?: Local
                         onChange={(e) => setPin(e.target.value.replace(/\D/g, ''))}
                         className="mt-2 h-14 border-2 border-arena-ink bg-arena-mist/40 text-center font-display text-2xl font-extrabold tracking-[0.28em] focus-visible:ring-arena-court sm:h-16 sm:text-3xl sm:tracking-[0.4em]"
                       />
-                      <p className="mt-2 text-xs font-medium text-arena-ink/45">
-                        {t('demoPinHint')}{' '}
-                        <Link href="/demo" className="font-bold text-arena-ink underline-offset-2 hover:underline">
-                          {t('tryDemo')}
-                        </Link>
-                      </p>
                     </div>
                     <div>
                       <Label htmlFor="nickname" className="text-[11px] font-bold uppercase tracking-[0.18em] text-arena-ink/45">
