@@ -64,7 +64,6 @@ describe('Player join page', () => {
     window.history.replaceState({}, '', '/play');
     render(<PlayJoinClient />);
     expect(screen.getByPlaceholderText('······')).toBeInTheDocument();
-    expect(screen.queryByText(MESSAGES.en.tryDemo)).not.toBeInTheDocument();
   });
 
   it('blocks join when the phone is offline', async () => {

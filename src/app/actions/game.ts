@@ -2,14 +2,9 @@
 
 import { getHostAuth } from '@/lib/supabase/hostAuth';
 import { DEFAULT_LATE_JOIN_THROUGH_INDEX } from '@/lib/game/lateJoin';
-import { DEMO_PIN } from '@/lib/game/demoRoom';
 
 function randomLivePin(): string {
-  let pin = '';
-  do {
-    pin = Math.floor(100000 + Math.random() * 900000).toString();
-  } while (pin === DEMO_PIN);
-  return pin;
+  return Math.floor(100000 + Math.random() * 900000).toString();
 }
 
 export async function createGameSession(quizId: string) {

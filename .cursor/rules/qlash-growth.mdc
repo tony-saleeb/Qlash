@@ -25,7 +25,7 @@ OG / sitemap, WhatsApp lobby, `/q/[code]`, `/p/[session]`, report
 WhatsApp + print, share import, room seal, player PWA (`/play`),
 Sentry (no-op without DSN), CI lint/test/build, rate-limit RPC test
 + `scripts/verify-rate-limit.sql`, seasonal packs (Advent / Christmas /
-Easter), paste-from-chat importer, always-on demo PIN `100000` (`/demo`).
+Easter), paste-from-chat importer.
 
 ## Do not build
 

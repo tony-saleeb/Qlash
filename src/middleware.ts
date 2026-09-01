@@ -53,7 +53,6 @@ export async function middleware(request: NextRequest) {
   if (
     pathname === '/' ||
     pathname.startsWith('/play') ||
-    pathname.startsWith('/demo') ||
     pathname.startsWith('/api/') ||
     pathname.startsWith('/q/') ||
     pathname.startsWith('/p/')

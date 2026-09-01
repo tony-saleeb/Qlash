@@ -75,7 +75,6 @@ export default function LandingClient({ initialLocale }: { initialLocale?: Local
   }, [supabase]);
 
   useEffect(() => {
-    router.prefetch('/demo');
     router.prefetch('/play');
     if (currentHost || panel === 'host') router.prefetch('/dashboard');
   }, [currentHost, panel, router]);
@@ -244,9 +243,6 @@ export default function LandingClient({ initialLocale }: { initialLocale?: Local
             <button type="button" className="arena-cta-secondary hidden lg:inline-flex" onClick={() => setPanel('host')}>
               {t('hostARoom')}
             </button>
-            <Link href="/demo" className="inline-flex h-12 items-center text-sm font-bold text-arena-ink/60 underline-offset-4 hover:text-arena-ink hover:underline">
-              {t('tryDemo')}
-            </Link>
           </div>
         </section>
 

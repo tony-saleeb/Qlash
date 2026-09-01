@@ -6,19 +6,13 @@ vi.mock('@/lib/supabase/admin', () => ({
   createAdminClient: vi.fn(),
 }));
 
-const { rateLimitMock, ensureDemoSessionMock } = vi.hoisted(() => ({
+const { rateLimitMock } = vi.hoisted(() => ({
   rateLimitMock: vi.fn(() => ({ ok: true as const })),
-  ensureDemoSessionMock: vi.fn(),
 }));
 
 vi.mock('@/lib/rate-limit', () => ({
   rateLimit: (...args: unknown[]) => rateLimitMock(...args),
   clientIpFromRequest: (request: Request) => request.headers.get('x-forwarded-for') || 'test-ip',
-}));
-
-vi.mock('@/lib/game/demoRoom', () => ({
-  DEMO_PIN: '100000',
-  ensureDemoSession: (...args: unknown[]) => ensureDemoSessionMock(...args),
 }));
 
 const admin = createClientMock();
@@ -35,7 +29,6 @@ describe('POST /api/player/join', () => {
   beforeEach(() => {
     admin.reset();
     rateLimitMock.mockReturnValue({ ok: true });
-    ensureDemoSessionMock.mockReset();
     vi.mocked(createAdminClient).mockReturnValue(admin as never);
   });
 
@@ -51,34 +44,6 @@ describe('POST /api/player/join', () => {
     const { POST } = await import('@/app/api/player/join/route');
     const result = await readJson(await POST(jsonRequest({ pin: '123456', nickname: 'Ada' })));
     expect(result).toMatchObject({ status: 404, body: { error: 'Game room not found.' } });
-    expect(ensureDemoSessionMock).not.toHaveBeenCalled();
-  });
-
-  it('spins up the demo room before joining PIN 100000', async () => {
-    ensureDemoSessionMock.mockResolvedValue({ sessionId: 'demo-sess', pin: '100000' });
-    const player = {
-      id: 'p-demo',
-      session_id: 'demo-sess',
-      nickname: 'Ada',
-      team_name: null,
-      score: 0,
-      streak: 0,
-      connected: true,
-    };
-    admin.setTables({
-      game_sessions: { data: { ...lobbySession, id: 'demo-sess' }, error: null },
-      players: [
-        { data: null, error: null },
-        { data: null, error: null, count: 0 },
-        { data: player, error: null },
-      ],
-      player_tokens: { data: {}, error: null },
-    });
-    const { POST } = await import('@/app/api/player/join/route');
-    const result = await readJson(await POST(jsonRequest({ pin: '100000', nickname: 'Ada' })));
-    expect(ensureDemoSessionMock).toHaveBeenCalled();
-    expect(result.status).toBe(200);
-    expect(result.body.sessionId).toBe('demo-sess');
   });
 
   it('rejects a finished room', async () => {

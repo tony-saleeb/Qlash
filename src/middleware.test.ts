@@ -26,11 +26,9 @@ describe('middleware', () => {
     const home = await middleware(request('/'));
     const play = await middleware(request('/play/abc'));
     const api = await middleware(request('/api/player/join'));
-    const demo = await middleware(request('/demo'));
     expect(home.status).toBe(200);
     expect(play.status).toBe(200);
     expect(api.status).toBe(200);
-    expect(demo.status).toBe(200);
     expect(getUser).not.toHaveBeenCalled();
   });
 

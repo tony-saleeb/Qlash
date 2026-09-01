@@ -39,7 +39,6 @@ describe('Landing page', () => {
     expect(container.firstElementChild).toHaveAttribute('dir', 'ltr');
     expect(screen.getAllByText('Qlash').length).toBeGreaterThan(0);
     expect(screen.getByRole('button', { name: /jump in/i })).toBeInTheDocument();
-    expect(screen.getAllByRole('link', { name: MESSAGES.en.tryDemo }).length).toBeGreaterThan(0);
     expect(screen.queryByText(/continue with google/i)).not.toBeInTheDocument();
   });
 
