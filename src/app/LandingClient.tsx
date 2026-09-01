@@ -105,6 +105,14 @@ export default function LandingClient({ initialLocale }: { initialLocale?: Local
     }
   }, [currentHost, router]);
 
+  const enterHost = (user: User | null, welcome: string) => {
+    if (!user) throw new Error('Authentication failed.');
+    toast.success(welcome);
+    setCurrentHost(user);
+    const importCode = new URLSearchParams(window.location.search).get('import');
+    router.push(importCode ? `/import/${importCode}` : '/dashboard');
+  };
+
   const handleHostAuth = async (e: React.FormEvent) => {
     e.preventDefault();
     if (!email || !password) {
@@ -117,32 +125,29 @@ export default function LandingClient({ initialLocale }: { initialLocale?: Local
       if (authMode === 'login') {
         const { error, data } = await supabase.auth.signInWithPassword({ email, password });
         if (error) throw error;
-        toast.success('Welcome back.');
-        setCurrentHost(data.user);
-        const importCode = new URLSearchParams(window.location.search).get('import');
-        router.push(importCode ? `/import/${importCode}` : '/dashboard');
+        enterHost(data.user, 'Welcome back.');
       } else {
-        if (!displayName) {
+        if (!displayName.trim()) {
           toast.error('Please enter a display name.');
           setAuthLoading(false);
           return;
         }
-        const { error, data } = await supabase.auth.signUp({
-          email,
-          password,
-          options: {
-            data: { display_name: displayName },
-            emailRedirectTo: hostAuthRedirect(),
-          },
+        const registerRes = await fetch('/api/host/register', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({
+            email,
+            password,
+            displayName: displayName.trim(),
+          }),
         });
-        if (error) throw error;
-        if (data.session) {
-          toast.success('Account ready.');
-          setCurrentHost(data.user);
-          router.push('/dashboard');
-        } else {
-          toast.success('Check your email to verify, then sign in.');
+        const registerBody = (await registerRes.json().catch(() => ({}))) as { error?: string };
+        if (!registerRes.ok) {
+          throw new Error(registerBody.error || 'Could not create account.');
         }
+        const { error, data } = await supabase.auth.signInWithPassword({ email, password });
+        if (error) throw error;
+        enterHost(data.user, 'Account ready.');
       }
     } catch (error) {
       toast.error(error instanceof Error ? error.message : 'Authentication failed.');
