@@ -1,6 +1,6 @@
 import { describe, expect, it } from 'vitest';
 import { ANSWER_MARKS } from '@/lib/game/marks';
-import { createDefaultQuestion, parseCsvQuestions } from '@/app/dashboard/quizzes/[id]/edit/quizEditorModel';
+import { createDefaultQuestion, importQuestionsFromText, parseCsvQuestions } from '@/app/dashboard/quizzes/[id]/edit/quizEditorModel';
 
 describe('createDefaultQuestion', () => {
   it('builds a 4-choice MCQ on linear scoring', () => {
@@ -81,5 +81,24 @@ describe('parseCsvQuestions', () => {
   it('skips blank lines and throws on short rows', () => {
     expect(parseCsvQuestions('\n\n')).toEqual([]);
     expect(() => parseCsvQuestions('only,three,cells')).toThrow(/enough columns/);
+  });
+});
+
+describe('importQuestionsFromText', () => {
+  it('keeps the CSV path when the paste looks like the template', () => {
+    const [question] = importQuestionsFromText('Prompt,Type,Time,Points,Correct,A,B\nCapital?,mcq,15,800,2,Paris,Lyon');
+    expect(question.type).toBe('mcq');
+    expect(question.answers.map((answer) => answer.is_correct)).toEqual([false, true]);
+  });
+
+  it('maps a starred chat paste onto editor marks', () => {
+    const [question] = importQuestionsFromText('1. عاصمة مصر إيه؟\nالقاهرة *\nالإسكندرية\nأسوان');
+    expect(question.prompt).toContain('عاصمة مصر');
+    expect(question.answers.find((answer) => answer.is_correct)?.text).toBe('القاهرة');
+    expect(question.answers[0]?.shape).toBeTruthy();
+  });
+
+  it('throws when the paste has no questions', () => {
+    expect(() => importQuestionsFromText('hello from the group chat')).toThrow(/No questions found/);
   });
 });

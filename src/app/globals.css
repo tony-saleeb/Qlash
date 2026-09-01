@@ -45,6 +45,17 @@
     background-color: var(--arena-canvas);
   }
 
+  /* Skip the 300ms tap delay on older mobile WebViews. */
+  a,
+  button,
+  [role='button'],
+  input,
+  textarea,
+  select,
+  label {
+    touch-action: manipulation;
+  }
+
   html {
     @apply font-sans;
   }

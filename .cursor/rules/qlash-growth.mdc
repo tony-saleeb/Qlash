@@ -11,8 +11,8 @@ Product status and order of work live in the growth review canvas
 
 ## Next build (do this, nothing else)
 
-2–3 seasonal packs, paste-from-chat importer, always-on demo PIN.
-That is Month 2.
+Five hosted classes, film the projector, fix only what those rooms show.
+That is Month 3.
 
 When the user says "next" / "continue the plan", implement the next
 **unshipped** row in Suggested sequence. After it ships, mark that row
@@ -24,7 +24,8 @@ Live loop, reports / CSV / recap, Arabic first paint + LTR PIN/QR,
 OG / sitemap, WhatsApp lobby, `/q/[code]`, `/p/[session]`, report
 WhatsApp + print, share import, room seal, player PWA (`/play`),
 Sentry (no-op without DSN), CI lint/test/build, rate-limit RPC test
-+ `scripts/verify-rate-limit.sql`.
++ `scripts/verify-rate-limit.sql`, seasonal packs (Advent / Christmas /
+Easter), paste-from-chat importer, always-on demo PIN `100000` (`/demo`).
 
 ## Do not build
 

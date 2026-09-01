@@ -7,6 +7,11 @@ import {
   LOCALE_HEADER,
   type Locale,
 } from '@/lib/i18n/locale';
+import {
+  cookieSessionExpiresAt,
+  isHostAuthPrefetch,
+  sessionNeedsRefresh,
+} from '@/lib/supabase/hostSession';
 
 function resolveRequestLocale(request: NextRequest): Locale {
   const existing = request.cookies.get(LOCALE_COOKIE_KEY)?.value;
@@ -48,10 +53,20 @@ export async function middleware(request: NextRequest) {
   if (
     pathname === '/' ||
     pathname.startsWith('/play') ||
+    pathname.startsWith('/demo') ||
     pathname.startsWith('/api/') ||
     pathname.startsWith('/q/') ||
     pathname.startsWith('/p/')
   ) {
+    return nextWithLocale(request, locale);
+  }
+
+  if (isHostAuthPrefetch(request.headers)) {
+    return nextWithLocale(request, locale);
+  }
+
+  const cookieExp = cookieSessionExpiresAt(request.cookies.getAll());
+  if (!sessionNeedsRefresh(cookieExp)) {
     return nextWithLocale(request, locale);
   }
 
@@ -84,9 +99,7 @@ export async function middleware(request: NextRequest) {
     }
   );
 
-  // Refresh session only for host-facing routes
   await supabase.auth.getUser();
-
   return applyLocale(request, response, locale);
 }
 

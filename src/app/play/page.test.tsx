@@ -60,6 +60,13 @@ describe('Player join page', () => {
     expect(router.replace).toHaveBeenCalledWith('/play/sess-1');
   });
 
+  it('hints at the always-on demo PIN when joining by hand', async () => {
+    window.history.replaceState({}, '', '/play');
+    render(<PlayJoinClient />);
+    expect(await screen.findByRole('link', { name: MESSAGES.en.tryDemo })).toBeInTheDocument();
+    expect(screen.getByPlaceholderText('······')).toBeInTheDocument();
+  });
+
   it('blocks join when the phone is offline', async () => {
     Object.defineProperty(window.navigator, 'onLine', { configurable: true, value: false });
     window.history.replaceState({}, '', '/play?pin=847291');

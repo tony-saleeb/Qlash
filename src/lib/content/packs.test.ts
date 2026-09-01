@@ -4,8 +4,19 @@ import { packToQuestionRows } from '@/lib/content/packRows';
 import { generateShareCode, normalizeShareCode } from '@/lib/content/shareCode';
 
 describe('content packs', () => {
-  it('keeps three classroom packs with at least one correct answer each', () => {
-    expect(CONTENT_PACKS.map((pack) => pack.id)).toEqual(['sunday-school', 'general-ar', 'warmup']);
+  it('keeps classroom packs with at least one correct answer each', () => {
+    expect(CONTENT_PACKS.map((pack) => pack.id)).toEqual([
+      'sunday-school',
+      'general-ar',
+      'warmup',
+      'advent',
+      'christmas',
+      'easter',
+    ]);
+    expect(CONTENT_PACKS).toHaveLength(6);
+    expect(getContentPack('advent')?.questions).toHaveLength(8);
+    expect(getContentPack('christmas')?.questions).toHaveLength(8);
+    expect(getContentPack('easter')?.questions).toHaveLength(8);
     for (const pack of CONTENT_PACKS) {
       expect(pack.questions.length).toBeGreaterThan(0);
       expect(pack.questions.every((question) => question.answers.some((answer) => answer.correct))).toBe(true);

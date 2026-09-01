@@ -14,6 +14,7 @@ describe('public site metadata', () => {
     const urls = sitemap().map((entry) => entry.url);
     expect(urls.some((url) => url.endsWith('/') || url.includes('localhost'))).toBe(true);
     expect(urls.some((url) => url.endsWith('/play'))).toBe(true);
+    expect(urls.some((url) => url.endsWith('/demo'))).toBe(true);
     expect(urls.some((url) => url.includes('/dashboard'))).toBe(false);
   });
 

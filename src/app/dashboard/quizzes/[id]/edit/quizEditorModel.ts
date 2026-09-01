@@ -1,4 +1,6 @@
 import { ANSWER_MARKS } from '@/lib/game/marks';
+import { looksLikeCsv, parseChatQuestions } from '@/lib/content/parseChat';
+import type { PackQuestion } from '@/lib/content/packs';
 
 export type AnswerShape = 'slash' | 'qring' | 'bolt' | 'chevron' | 'spark' | 'bars';
 
@@ -161,4 +163,33 @@ export function parseCsvQuestions(csvText: string): Question[] {
   }
 
   return importedQs;
+}
+
+export function packQuestionToEditor(question: PackQuestion): Question {
+  const type = question.answers.length === 1 ? 'type_answer' : 'mcq';
+  return {
+    type,
+    prompt: question.prompt,
+    media_url: null,
+    media_type: null,
+    time_limit_seconds: 20,
+    points_base: 1000,
+    scoring_type: 'linear',
+    answers: question.answers.map((answer, index) => ({
+      id: String(index + 1),
+      text: answer.text,
+      is_correct: answer.correct,
+      color: DEFAULT_ANSWERS[index % DEFAULT_ANSWERS.length].color,
+      shape: DEFAULT_ANSWERS[index % DEFAULT_ANSWERS.length].shape,
+    })),
+  };
+}
+
+export function importQuestionsFromText(raw: string): Question[] {
+  if (looksLikeCsv(raw)) return parseCsvQuestions(raw);
+  const fromChat = parseChatQuestions(raw).map(packQuestionToEditor);
+  if (fromChat.length === 0) {
+    throw new Error('No questions found. Number them and mark the right answer with *.');
+  }
+  return fromChat;
 }

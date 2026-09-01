@@ -36,13 +36,10 @@ describe('host game actions', () => {
     vi.spyOn(Math, 'random').mockReturnValue(0.5);
     host.setTables({
       quizzes: { data: { id: 'quiz-1' }, error: null },
-      game_sessions: [
-        { data: null, error: null },
-        {
-          data: { id: 'sess-1', pin: '550000', status: 'lobby', host_id: 'host-1' },
-          error: null,
-        },
-      ],
+      game_sessions: {
+        data: { id: 'sess-1', pin: '550000', status: 'lobby', host_id: 'host-1' },
+        error: null,
+      },
     });
     const { createGameSession } = await import('@/app/actions/game');
     const session = await createGameSession('quiz-1');
@@ -56,6 +53,20 @@ describe('host game actions', () => {
       active_multiplier: 1,
       late_join_through_index: 2,
     });
+  });
+
+  it('retries lobby insert when the PIN is already taken', async () => {
+    vi.spyOn(Math, 'random').mockReturnValueOnce(0.1).mockReturnValueOnce(0.5);
+    host.setTables({
+      quizzes: { data: { id: 'quiz-1' }, error: null },
+      game_sessions: [
+        { data: null, error: { code: '23505', message: 'duplicate pin' } },
+        { data: { id: 'sess-2', pin: '550000', status: 'lobby', host_id: 'host-1' }, error: null },
+      ],
+    });
+    const { createGameSession } = await import('@/app/actions/game');
+    const session = await createGameSession('quiz-1');
+    expect(session.id).toBe('sess-2');
   });
 
   it('refuses to start without a question order and only from lobby', async () => {

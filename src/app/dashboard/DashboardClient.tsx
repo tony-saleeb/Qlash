@@ -22,14 +22,14 @@ import {
   cloneQuiz,
   createPackQuiz,
   enableQuizShare,
-} from '@/app/actions/quizzes';
-import { createGameSession } from '@/app/actions/game';
+  createGameSession,
+  setHostLocale,
+} from '@/lib/host/hostApi';
 import { Plus, Play, Edit, Copy, Trash2, LogOut, BookTemplate, ClipboardList, Link2 } from 'lucide-react';
 import { BrandMark } from '@/components/brand/BrandMark';
 import { livePlayerCap, normalizeHostPlan, quizLibraryCap } from '@/lib/game/constants';
 import { LocaleToggle } from '@/components/brand/LocaleToggle';
 import { useLocale } from '@/lib/i18n/useLocale';
-import { setHostLocale } from '@/app/actions/host';
 import { CONTENT_PACKS } from '@/lib/content/packs';
 import type { Locale } from '@/lib/i18n/locale';
 

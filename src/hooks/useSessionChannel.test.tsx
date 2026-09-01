@@ -33,4 +33,17 @@ describe('useSessionChannel', () => {
       payload: { reason: 'test' },
     });
   });
+
+  it('does not resubscribe when the parent passes a new client object', async () => {
+    const supabase = createClientMock();
+    const { rerender } = renderHook(
+      ({ client }) => useSessionChannel('sess-1', { supabase: client as never }),
+      { initialProps: { client: supabase } }
+    );
+    await waitFor(() => expect(supabase.channel).toHaveBeenCalledTimes(1));
+    const other = createClientMock();
+    rerender({ client: other });
+    expect(supabase.channel).toHaveBeenCalledTimes(1);
+    expect(other.channel).not.toHaveBeenCalled();
+  });
 });

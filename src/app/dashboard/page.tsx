@@ -1,20 +1,13 @@
 import { redirect } from 'next/navigation';
-import { createClient } from '@/lib/supabase/server';
+import { readHostAuth } from '@/lib/supabase/hostAuth';
 import DashboardClient, { type RecentSession } from './DashboardClient';
 import { normalizeLocale } from '@/lib/i18n/locale';
 
 export const dynamic = 'force-dynamic';
 
 export default async function DashboardPage() {
-  const supabase = createClient();
-
-  // Get current authenticated user
-  const {
-    data: { user },
-    error: authError,
-  } = await supabase.auth.getUser();
-
-  if (authError || !user) {
+  const { supabase, user } = await readHostAuth();
+  if (!user) {
     redirect('/');
   }
 

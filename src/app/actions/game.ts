@@ -1,34 +1,14 @@
 'use server';
 
 import { getHostAuth } from '@/lib/supabase/hostAuth';
-import { SupabaseClient } from '@supabase/supabase-js';
 import { DEFAULT_LATE_JOIN_THROUGH_INDEX } from '@/lib/game/lateJoin';
+import { DEMO_PIN } from '@/lib/game/demoRoom';
 
-async function generateUniquePin(supabase: SupabaseClient): Promise<string> {
+function randomLivePin(): string {
   let pin = '';
-  let isUnique = false;
-  let attempts = 0;
-
-  while (!isUnique && attempts < 10) {
-    attempts++;
+  do {
     pin = Math.floor(100000 + Math.random() * 900000).toString();
-
-    const { data, error } = await supabase
-      .from('game_sessions')
-      .select('id')
-      .eq('pin', pin)
-      .neq('status', 'finished')
-      .maybeSingle();
-
-    if (!data && !error) {
-      isUnique = true;
-    }
-  }
-
-  if (!isUnique) {
-    throw new Error('Failed to generate a unique PIN code. Please try again.');
-  }
-
+  } while (pin === DEMO_PIN);
   return pin;
 }
 
@@ -47,27 +27,28 @@ export async function createGameSession(quizId: string) {
       throw new Error('Quiz not found or unauthorized.');
     }
 
-    const pin = await generateUniquePin(supabase);
+    for (let attempt = 0; attempt < 8; attempt++) {
+      const pin = randomLivePin();
+      const { data: session, error: sessionError } = await supabase
+        .from('game_sessions')
+        .insert({
+          quiz_id: quizId,
+          host_id: user.id,
+          pin,
+          status: 'lobby',
+          current_question_index: 0,
+          active_multiplier: 1,
+          late_join_through_index: DEFAULT_LATE_JOIN_THROUGH_INDEX,
+        })
+        .select()
+        .single();
 
-    const { data: session, error: sessionError } = await supabase
-      .from('game_sessions')
-      .insert({
-        quiz_id: quizId,
-        host_id: user.id,
-        pin,
-        status: 'lobby',
-        current_question_index: 0,
-        active_multiplier: 1,
-        late_join_through_index: DEFAULT_LATE_JOIN_THROUGH_INDEX,
-      })
-      .select()
-      .single();
-
-    if (sessionError || !session) {
+      if (session) return session;
+      if ((sessionError as { code?: string } | null)?.code === '23505') continue;
       throw sessionError || new Error('Failed to create game session.');
     }
 
-    return session;
+    throw new Error('Failed to generate a unique PIN code. Please try again.');
   } catch (err) {
     console.error('createGameSession error:', err);
     throw new Error(err instanceof Error ? err.message : 'Failed to start game room.');

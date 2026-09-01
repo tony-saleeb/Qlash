@@ -28,6 +28,9 @@ describe('i18n', () => {
     expect(t('ar', 'lightning')).toBe('برق!');
     expect(t('ar', 'firstLock')).toBe('أول قفل');
     expect(t('ar', 'answerLocked')).toBe('الإجابة اتقفلت');
+    expect(t('ar', 'youAreOffline')).toContain('أوفلاين');
+    expect(t('en', 'tryDemo')).toBe('Try the demo');
+    expect(t('ar', 'tryDemo')).toBe('جرّب الديمو');
     expect(isLocale('ar')).toBe(true);
     expect(normalizeLocale('nope')).toBe('en');
   });

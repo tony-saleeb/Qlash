@@ -39,15 +39,20 @@ export default function CsvImportDialog({
       <DialogContent className="bg-arena-mist border-arena-line text-arena-ink rounded-2xl max-w-lg">
         <DialogHeader>
           <DialogTitle className="text-xl font-bold text-arena-ink flex items-center gap-2">
-            <FileSpreadsheet className="w-5 h-5 text-emerald-500" /> Import Questions from CSV
+            <FileSpreadsheet className="w-5 h-5 text-emerald-500" /> Paste from chat or CSV
           </DialogTitle>
           <DialogDescription className="text-arena-ink/55 text-xs">
-            Upload formatted text questions in bulk.
+            Number a WhatsApp list. Put * after the right answer. CSV still works.
           </DialogDescription>
         </DialogHeader>
         <div className="space-y-4 my-2">
           <div className="p-3 bg-white/60 border border-arena-line rounded-xl space-y-1 text-arena-ink/55 text-[11px] leading-relaxed">
-            <span className="font-bold text-arena-ink/80 block mb-1">CSV Template Columns:</span>
+            <span className="font-bold text-arena-ink/80 block mb-1">Chat paste</span>
+            <code className="block whitespace-pre-wrap text-[11px]">{`1. عاصمة مصر إيه؟
+القاهرة *
+الإسكندرية
+أسوان`}</code>
+            <span className="font-bold text-arena-ink/80 mt-2 block">CSV still works</span>
             <code>Prompt, Type, TimeLimit, Points, CorrectKey, Choice1, Choice2, Choice3, Choice4</code>
             <ul className="list-disc list-inside space-y-0.5 mt-1 text-arena-ink/45">
               <li><b>Type:</b> <code>mcq</code> | <code>true_false</code> | <code>multi_select</code> | <code>type_answer</code> | <code>poll</code></li>
@@ -73,9 +78,9 @@ export default function CsvImportDialog({
           </div>
 
           <div className="space-y-1.5">
-            <Label className="text-arena-ink/55 text-xs font-semibold">Paste CSV Contents</Label>
+            <Label className="text-arena-ink/55 text-xs font-semibold">Paste from chat</Label>
             <Textarea
-              placeholder={`"Who was the first president?","mcq",20,1000,"2","John Adams","George Washington","Thomas Jefferson","James Madison"`}
+              placeholder={`1. Who was born in Bethlehem?\nNazareth\nBethlehem *\nJerusalem`}
               value={csvText}
               onChange={(e) => onCsvTextChange(e.target.value)}
               className="bg-white border-arena-line h-44 focus-visible:ring-arena-court rounded-xl font-mono text-xs resize-none"

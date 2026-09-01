@@ -43,8 +43,9 @@ export default async function SharedQuizPage({ params }: PageProps) {
   const dir = locale === 'ar' ? 'rtl' : 'ltr';
   const supabase = createClient();
   const {
-    data: { user },
-  } = await supabase.auth.getUser();
+    data: { session },
+  } = await supabase.auth.getSession();
+  const user = session?.user;
   const importHref = user ? `/import/${preview.shareCode}` : `/?import=${encodeURIComponent(preview.shareCode)}`;
   const url = quizPreviewUrl(metadataBaseUrl().origin, preview.shareCode);
   const whatsapp = whatsAppShareUrl(quizShareText(locale, preview.title, preview.questionCount, url));

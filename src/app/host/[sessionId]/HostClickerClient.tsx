@@ -17,7 +17,7 @@ import {
   setLateJoinThroughIndex,
   startGameSession,
   endGameSession,
-} from '@/app/actions/game';
+} from '@/lib/host/hostApi';
 import { ArrowRight, Clock, Link2, LogOut, MessageCircle, Monitor, Pause, Play, Trophy, Users } from 'lucide-react';
 import { BrandMark, PinDisplay } from '@/components/brand/BrandMark';
 import { LobbyQr } from '@/components/brand/LobbyQr';
@@ -44,7 +44,7 @@ import { podiumWhatsAppHref } from '@/lib/game/podiumShare';
 import { useAutoCloseEmptyLobby } from '@/hooks/useAutoCloseEmptyLobby';
 import { LocaleToggle } from '@/components/brand/LocaleToggle';
 import { useLocale } from '@/lib/i18n/useLocale';
-import { setHostLocale } from '@/app/actions/host';
+import { setHostLocale } from '@/lib/host/hostApi';
 import type { Locale } from '@/lib/i18n/locale';
 
 interface HostClickerClientProps {

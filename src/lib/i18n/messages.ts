@@ -157,6 +157,12 @@ const en = {
   championsOf: 'Champions of',
   youAreOffline: 'You’re offline',
   connectToJoin: 'Connect to join the room. The form stays here until you are back.',
+  tryDemo: 'Try the demo',
+  demoPinHint: 'PIN 100000 is always on — warmup questions, no account.',
+  demoRoom: 'Demo room',
+  demoTeaser: 'This is the projector. Phones join with the PIN.',
+  joinDemo: 'Join from your phone',
+  demoNotReady: 'The demo spins up after the first host signs in. The PIN and QR still work as a preview.',
 } as const;
 
 const ar: Record<keyof typeof en, string> = {
@@ -316,6 +322,12 @@ const ar: Record<keyof typeof en, string> = {
   championsOf: 'أبطال',
   youAreOffline: 'إنت أوفلاين',
   connectToJoin: 'اتوصل بالنت عشان تدخل الغرفة. الفورم هتفضل هنا.',
+  tryDemo: 'جرّب الديمو',
+  demoPinHint: 'الكود 100000 شغال دايمًا — أسئلة تسخين، من غير حساب.',
+  demoRoom: 'غرفة الديمو',
+  demoTeaser: 'دي الشاشة الكبيرة. الموبايل يدخل بالكود.',
+  joinDemo: 'ادخل من موبايلك',
+  demoNotReady: 'الديمو بيتفتح بعد أول هوست يسجّل. الكود والـ QR ظاهرين كمعاينة.',
 };
 
 export const MESSAGES = { en, ar } as const;

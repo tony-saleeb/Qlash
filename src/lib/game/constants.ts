@@ -31,4 +31,5 @@ export const RATE_LIMITS = {
   joinPerIp: { limit: 120, windowMs: 60_000 },
   submitPerIp: { limit: 400, windowMs: 60_000 },
   submitPerPlayer: { limit: 8, windowMs: 60_000 },
+  demoEnsurePerIp: { limit: 40, windowMs: 60_000 },
 } as const;

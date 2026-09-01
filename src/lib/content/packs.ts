@@ -1,3 +1,5 @@
+import { SEASONAL_PACKS } from '@/lib/content/seasonalPacks';
+
 export type PackAnswer = { text: string; correct: boolean };
 
 export type PackQuestion = {
@@ -5,7 +7,13 @@ export type PackQuestion = {
   answers: PackAnswer[];
 };
 
-export type ContentPackId = 'sunday-school' | 'general-ar' | 'warmup';
+export type ContentPackId =
+  | 'sunday-school'
+  | 'general-ar'
+  | 'warmup'
+  | 'advent'
+  | 'christmas'
+  | 'easter';
 
 export interface ContentPack {
   id: ContentPackId;
@@ -78,6 +86,7 @@ export const CONTENT_PACKS: ContentPack[] = [
       { prompt: 'لون مش موجود في علم مصر؟', answers: [{ text: 'أحمر', correct: false }, { text: 'أبيض', correct: false }, { text: 'أسود', correct: false }, { text: 'أزرق', correct: true }] },
     ],
   },
+  ...SEASONAL_PACKS,
 ];
 
 export function getContentPack(id: string): ContentPack | null {
@@ -85,5 +94,5 @@ export function getContentPack(id: string): ContentPack | null {
 }
 
 export function isContentPackId(value: unknown): value is ContentPackId {
-  return value === 'sunday-school' || value === 'general-ar' || value === 'warmup';
+  return CONTENT_PACKS.some((pack) => pack.id === value);
 }

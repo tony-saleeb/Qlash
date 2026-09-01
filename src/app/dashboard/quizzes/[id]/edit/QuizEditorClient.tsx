@@ -3,12 +3,12 @@
 import React, { useState } from 'react';
 import { useRouter } from 'next/navigation';
 import { toast } from 'sonner';
-import { saveQuizData } from '@/app/actions/quizzes';
+import { saveQuizData } from '@/lib/host/hostApi';
 import { DEFAULT_QUIZ_THEME } from '@/lib/game/theme';
 import {
   DEFAULT_ANSWERS,
   createDefaultQuestion,
-  parseCsvQuestions,
+  importQuestionsFromText,
   type Question,
   type QuizEditorClientProps,
 } from './quizEditorModel';
@@ -227,12 +227,12 @@ export default function QuizEditorClient({
   // Client-Side CSV Parsing for imports
   const handleCSVImport = () => {
     if (!csvText.trim()) {
-      toast.error('Please paste or upload some CSV data first.');
+      toast.error('Paste a chat list or CSV first.');
       return;
     }
 
     try {
-      const importedQs = parseCsvQuestions(csvText);
+      const importedQs = importQuestionsFromText(csvText);
 
       if (importedQs.length > 0) {
         setQuestions([...questions, ...importedQs]);

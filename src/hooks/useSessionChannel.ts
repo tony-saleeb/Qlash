@@ -25,6 +25,8 @@ export function useSessionChannel(
   }
 ) {
   const supabase = options?.supabase ?? createClient();
+  const supabaseRef = useRef(supabase);
+  supabaseRef.current = supabase;
   const channelRef = useRef<RealtimeChannel | null>(null);
   const onEventsRef = useRef(options?.onEvents);
   onEventsRef.current = options?.onEvents;
@@ -34,7 +36,8 @@ export function useSessionChannel(
   useEffect(() => {
     if (!sessionId) return;
 
-    const channel = supabase.channel(`session_channel_${sessionId}`, {
+    const client = supabaseRef.current;
+    const channel = client.channel(`session_channel_${sessionId}`, {
       config: { broadcast: { ack: false } },
     });
     channelRef.current = channel;
@@ -61,10 +64,9 @@ export function useSessionChannel(
       readyRef.current = false;
       setReady(false);
       channelRef.current = null;
-      supabase.removeChannel(channel);
+      client.removeChannel(channel);
     };
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [supabase, sessionId]);
+  }, [sessionId]);
 
   const send = useCallback(async (event: string, payload: SessionBroadcastPayload) => {
     const trySend = async () => {

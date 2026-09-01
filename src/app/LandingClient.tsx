@@ -75,6 +75,8 @@ export default function LandingClient({ initialLocale }: { initialLocale?: Local
   }, [supabase]);
 
   useEffect(() => {
+    router.prefetch('/demo');
+    router.prefetch('/play');
     if (currentHost || panel === 'host') router.prefetch('/dashboard');
   }, [currentHost, panel, router]);
 
@@ -110,6 +112,7 @@ export default function LandingClient({ initialLocale }: { initialLocale?: Local
       return;
     }
     setAuthLoading(true);
+    router.prefetch('/dashboard');
     try {
       if (authMode === 'login') {
         const { error, data } = await supabase.auth.signInWithPassword({ email, password });
@@ -229,13 +232,16 @@ export default function LandingClient({ initialLocale }: { initialLocale?: Local
             {t('heroBody')}
           </p>
 
-          <div className="motion-rise-delay-2 mt-6 hidden flex-wrap gap-3 lg:mt-9 lg:flex">
-            <button type="button" className="arena-cta" onClick={() => setPanel('join')}>
+          <div className="motion-rise-delay-2 mt-6 flex flex-wrap items-center gap-3 lg:mt-9">
+            <button type="button" className="arena-cta hidden lg:inline-flex" onClick={() => setPanel('join')}>
               {t('joinAGame')}
             </button>
-            <button type="button" className="arena-cta-secondary" onClick={() => setPanel('host')}>
+            <button type="button" className="arena-cta-secondary hidden lg:inline-flex" onClick={() => setPanel('host')}>
               {t('hostARoom')}
             </button>
+            <Link href="/demo" className="inline-flex h-12 items-center text-sm font-bold text-arena-ink/60 underline-offset-4 hover:text-arena-ink hover:underline">
+              {t('tryDemo')}
+            </Link>
           </div>
         </section>
 
@@ -280,6 +286,12 @@ export default function LandingClient({ initialLocale }: { initialLocale?: Local
                         onChange={(e) => setPin(e.target.value.replace(/\D/g, ''))}
                         className="mt-2 h-14 border-2 border-arena-ink bg-arena-mist/40 text-center font-display text-2xl font-extrabold tracking-[0.28em] focus-visible:ring-arena-court sm:h-16 sm:text-3xl sm:tracking-[0.4em]"
                       />
+                      <p className="mt-2 text-xs font-medium text-arena-ink/45">
+                        {t('demoPinHint')}{' '}
+                        <Link href="/demo" className="font-bold text-arena-ink underline-offset-2 hover:underline">
+                          {t('tryDemo')}
+                        </Link>
+                      </p>
                     </div>
                     <div>
                       <Label htmlFor="nickname" className="text-[11px] font-bold uppercase tracking-[0.18em] text-arena-ink/45">
@@ -347,6 +359,7 @@ export default function LandingClient({ initialLocale }: { initialLocale?: Local
                       disabled={authLoading}
                       onClick={async () => {
                         setAuthLoading(true);
+                        router.prefetch('/dashboard');
                         const { error } = await supabase.auth.signInWithOAuth({
                           provider: 'google',
                           options: { redirectTo: hostAuthRedirect() },

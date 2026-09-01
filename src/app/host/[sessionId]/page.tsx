@@ -1,5 +1,5 @@
 import { redirect } from 'next/navigation';
-import { createClient } from '@/lib/supabase/server';
+import { readHostAuth } from '@/lib/supabase/hostAuth';
 import HostGameClient from '@/app/host/[sessionId]/HostGameClient';
 import HostClickerClient from '@/app/host/[sessionId]/HostClickerClient';
 import { livePlayerCap } from '@/lib/game/constants';
@@ -19,26 +19,18 @@ interface HostSessionPageProps {
 
 export default async function HostSessionPage({ params, searchParams }: HostSessionPageProps) {
   const { sessionId } = params;
-  const supabase = createClient();
-
-  // Run auth check and session fetch in parallel
-  const [authResult, sessionResult] = await Promise.all([
-    supabase.auth.getUser(),
-    supabase
-      .from('game_sessions')
-      .select(
-        'id, pin, status, current_question_index, question_started_at, quiz_id, host_id, active_multiplier, question_order, late_join_through_index'
-      )
-      .eq('id', sessionId)
-      .single(),
-  ]);
-
-  const { data: { user }, error: authError } = authResult;
-  if (authError || !user) {
+  const { supabase, user } = await readHostAuth();
+  if (!user) {
     redirect('/');
   }
 
-  const { data: session, error: sessionError } = sessionResult;
+  const { data: session, error: sessionError } = await supabase
+    .from('game_sessions')
+    .select(
+      'id, pin, status, current_question_index, question_started_at, quiz_id, host_id, active_multiplier, question_order, late_join_through_index'
+    )
+    .eq('id', sessionId)
+    .single();
   if (sessionError || !session || session.host_id !== user.id) {
     redirect('/dashboard');
   }

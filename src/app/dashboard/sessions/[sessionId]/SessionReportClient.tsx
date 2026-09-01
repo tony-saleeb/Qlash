@@ -6,11 +6,9 @@ import { ArrowLeft, Download, MessageCircle, Play, Printer } from 'lucide-react'
 import { Button } from '@/components/ui/button';
 import { BrandMark } from '@/components/brand/BrandMark';
 import { LocaleToggle } from '@/components/brand/LocaleToggle';
-import { createGameSession } from '@/app/actions/game';
-import { createRecapQuiz } from '@/app/actions/reports';
+import { createGameSession, createRecapQuiz, setHostLocale } from '@/lib/host/hostApi';
 import { recapQuestionIds } from '@/lib/game/sessionReport';
 import { reportWhatsAppHref } from '@/lib/game/reportShare';
-import { setHostLocale } from '@/app/actions/host';
 import { useLocale } from '@/lib/i18n/useLocale';
 import type { Locale } from '@/lib/i18n/locale';
 import {

@@ -1,16 +1,13 @@
 import Link from 'next/link';
 import { redirect } from 'next/navigation';
-import { createClient } from '@/lib/supabase/server';
+import { readHostAuth } from '@/lib/supabase/hostAuth';
 import { importSharedQuiz } from '@/app/actions/quizzes';
 import { BrandMark } from '@/components/brand/BrandMark';
 
 export const dynamic = 'force-dynamic';
 
 export default async function ImportQuizPage({ params }: { params: { code: string } }) {
-  const supabase = createClient();
-  const {
-    data: { user },
-  } = await supabase.auth.getUser();
+  const { user } = await readHostAuth();
 
   if (!user) {
     redirect(`/?import=${encodeURIComponent(params.code)}`);

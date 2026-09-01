@@ -9,6 +9,7 @@ import {
   livePlayerCap,
 } from '@/lib/game/constants';
 import { canInsertNewPlayer } from '@/lib/game/lateJoin';
+import { DEMO_PIN, ensureDemoSession } from '@/lib/game/demoRoom';
 
 export const dynamic = 'force-dynamic';
 
@@ -42,6 +43,10 @@ export async function POST(request: Request) {
     }
 
     const admin = createAdminClient();
+
+    if (pin === DEMO_PIN) {
+      await ensureDemoSession(admin);
+    }
 
     const { data: session, error: sessionError } = await admin
       .from('game_sessions')

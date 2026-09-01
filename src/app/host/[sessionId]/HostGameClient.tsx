@@ -21,7 +21,8 @@ import {
   resumeGameSession,
   addQuestionTime,
   setLateJoinThroughIndex,
-} from '@/app/actions/game';
+  setHostLocale,
+} from '@/lib/host/hostApi';
 import { Flame, Users, Play, Pause, UserX, AlertCircle, Trophy, ArrowRight, Home, CheckCircle2, Clock, Settings, Edit3, Zap, SkipForward, Send, Activity, ChevronDown, ChevronUp, MessageSquare, X, ClipboardList, Smartphone, Link2, LogOut, MessageCircle } from 'lucide-react';
 import confetti from 'canvas-confetti';
 import { bindAudioUnlock, playJoinSound, playTickSound, playRevealSound, playFanfareSound, unlockGameAudio } from '@/lib/sounds';
@@ -79,7 +80,6 @@ import {
 } from '@/lib/game/roomPulse';
 import { LocaleToggle } from '@/components/brand/LocaleToggle';
 import { useLocale } from '@/lib/i18n/useLocale';
-import { setHostLocale } from '@/app/actions/host';
 import type { Locale } from '@/lib/i18n/locale';
 
 const hostCtrl =
