@@ -2,7 +2,7 @@
 
 import React, { useState, useEffect } from 'react';
 import { useRouter } from 'next/navigation';
-import { createClient } from '@/lib/supabase/client';
+import { lookupTeamModeByPin } from '@/lib/game/roomByPin';
 import { Input } from '@/components/ui/input';
 import { Button } from '@/components/ui/button';
 import { Label } from '@/components/ui/label';
@@ -16,7 +16,6 @@ import type { Locale } from '@/lib/i18n/locale';
 
 export default function PlayJoinClient({ initialLocale }: { initialLocale?: Locale }) {
   const router = useRouter();
-  const supabase = createClient();
   const { locale, setLocale, t } = useLocale(initialLocale);
   const pageDir = locale === 'ar' ? 'rtl' : 'ltr';
 
@@ -50,33 +49,27 @@ export default function PlayJoinClient({ initialLocale }: { initialLocale?: Loca
   useEffect(() => {
     const checkTeamMode = async () => {
       if (pin.length === 6) {
-        const { data: session } = await supabase
-          .from('game_sessions')
-          .select('id, quizzes(team_mode)')
-          .eq('pin', pin)
-          .maybeSingle();
-        const sessionWithQuiz = session as unknown as { quizzes: { team_mode: boolean } | null };
-        setIsTeamQuiz(Boolean(sessionWithQuiz?.quizzes?.team_mode));
+        setIsTeamQuiz(await lookupTeamModeByPin(pin));
       } else {
         setIsTeamQuiz(false);
       }
     };
     checkTeamMode();
-  }, [pin, supabase]);
+  }, [pin]);
 
   const handlePlayerJoin = async (e: React.FormEvent) => {
     e.preventDefault();
     void unlockGameAudio();
     if (!pin || pin.length !== 6) {
-      toast.error('Enter a valid 6-digit game PIN.');
+      toast.error(t('validGamePin'));
       return;
     }
     if (!nickname.trim()) {
-      toast.error('Pick a nickname.');
+      toast.error(t('pickNickname'));
       return;
     }
     if (isTeamQuiz && !teamName.trim()) {
-      toast.error('This game needs a team name.');
+      toast.error(t('needTeamName'));
       return;
     }
     setLoading(true);
@@ -87,10 +80,10 @@ export default function PlayJoinClient({ initialLocale }: { initialLocale?: Loca
         nickname: nickname.trim(),
         teamName: isTeamQuiz ? teamName.trim() : undefined,
       });
-      toast.success(result.reconnected ? `Back in as ${nickname.trim()}` : `You're in as ${nickname.trim()}`);
+      toast.success(result.reconnected ? `${t('backInAs')} ${nickname.trim()}` : `${t('youreInAs')} ${nickname.trim()}`);
       router.replace(`/play/${result.sessionId}`);
     } catch (err: unknown) {
-      toast.error(err instanceof Error ? err.message : 'Failed to join. Try again.');
+      toast.error(err instanceof Error ? err.message : t('joinFailed'));
     } finally {
       setLoading(false);
     }

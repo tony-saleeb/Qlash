@@ -78,9 +78,7 @@ describe('joinOrReconnect', () => {
       'fetch',
       vi
         .fn()
-        .mockResolvedValueOnce(
-          jsonResponse({ code: 'GAME_STARTED', sessionId: 'sess-9', error: 'started' }, 403)
-        )
+        .mockResolvedValueOnce(jsonResponse({ code: 'GAME_STARTED', error: 'started' }, 403))
         .mockResolvedValueOnce(jsonResponse({ success: true }, 200))
     );
     await expect(joinOrReconnect({ pin: '999999', nickname: 'Ada' })).resolves.toEqual({
@@ -93,7 +91,7 @@ describe('joinOrReconnect', () => {
     vi.stubGlobal(
       'fetch',
       vi.fn().mockResolvedValueOnce(
-        jsonResponse({ code: 'GAME_STARTED', sessionId: 'sess-9', error: 'This game has already started.' }, 403)
+        jsonResponse({ code: 'GAME_STARTED', error: 'This game has already started.' }, 403)
       )
     );
     await expect(joinOrReconnect({ pin: '999999', nickname: 'Ada' })).rejects.toThrow(

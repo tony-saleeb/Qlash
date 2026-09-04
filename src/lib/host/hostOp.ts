@@ -1,4 +1,6 @@
-export async function hostOp<T>(op: string, args: Record<string, unknown> = {}): Promise<T> {
+import type { HostOpName } from '@/lib/host/ops';
+
+export async function hostOp<T>(op: HostOpName, args: Record<string, unknown> = {}): Promise<T> {
   const response = await fetch('/api/host/op', {
     method: 'POST',
     headers: { 'Content-Type': 'application/json' },
@@ -8,5 +10,8 @@ export async function hostOp<T>(op: string, args: Record<string, unknown> = {}):
   if (!response.ok) {
     throw new Error(body.error || 'Request failed.');
   }
-  return body.data as T;
+  if (body.data === undefined) {
+    throw new Error('Request failed.');
+  }
+  return body.data;
 }

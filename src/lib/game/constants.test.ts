@@ -8,6 +8,7 @@ import {
   RATE_LIMITS,
   livePlayerCap,
   quizLibraryCap,
+  SUBMIT_LATE_GRACE_MS,
 } from '@/lib/game/constants';
 
 describe('cn', () => {
@@ -28,9 +29,12 @@ describe('theme + capacity constants', () => {
     expect(MAX_PLAYERS_PER_SESSION).toBe(80);
     expect(NICKNAME_MIN_LEN).toBe(1);
     expect(NICKNAME_MAX_LEN).toBe(20);
+    expect(SUBMIT_LATE_GRACE_MS).toBe(1500);
     expect(RATE_LIMITS.joinPerIp.limit).toBe(120);
     expect(RATE_LIMITS.submitPerPlayer.limit).toBe(8);
     expect(RATE_LIMITS.registerPerIp.limit).toBe(8);
+    expect(RATE_LIMITS.pinLookupPerIp.limit).toBe(60);
+    expect(RATE_LIMITS.playerHydratePerIp.limit).toBe(180);
     expect(livePlayerCap('free')).toBe(80);
     expect(livePlayerCap('pro')).toBe(80);
     expect(quizLibraryCap('free')).toBe(5);

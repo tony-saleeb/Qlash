@@ -17,6 +17,14 @@ export const createClient = (): SupabaseClient => {
     process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY!
   );
 
+  void client.auth?.getSession?.().then(({ error }) => {
+    const code = (error as { code?: string } | null)?.code;
+    const message = error?.message || '';
+    if (code === 'refresh_token_not_found' || message.includes('Refresh Token')) {
+      void client.auth.signOut({ scope: 'local' });
+    }
+  });
+
   globalThis.__qlashBrowserClient = client;
   return client;
 };

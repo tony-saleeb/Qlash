@@ -140,6 +140,7 @@ export default function QuestionMediaField({
             className="h-10 w-10 rounded-xl border border-arena-line text-arena-signal"
             onClick={() => onChange({ media_url: null, media_type: null })}
             title="Remove media"
+            aria-label="Remove media"
           >
             <Trash2 className="h-4 w-4" />
           </Button>

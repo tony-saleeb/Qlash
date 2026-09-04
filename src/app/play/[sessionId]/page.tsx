@@ -1,5 +1,5 @@
 import { redirect } from 'next/navigation';
-import { createClient } from '@/lib/supabase/server';
+import { createAdminClient } from '@/lib/supabase/admin';
 import PlayerGameClient from '@/app/play/[sessionId]/PlayerGameClient';
 
 export const dynamic = 'force-dynamic';
@@ -12,27 +12,30 @@ interface PlayerSessionPageProps {
 
 export default async function PlayerSessionPage({ params }: PlayerSessionPageProps) {
   const { sessionId } = params;
-  const supabase = createClient();
+  const admin = createAdminClient();
 
-  const { data: session, error } = await supabase
+  const { data: session, error } = await admin
     .from('game_sessions')
     .select('id, status, quizzes(team_mode)')
     .eq('id', sessionId)
-    .single();
+    .maybeSingle();
 
   if (error || !session) {
     redirect('/play');
   }
 
   const sessionWithQuiz = session as unknown as {
-    quizzes: { team_mode?: boolean } | null;
+    quizzes: { team_mode?: boolean } | { team_mode?: boolean }[] | null;
   };
+  const quizMeta = Array.isArray(sessionWithQuiz.quizzes)
+    ? sessionWithQuiz.quizzes[0]
+    : sessionWithQuiz.quizzes;
 
   return (
     <PlayerGameClient
       sessionId={sessionId}
       initialSessionStatus={session.status}
-      teamMode={Boolean(sessionWithQuiz?.quizzes?.team_mode)}
+      teamMode={Boolean(quizMeta?.team_mode)}
     />
   );
 }

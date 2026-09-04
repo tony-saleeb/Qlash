@@ -2,9 +2,41 @@
 
 import { getHostAuth } from '@/lib/supabase/hostAuth';
 import { DEFAULT_LATE_JOIN_THROUGH_INDEX } from '@/lib/game/lateJoin';
+import { randomLivePin } from '@/lib/game/livePin';
 
-function randomLivePin(): string {
-  return Math.floor(100000 + Math.random() * 900000).toString();
+async function applyScoresBeforeAdvance(
+  supabase: Awaited<ReturnType<typeof getHostAuth>>['supabase'],
+  sessionId: string,
+  hostId: string
+) {
+  const { data: session } = await supabase
+    .from('game_sessions')
+    .select('status, current_question_index, question_order, scores_applied_question_id, quiz_id')
+    .eq('id', sessionId)
+    .eq('host_id', hostId)
+    .maybeSingle();
+
+  if (!session) return;
+  if (!['question_active', 'question_paused'].includes(session.status)) return;
+
+  const order = Array.isArray(session.question_order) ? (session.question_order as string[]) : null;
+  let questionId = order?.[session.current_question_index] ?? null;
+  if (!questionId && session.quiz_id) {
+    const { data: question } = await supabase
+      .from('questions')
+      .select('id')
+      .eq('quiz_id', session.quiz_id)
+      .eq('order_index', session.current_question_index)
+      .maybeSingle();
+    questionId = question?.id ?? null;
+  }
+  if (!questionId || session.scores_applied_question_id === questionId) return;
+
+  const { error } = await supabase.rpc('apply_question_scores_and_reveal', {
+    p_session_id: sessionId,
+    p_question_id: questionId,
+  });
+  if (error) throw error;
 }
 
 export async function createGameSession(quizId: string) {
@@ -362,6 +394,7 @@ export async function addQuestionTime(sessionId: string, extraSeconds = 10) {
 export async function goToNextQuestion(sessionId: string, nextIndex: number) {
   try {
     const { supabase, user } = await getHostAuth();
+    await applyScoresBeforeAdvance(supabase, sessionId, user.id);
     const serverStartedAt = new Date().toISOString();
     const { data, error } = await supabase
       .from('game_sessions')

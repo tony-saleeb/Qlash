@@ -52,6 +52,9 @@ export async function middleware(request: NextRequest) {
   // Skip auth refresh for public/player traffic — hosts refresh on dashboard/host/editor
   if (
     pathname === '/' ||
+    pathname === '/register' ||
+    pathname === '/login' ||
+    pathname === '/signup' ||
     pathname.startsWith('/play') ||
     pathname.startsWith('/api/') ||
     pathname.startsWith('/q/') ||

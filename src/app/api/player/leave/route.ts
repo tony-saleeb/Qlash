@@ -1,12 +1,16 @@
 import { NextResponse } from 'next/server';
 import { createAdminClient } from '@/lib/supabase/admin';
 import { lobbyShouldCloseNow } from '@/lib/game/emptyLobby';
+import { limitPlayerHydrate, tooManyRequests } from '@/lib/api/playerLimit';
 
 export const dynamic = 'force-dynamic';
 
 /** Player leaves the room. If they were the last lobby player, the session closes. */
 export async function POST(request: Request) {
   try {
+    const limited = await limitPlayerHydrate(request, 'leave');
+    if (!limited.ok) return tooManyRequests(limited.retryAfterSec);
+
     const { sessionId, playerId, token } = await request.json();
 
     if (!sessionId || !playerId || !token) {

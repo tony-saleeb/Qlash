@@ -29,6 +29,10 @@ describe('i18n', () => {
     expect(t('ar', 'firstLock')).toBe('أول قفل');
     expect(t('ar', 'answerLocked')).toBe('الإجابة اتقفلت');
     expect(t('ar', 'youAreOffline')).toContain('أوفلاين');
+    expect(t('en', 'playAgain')).toBe('Play again');
+    expect(t('ar', 'showFinalPodium')).toBe('ورّي المنصة النهائية');
+    expect(t('en', 'resultsCalculated')).toBe('Results calculated!');
+    expect(t('ar', 'validGamePin')).toContain('6');
     expect(isLocale('ar')).toBe(true);
     expect(normalizeLocale('nope')).toBe('en');
   });

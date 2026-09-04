@@ -49,4 +49,10 @@ describe('POST /api/host/op', () => {
     expect(result.status).toBe(200);
     expect(result.body).toEqual({ data: { id: 'sess-1', pin: '123456' } });
   });
+
+  it('rejects an unknown operation', async () => {
+    const { POST } = await import('@/app/api/host/op/route');
+    const result = await readJson(await POST(jsonRequest({ op: 'dropDatabase' })));
+    expect(result.status).toBe(400);
+  });
 });

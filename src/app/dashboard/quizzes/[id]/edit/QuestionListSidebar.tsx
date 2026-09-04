@@ -90,6 +90,7 @@ export default function QuestionListSidebar({
                     }}
                     className="text-arena-ink/45 hover:text-arena-court"
                     title="Duplicate Question"
+                    aria-label="Duplicate Question"
                   >
                     <Copy className="w-3 h-3" />
                   </button>
@@ -100,6 +101,7 @@ export default function QuestionListSidebar({
                     }}
                     className="text-arena-ink/45 hover:text-rose-400"
                     title="Delete Question"
+                    aria-label="Delete Question"
                   >
                     <Trash2 className="w-3 h-3" />
                   </button>

@@ -2,6 +2,7 @@ import { beforeEach, describe, expect, it, vi } from 'vitest';
 import { createClientMock } from '@/test/supabaseMock';
 import { createClient } from '@/lib/supabase/server';
 import { createAdminClient } from '@/lib/supabase/admin';
+import { randomLivePin } from '@/lib/game/livePin';
 
 vi.mock('@/lib/supabase/server', () => ({
   createClient: vi.fn(),
@@ -9,6 +10,10 @@ vi.mock('@/lib/supabase/server', () => ({
 
 vi.mock('@/lib/supabase/admin', () => ({
   createAdminClient: vi.fn(),
+}));
+
+vi.mock('@/lib/game/livePin', () => ({
+  randomLivePin: vi.fn(() => '550000'),
 }));
 
 const host = createClientMock({ id: 'host-1', email: 'host@qlash.test' });
@@ -33,7 +38,7 @@ describe('host game actions', () => {
   });
 
   it('creates a lobby session with a unique 6-digit PIN for the owning host', async () => {
-    vi.spyOn(Math, 'random').mockReturnValue(0.5);
+    vi.mocked(randomLivePin).mockReturnValue('550000');
     host.setTables({
       quizzes: { data: { id: 'quiz-1' }, error: null },
       game_sessions: {
@@ -56,7 +61,7 @@ describe('host game actions', () => {
   });
 
   it('retries lobby insert when the PIN is already taken', async () => {
-    vi.spyOn(Math, 'random').mockReturnValueOnce(0.1).mockReturnValueOnce(0.5);
+    vi.mocked(randomLivePin).mockReturnValueOnce('190000').mockReturnValueOnce('550000');
     host.setTables({
       quizzes: { data: { id: 'quiz-1' }, error: null },
       game_sessions: [
@@ -227,6 +232,34 @@ describe('host game actions', () => {
     const result = await revealQuestionResults('sess-1', 'q1');
     expect(result.optionCounts).toEqual({ a: 3 });
     expect(result.leaderboard[0].nickname).toBe('Ada');
+    expect(host.rpc).toHaveBeenCalledWith('apply_question_scores_and_reveal', {
+      p_session_id: 'sess-1',
+      p_question_id: 'q1',
+    });
+  });
+
+  it('applies the current round scores before jumping to another question', async () => {
+    host.setTables({
+      game_sessions: [
+        {
+          data: {
+            status: 'question_active',
+            current_question_index: 0,
+            question_order: ['q1', 'q2'],
+            scores_applied_question_id: null,
+            quiz_id: 'quiz-1',
+          },
+          error: null,
+        },
+        { data: { question_started_at: 't-next' }, error: null },
+      ],
+    });
+    host.setRpc('apply_question_scores_and_reveal', { data: { alreadyApplied: false }, error: null });
+    const { goToNextQuestion } = await import('@/app/actions/game');
+    await expect(goToNextQuestion('sess-1', 1)).resolves.toEqual({
+      success: true,
+      serverStartedAt: 't-next',
+    });
     expect(host.rpc).toHaveBeenCalledWith('apply_question_scores_and_reveal', {
       p_session_id: 'sess-1',
       p_question_id: 'q1',

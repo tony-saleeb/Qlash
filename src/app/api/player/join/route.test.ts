@@ -71,7 +71,7 @@ describe('POST /api/player/join', () => {
     const result = await readJson(await POST(jsonRequest({ pin: '123456', nickname: 'Ada' })));
     expect(result.status).toBe(403);
     expect(result.body.code).toBe('GAME_STARTED');
-    expect(result.body.sessionId).toBe('sess-1');
+    expect(result.body.sessionId).toBeUndefined();
   });
 
   it('allows a first-time join on a later question when late join is on', async () => {
@@ -117,7 +117,7 @@ describe('POST /api/player/join', () => {
     const result = await readJson(await POST(jsonRequest({ pin: '123456', nickname: 'Ada' })));
     expect(result.status).toBe(409);
     expect(result.body.code).toBe('NICKNAME_TAKEN');
-    expect(result.body.playerId).toBe('p-existing');
+    expect(result.body.playerId).toBeUndefined();
   });
 
   it('requires a team name on team quizzes', async () => {

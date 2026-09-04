@@ -72,7 +72,10 @@ describe('createConfirmedHost', () => {
       password: 'secret1',
       displayName: 'Mira',
     });
-    expect(admin.auth.admin.updateUserById).toHaveBeenCalledWith('u1', { email_confirm: true });
+    expect(admin.auth.admin.updateUserById).toHaveBeenCalledWith('u1', {
+      email_confirm: true,
+      password: 'secret1',
+    });
   });
 
   it('does not overwrite an existing confirmed host', async () => {

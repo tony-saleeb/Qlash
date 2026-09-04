@@ -223,7 +223,8 @@ export default function DashboardClient({
               size="icon"
               className="rounded-none border-2 border-arena-ink text-arena-ink/60 hover:bg-arena-ink hover:text-white"
               onClick={handleLogout}
-              title="Sign out"
+              title={t('signOut')}
+              aria-label={t('signOut')}
             >
               <LogOut className="h-4 w-4" />
             </Button>
@@ -310,6 +311,7 @@ export default function DashboardClient({
                         className="rounded-none border-2 border-arena-ink/20"
                         onClick={() => router.push(`/dashboard/quizzes/${quiz.id}/edit`)}
                         title="Edit"
+                        aria-label="Edit"
                       >
                         <Edit className="h-4 w-4" />
                       </Button>
@@ -319,6 +321,7 @@ export default function DashboardClient({
                         className="rounded-none border-2 border-arena-ink/20"
                         onClick={() => handleShareQuiz(quiz)}
                         title={t('shareQuiz')}
+                        aria-label={t('shareQuiz')}
                       >
                         <Link2 className="h-4 w-4" />
                       </Button>
@@ -328,6 +331,7 @@ export default function DashboardClient({
                         className="rounded-none border-2 border-arena-ink/20"
                         onClick={() => handleCloneQuiz(quiz.id)}
                         title="Duplicate"
+                        aria-label="Duplicate"
                       >
                         <Copy className="h-4 w-4" />
                       </Button>
@@ -337,6 +341,7 @@ export default function DashboardClient({
                         className="rounded-none border-2 border-arena-ink/20 text-arena-signal hover:bg-arena-signal/10"
                         onClick={() => handleDeleteQuiz(quiz.id)}
                         title="Delete"
+                        aria-label="Delete"
                       >
                         <Trash2 className="h-4 w-4" />
                       </Button>

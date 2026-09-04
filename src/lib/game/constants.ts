@@ -4,6 +4,9 @@ export const MAX_PLAYERS_PER_SESSION = 80;
 export const NICKNAME_MIN_LEN = 1;
 export const NICKNAME_MAX_LEN = 20;
 
+/** Matches submit_live_answer: answers after the clock are late, not rejected, for this long. */
+export const SUBMIT_LATE_GRACE_MS = 1500;
+
 export type HostPlan = 'free' | 'pro' | 'org';
 
 /** Live seats are 80 on every plan until we turn Free=30 back on. */
@@ -32,4 +35,6 @@ export const RATE_LIMITS = {
   submitPerIp: { limit: 400, windowMs: 60_000 },
   submitPerPlayer: { limit: 8, windowMs: 60_000 },
   registerPerIp: { limit: 8, windowMs: 15 * 60_000 },
+  pinLookupPerIp: { limit: 60, windowMs: 60_000 },
+  playerHydratePerIp: { limit: 180, windowMs: 60_000 },
 } as const;

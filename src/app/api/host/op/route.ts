@@ -24,12 +24,13 @@ import {
 } from '@/app/actions/quizzes';
 import { createRecapQuiz } from '@/app/actions/reports';
 import { setHostLocale } from '@/app/actions/host';
+import { isHostOp, type HostOpName } from '@/lib/host/ops';
 
 export const dynamic = 'force-dynamic';
 
 type Args = Record<string, unknown>;
 
-async function runHostOp(op: string, args: Args) {
+async function runHostOp(op: HostOpName, args: Args) {
   switch (op) {
     case 'createGameSession':
       return createGameSession(String(args.quizId));
@@ -47,8 +48,12 @@ async function runHostOp(op: string, args: Args) {
       return goToPodium(String(args.sessionId));
     case 'setSessionMultiplier':
       return setSessionMultiplier(String(args.sessionId), args.multiplier === 2 ? 2 : 1);
-    case 'startGameSession':
-      return startGameSession(String(args.sessionId), args.questionOrder as string[]);
+    case 'startGameSession': {
+      const questionOrder = Array.isArray(args.questionOrder)
+        ? args.questionOrder.filter((id): id is string => typeof id === 'string')
+        : [];
+      return startGameSession(String(args.sessionId), questionOrder);
+    }
     case 'pauseGameSession':
       return pauseGameSession(String(args.sessionId));
     case 'resumeGameSession':
@@ -81,7 +86,7 @@ async function runHostOp(op: string, args: Args) {
 export async function POST(request: Request) {
   try {
     const body = (await request.json()) as { op?: string; args?: Args };
-    if (!body.op || typeof body.op !== 'string') {
+    if (!body.op || typeof body.op !== 'string' || !isHostOp(body.op)) {
       return NextResponse.json({ error: 'Missing operation.' }, { status: 400 });
     }
     const data = await runHostOp(body.op, body.args ?? {});

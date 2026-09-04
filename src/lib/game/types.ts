@@ -87,6 +87,10 @@ export function sanitizeAnswers(answers: AnswerOption[]): PublicAnswerOption[] {
   }));
 }
 
+export function correctAnswerIds(answers: { id: string; is_correct?: boolean }[]): string[] {
+  return answers.filter((ans) => Boolean(ans.is_correct)).map((ans) => ans.id);
+}
+
 export function toPublicQuestion(question: Question): PublicQuestionPayload {
   return {
     id: question.id,

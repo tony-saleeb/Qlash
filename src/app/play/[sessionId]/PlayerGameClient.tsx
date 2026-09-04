@@ -114,7 +114,7 @@ export default function PlayerGameClient({
   const displayedSecondRef = React.useRef<number | null>(null);
   const lobbyFanfarePlayedRef = React.useRef(false);
   const clockStartedAtRef = React.useRef<string | null>(null);
-  const sawOpenQuestionRef = React.useRef(false);
+  const questionIndexRef = React.useRef<number | null>(null);
   const lastReactionAtRef = React.useRef(0);
   const lockedRemainingRef = React.useRef<number | null>(null);
   const liveRankRef = React.useRef<number | null>(null);
@@ -147,23 +147,30 @@ export default function PlayerGameClient({
     return () => window.clearInterval(id);
   }, [submissionState]);
 
+  const fetchRoster = useCallback(async () => {
+    const token = localStorage.getItem(`quizarena_token_${sessionId}`) || '';
+    const res = await fetch('/api/player/roster', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ sessionId, token }),
+    });
+    const data = await res.json().catch(() => ({}));
+    if (!res.ok) return [];
+    return (data.players || []) as Player[];
+  }, [sessionId]);
+
   React.useEffect(() => {
     if (sessionStatus !== 'leaderboard' || !player?.id) return;
     let cancelled = false;
-    void supabase
-      .from('players')
-      .select('id')
-      .eq('session_id', sessionId)
-      .order('score', { ascending: false })
-      .then(({ data }) => {
-        if (cancelled || !data) return;
-        const rank = data.findIndex((row) => row.id === player.id) + 1;
-        setLiveRank(rank > 0 ? rank : null);
-      });
+    void fetchRoster().then((rows) => {
+      if (cancelled || !rows.length) return;
+      const rank = rows.findIndex((row) => row.id === player.id) + 1;
+      setLiveRank(rank > 0 ? rank : null);
+    });
     return () => {
       cancelled = true;
     };
-  }, [sessionStatus, player?.id, sessionId, supabase]);
+  }, [sessionStatus, player?.id, fetchRoster]);
 
   React.useEffect(() => {
     playerRef.current = player;
@@ -184,9 +191,15 @@ export default function PlayerGameClient({
       revealAppliedRef.current = null;
 
       if (serverStartedAt && question.time_limit_seconds) {
-        setClockStartedAt(serverStartedAt);
-        clockStartedAtRef.current = serverStartedAt;
-        setTimeLeft(remainingSeconds(serverStartedAt, question.time_limit_seconds));
+        if (status === 'question_paused') {
+          setClockStartedAt(null);
+          clockStartedAtRef.current = null;
+          setTimeLeft(remainingFromPausedElapsed(serverStartedAt, question.time_limit_seconds));
+        } else {
+          setClockStartedAt(serverStartedAt);
+          clockStartedAtRef.current = serverStartedAt;
+          setTimeLeft(remainingSeconds(serverStartedAt, question.time_limit_seconds));
+        }
       } else {
         setClockStartedAt(null);
         clockStartedAtRef.current = null;
@@ -262,14 +275,14 @@ export default function PlayerGameClient({
                 setRoundResult({
                   isCorrect: Boolean(round.submission.is_correct),
                   pointsAwarded: Number(round.submission.points_awarded) || 0,
-                  correctAnswerIds: [],
+                  correctAnswerIds: Array.isArray(round.correctAnswerIds) ? round.correctAnswerIds : [],
                   optionCounts: undefined,
                 });
               } else if (!joinedLate) {
                 setRoundResult({
                   isCorrect: false,
                   pointsAwarded: 0,
-                  correctAnswerIds: [],
+                  correctAnswerIds: Array.isArray(round.correctAnswerIds) ? round.correctAnswerIds : [],
                   optionCounts: undefined,
                 });
               }
@@ -286,18 +299,13 @@ export default function PlayerGameClient({
 
   const loadPodium = useCallback(
     async (playerId: string) => {
-      const { data: allPlayers } = await supabase
-        .from('players')
-        .select('id, nickname, score')
-        .eq('session_id', sessionId)
-        .order('score', { ascending: false });
-
-      if (allPlayers) {
+      const allPlayers = await fetchRoster();
+      if (allPlayers.length) {
         setFinalRank(allPlayers.findIndex((row) => row.id === playerId) + 1);
-        setPodiumPlayers(allPlayers as Player[]);
+        setPodiumPlayers(allPlayers);
       }
     },
-    [supabase, sessionId]
+    [fetchRoster]
   );
 
   const syncOfficialScore = useCallback(
@@ -316,11 +324,8 @@ export default function PlayerGameClient({
             prev ? { ...prev, score: data.player.score, streak: data.player.streak } : null
           );
         }
-        const { data: rows } = await supabase
-          .from('players')
-          .select('id, score')
-          .eq('session_id', sessionId);
-        if (rows) setLiveRank(rankOfPlayer(rows, playerId));
+        const rows = await fetchRoster();
+        if (rows.length) setLiveRank(rankOfPlayer(rows, playerId));
         if (data.submission) {
           setRoundResult((prev) =>
             prev
@@ -328,6 +333,9 @@ export default function PlayerGameClient({
                   ...prev,
                   isCorrect: data.submission.is_correct ?? prev.isCorrect,
                   pointsAwarded: data.submission.points_awarded ?? prev.pointsAwarded,
+                  correctAnswerIds: Array.isArray(data.correctAnswerIds)
+                    ? data.correctAnswerIds
+                    : prev.correctAnswerIds,
                 }
               : prev
           );
@@ -336,7 +344,7 @@ export default function PlayerGameClient({
         console.error('Failed to sync official score', err);
       }
     },
-    [sessionId, supabase]
+    [sessionId, fetchRoster]
   );
 
   const applyRevealInstant = useCallback(
@@ -359,8 +367,6 @@ export default function PlayerGameClient({
       }
       if (qid) revealAppliedRef.current = qid;
       const submit = lastSubmitRef.current;
-      const selected =
-        submit && submit.questionId === currentQ?.id ? submit.selected : [];
       const playedThisRound = Boolean(submit && submit.questionId === currentQ?.id);
 
       if (!playedThisRound && !sawOpenQuestionRef.current) {
@@ -375,10 +381,6 @@ export default function PlayerGameClient({
       if (submit && submit.questionId === currentQ?.id && submit.isCorrect !== null) {
         isCorrect = submit.isCorrect;
         pointsAwarded = submit.pointsAwarded;
-      } else if (currentQ?.type !== 'poll' && selected.length > 0) {
-        const sel = [...selected].sort();
-        const cor = [...correctAnswerIds].sort();
-        isCorrect = sel.length === cor.length && sel.every((id, i) => id === cor[i]);
       }
 
       const callout = roundCallout({
@@ -438,6 +440,9 @@ export default function PlayerGameClient({
           (payload.server_started_at as string) || new Date().toISOString(),
           'question_active'
         );
+        if (typeof payload.question_index === 'number') {
+          questionIndexRef.current = payload.question_index;
+        }
         playQuestionStartSound();
         setActiveMultiplier(1);
       },
@@ -482,19 +487,19 @@ export default function PlayerGameClient({
               : prev.answers,
           };
         });
-        toast.info('The host updated the question.');
+        toast.info(t('hostUpdatedQuestion'));
       },
       'host:announcement': (msg) => {
         const message = msg.payload.message as string;
-        if (message) toast.info(`📢 Host: ${message}`, { duration: 8000 });
+        if (message) toast.info(`${t('hostSaid')} ${message}`, { duration: 8000 });
       },
       'multiplier:change': (msg) => {
         const multiplier = (msg.payload.multiplier as number) || 1;
         setActiveMultiplier(multiplier);
         if (multiplier > 1) {
-          toast.success(`⚡ Double Points activated! (${multiplier}x)`, { duration: 5000 });
+          toast.success(`${t('doublePointsOn')} (${multiplier}x)`, { duration: 5000 });
         } else {
-          toast.info('Multiplier deactivated (1x)');
+          toast.info(t('doublePointsOff'));
         }
       },
     },
@@ -505,7 +510,7 @@ export default function PlayerGameClient({
     const authenticatePlayer = async () => {
       const token = localStorage.getItem(`quizarena_token_${sessionId}`);
       if (!token) {
-        toast.error('Session not found. Please join with your PIN.');
+        toast.error(t('sessionNotFound'));
         router.push('/play');
         return;
       }
@@ -520,7 +525,7 @@ export default function PlayerGameClient({
 
         if (!res.ok || !data.player) {
           localStorage.removeItem(`quizarena_token_${sessionId}`);
-          toast.error('Identity verification failed. Please join again.');
+          toast.error(t('identityFailed'));
           router.push('/play');
           return;
         }
@@ -570,7 +575,7 @@ export default function PlayerGameClient({
         },
         () => {
           localStorage.removeItem(`quizarena_token_${sessionId}`);
-          toast.error('You have been kicked from the lobby by the host.');
+          toast.error(t('kickedByHost'));
           router.push('/play');
         }
       )
@@ -586,12 +591,30 @@ export default function PlayerGameClient({
           const newStatus = payload.new.status as string;
           setSessionStatus(newStatus);
 
+          if (revealFallbackTimer) {
+            clearTimeout(revealFallbackTimer);
+            revealFallbackTimer = null;
+          }
+
           if (typeof payload.new.active_multiplier === 'number') {
             setActiveMultiplier(payload.new.active_multiplier);
           }
 
           const startedAt = payload.new.question_started_at as string | null;
           const limit = activeQuestionRef.current?.time_limit_seconds;
+          const nextIndex = payload.new.current_question_index;
+          if (typeof nextIndex === 'number') {
+            const indexChanged =
+              questionIndexRef.current !== null && nextIndex !== questionIndexRef.current;
+            questionIndexRef.current = nextIndex;
+            if (
+              (newStatus === 'question_active' || newStatus === 'question_paused') &&
+              (indexChanged || !activeQuestionRef.current)
+            ) {
+              hydrateCurrentQuestion(playerId);
+              return;
+            }
+          }
 
           if (newStatus === 'question_active' || newStatus === 'question_paused') {
             if (!activeQuestionRef.current) {
@@ -631,7 +654,7 @@ export default function PlayerGameClient({
       void fetch('/api/player/connection', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ playerId, token, connected }),
+        body: JSON.stringify({ playerId, token, connected, sessionId }),
         keepalive: true,
       });
     };
@@ -806,7 +829,7 @@ export default function PlayerGameClient({
       console.error(err);
       lastSubmitRef.current = null;
       setSubmissionState('idle');
-      toast.error(err instanceof Error ? err.message : 'Failed to submit — tap again.');
+      toast.error(err instanceof Error ? err.message : t('submitFailed'));
     }
   };
 
@@ -831,7 +854,7 @@ export default function PlayerGameClient({
   // Trigger Multi-select submit
   const handleMultiSubmit = () => {
     if (selectedAnswerIds.length === 0) {
-      toast.error('Please select at least one choice.');
+      toast.error(t('selectAChoice'));
       return;
     }
     submitAnswer(selectedAnswerIds);
@@ -841,7 +864,7 @@ export default function PlayerGameClient({
   const handleTextSubmit = (e: React.FormEvent) => {
     e.preventDefault();
     if (!typeInputValue.trim()) {
-      toast.error('Please type an answer before submitting.');
+      toast.error(t('typeAnAnswer'));
       return;
     }
     submitAnswer([typeInputValue.trim()]);
@@ -935,39 +958,43 @@ export default function PlayerGameClient({
   // RENDER: ROUND REVEAL RESULTS (CORRECT / INCORRECT STATE)
   // ==========================================
   if (roundResult && activeQuestion) {
+    const isPoll = activeQuestion.type === 'poll';
     const isCorrect = roundResult.isCorrect;
     const points = roundResult.pointsAwarded;
     const move = rankMove(previousRankRef.current, liveRank);
     const callout = roundCallout({
       isCorrect,
-      isPoll: activeQuestion.type === 'poll',
+      isPoll,
       lockedRemaining: lockedRemainingRef.current,
       timeLimit: activeQuestion.time_limit_seconds,
       previousStreak: previousStreakRef.current,
     });
+    const winTone = isPoll || isCorrect;
 
     return (
       <div
         className={`flex min-h-dvh w-full flex-col items-center justify-between p-6 text-center font-sans transition-colors duration-500 ${
-          isCorrect ? 'bg-arena-acid text-arena-ink' : 'bg-arena-signal text-white'
+          winTone ? 'bg-arena-acid text-arena-ink' : 'bg-arena-signal text-white'
         }`}
       >
         <div />
 
         <div className="w-full max-w-sm space-y-4 animate-scale-in">
           <div className="flex justify-center">
-            {isCorrect ? (
+            {winTone ? (
               <CheckCircle className="h-20 w-20 text-arena-ink" />
             ) : (
               <XCircle className="h-20 w-20 text-white" />
             )}
           </div>
           <h1 className="font-display text-4xl font-extrabold uppercase tracking-tight sm:text-5xl">
-            {isCorrect ? t('correct') : t('missed')}
+            {isPoll ? t('answerLocked') : isCorrect ? t('correct') : t('missed')}
           </h1>
-          <p className={`font-display text-xl font-bold ${isCorrect ? 'text-arena-ink/80' : 'text-white/85'}`}>
-            {isCorrect ? `+${points.toLocaleString()} ${t('pointsWord')}` : `+0 ${t('pointsWord')}`}
-          </p>
+          {!isPoll ? (
+            <p className={`font-display text-xl font-bold ${winTone ? 'text-arena-ink/80' : 'text-white/85'}`}>
+              {isCorrect ? `+${points.toLocaleString()} ${t('pointsWord')}` : `+0 ${t('pointsWord')}`}
+            </p>
+          ) : null}
           {player.streak > 1 && isCorrect && (
             <div className="inline-flex animate-bounce items-center gap-1.5 border-2 border-arena-ink bg-white px-4 py-1.5 text-sm font-extrabold text-arena-ink">
               <Flame className="h-4 w-4 fill-current" />
@@ -990,7 +1017,7 @@ export default function PlayerGameClient({
             </p>
           )}
           {move ? (
-            <p className={`font-display text-lg font-black ${isCorrect ? 'text-arena-ink' : 'text-white'}`}>
+            <p className={`font-display text-lg font-black ${winTone ? 'text-arena-ink' : 'text-white'}`}>
               {move.kind === 'up' ? `↑ ${move.delta} · ` : move.kind === 'down' ? `↓ ${Math.abs(move.delta)} · ` : ''}
               {t('yourRankPrefix')}{move.current}
             </p>
@@ -1004,14 +1031,14 @@ export default function PlayerGameClient({
 
           return roundResult.optionCounts ? (
             <div className={`my-2 flex w-full max-w-sm flex-col items-center gap-4 border-2 p-5 animate-fade-in ${
-              isCorrect ? 'border-arena-ink/20 bg-black/10' : 'border-white/20 bg-black/25'
+              winTone ? 'border-arena-ink/20 bg-black/10' : 'border-white/20 bg-black/25'
             }`}>
-              <h3 className={`text-[10px] font-black uppercase tracking-[0.18em] ${isCorrect ? 'text-arena-ink/55' : 'text-white/55'}`}>
+              <h3 className={`text-[10px] font-black uppercase tracking-[0.18em] ${winTone ? 'text-arena-ink/55' : 'text-white/55'}`}>
                 {t('howTheRoomVoted')}
               </h3>
 
               <div className={`flex h-36 w-full items-end justify-center gap-3.5 border-b px-2 pb-1 ${
-                isCorrect ? 'border-arena-ink/20' : 'border-white/15'
+                winTone ? 'border-arena-ink/20' : 'border-white/15'
               }`}>
                 {activeQuestion.answers.map((ans) => {
                   const votes = roundResult.optionCounts ? (roundResult.optionCounts[ans.id] || 0) : 0;
@@ -1051,16 +1078,16 @@ export default function PlayerGameClient({
         })()}
 
         <div className={`my-4 w-full max-w-sm space-y-4 border-2 p-5 text-left animate-fade-in ${
-          isCorrect ? 'border-arena-ink/20 bg-black/10' : 'border-white/20 bg-black/25'
+          winTone ? 'border-arena-ink/20 bg-black/10' : 'border-white/20 bg-black/25'
         }`}>
           <h3 className={`border-b pb-2 text-xs font-extrabold uppercase tracking-wider ${
-            isCorrect ? 'border-arena-ink/15 text-arena-ink/50' : 'border-white/10 text-white/50'
+            winTone ? 'border-arena-ink/15 text-arena-ink/50' : 'border-white/10 text-white/50'
           }`}>
             {t('roundSummary')}
           </h3>
           
           <div className="space-y-1">
-            <span className={`block text-[10px] font-black uppercase tracking-widest ${isCorrect ? 'text-arena-ink/40' : 'text-white/40'}`}>
+            <span className={`block text-[10px] font-black uppercase tracking-widest ${winTone ? 'text-arena-ink/40' : 'text-white/40'}`}>
               {t('yourChoice')}
             </span>
             {selectedAnswerIds.length > 0 ? (
@@ -1086,14 +1113,15 @@ export default function PlayerGameClient({
                   ))}
               </div>
             ) : (
-              <p className={`mt-0.5 text-sm font-semibold ${isCorrect ? 'text-arena-ink' : 'text-white'}`}>
+              <p className={`mt-0.5 text-sm font-semibold ${winTone ? 'text-arena-ink' : 'text-white'}`}>
                 <Clock className="mr-0.5 inline-block h-3.5 w-3.5" /> {t('timeOutNoAnswer')}
               </p>
             )}
           </div>
 
+          {!isPoll ? (
           <div className="space-y-1 pt-1">
-            <span className={`block text-[10px] font-black uppercase tracking-widest ${isCorrect ? 'text-arena-ink/40' : 'text-white/40'}`}>
+            <span className={`block text-[10px] font-black uppercase tracking-widest ${winTone ? 'text-arena-ink/40' : 'text-white/40'}`}>
               {t('correctAnswer')}
             </span>
             <div className="mt-1 flex flex-wrap gap-2">
@@ -1118,12 +1146,13 @@ export default function PlayerGameClient({
                 ))}
             </div>
           </div>
+          ) : null}
         </div>
 
         <div className={`mb-8 w-full max-w-xs border-2 p-4 ${
-          isCorrect ? 'border-arena-ink/25 bg-white/40' : 'border-white/20 bg-black/20'
+          winTone ? 'border-arena-ink/25 bg-white/40' : 'border-white/20 bg-black/20'
         }`}>
-          <span className={`block text-[10px] font-bold uppercase tracking-widest ${isCorrect ? 'text-arena-ink/50' : 'text-white/50'}`}>
+          <span className={`block text-[10px] font-bold uppercase tracking-widest ${winTone ? 'text-arena-ink/50' : 'text-white/50'}`}>
             {t('totalScore')}
           </span>
           <span className="mt-0.5 block font-display text-2xl font-black tabular-nums">

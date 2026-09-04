@@ -1,11 +1,15 @@
 import { NextResponse } from 'next/server';
 import { createAdminClient } from '@/lib/supabase/admin';
+import { limitPlayerHydrate, tooManyRequests } from '@/lib/api/playerLimit';
 
 export const dynamic = 'force-dynamic';
 
 /** Authenticate a returning player by sessionId + client token. */
 export async function POST(request: Request) {
   try {
+    const limited = await limitPlayerHydrate(request, 'me');
+    if (!limited.ok) return tooManyRequests(limited.retryAfterSec);
+
     const { sessionId, token, nickname } = await request.json();
 
     if (!sessionId || !token) {

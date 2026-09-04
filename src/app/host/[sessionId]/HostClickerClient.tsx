@@ -229,7 +229,7 @@ export default function HostClickerClient({
     try {
       await work();
     } catch (err) {
-      toast.error(err instanceof Error ? err.message : 'Could not update the room.');
+      toast.error(err instanceof Error ? err.message : t('couldNotUpdateRoom'));
     } finally {
       setBusy(false);
     }
@@ -246,8 +246,8 @@ export default function HostClickerClient({
   const handleStart = () =>
     run(async () => {
       if (clashLockRef.current || clashRunning) return;
-      if (!questions.length) throw new Error('Add questions before starting.');
-      if (players.length === 0) throw new Error('Wait for at least one player.');
+      if (!questions.length) throw new Error(t('cannotStartNoQuestions'));
+      if (players.length === 0) throw new Error(t('cannotStartNoPlayers'));
       clashLockRef.current = true;
       setClashRunning(true);
       void sendSessionEvent('clash:countdown', { at: Date.now() });
@@ -266,13 +266,13 @@ export default function HostClickerClient({
       revealingRef.current = false;
       void sendSessionEvent('question:start', buildQuestionStartPayload(ordered[0], 0, serverStartedAt));
     } catch (err) {
-      toast.error(err instanceof Error ? err.message : 'Could not update the room.');
+      toast.error(err instanceof Error ? err.message : t('couldNotUpdateRoom'));
     } finally {
       setClashRunning(false);
       clashLockRef.current = false;
       setBusy(false);
     }
-  }, [questions, randomizeQuestions, session.id, prepareQuestionForPlay, sendSessionEvent]);
+  }, [questions, randomizeQuestions, session.id, prepareQuestionForPlay, sendSessionEvent, t]);
 
   const handlePauseResume = () =>
     run(async () => {
@@ -448,8 +448,8 @@ export default function HostClickerClient({
       {(session.status === 'question_active' || session.status === 'question_paused') && activeQuestion && (
         <div className="mt-5 flex flex-1 flex-col gap-4">
           <p className="text-[11px] font-bold uppercase tracking-[0.2em] text-white/45">
-            Question {session.current_question_index + 1} of {playQuestions.length}
-            {session.status === 'question_paused' ? ' · paused' : ''}
+            {t('questionLabel')} {session.current_question_index + 1} {t('ofWord')} {playQuestions.length}
+            {session.status === 'question_paused' ? ` · ${t('paused')}` : ''}
           </p>
           <p dir="auto" className="line-clamp-3 font-display text-xl font-extrabold">
             {activeQuestion.prompt}
@@ -467,7 +467,7 @@ export default function HostClickerClient({
           </div>
           <ul className="max-h-40 flex-1 space-y-1 overflow-y-auto border border-white/10 bg-black/25 p-3">
             {waiting.length === 0 ? (
-              <li className="text-sm text-white/50">Everyone in. Reveal when you are ready.</li>
+              <li className="text-sm text-white/50">{t('everyoneInReveal')}</li>
             ) : (
               waiting.map((player) => (
                 <li key={player.id} dir="auto" className="truncate text-sm font-bold">
@@ -479,7 +479,7 @@ export default function HostClickerClient({
           </ul>
           <div className="grid grid-cols-2 gap-2">
             <Button type="button" disabled={busy} onClick={handleAddTime} className={`${bigBtn} bg-white/10`}>
-              <Clock className="mr-1 h-5 w-5" /> +10s
+              <Clock className="mr-1 h-5 w-5" /> {t('addTenSeconds')}
             </Button>
             <Button type="button" disabled={busy} onClick={handlePauseResume} className={`${bigBtn} bg-white/10`}>
               {session.status === 'question_paused' ? (
@@ -506,7 +506,7 @@ export default function HostClickerClient({
 
       {session.status === 'question_reveal' && (
         <div className="mt-8 flex flex-1 flex-col justify-end gap-3">
-          <p className="font-display text-2xl font-extrabold">Answers are up on the projector.</p>
+          <p className="font-display text-2xl font-extrabold">{t('answersOnProjector')}</p>
           <Button
             type="button"
             disabled={busy}

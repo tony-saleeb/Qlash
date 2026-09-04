@@ -61,6 +61,7 @@ export default function QuizEditorHeader({
           onClick={onImport}
           className="rounded-xl border border-arena-line text-arena-ink/70 hover:bg-arena-mist sm:hidden"
           title="Import"
+          aria-label="Import"
         >
           <Upload className="h-4 w-4" />
         </Button>

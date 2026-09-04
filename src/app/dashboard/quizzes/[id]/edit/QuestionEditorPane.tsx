@@ -246,6 +246,7 @@ export default function QuestionEditorPane({
                             : 'border-arena-line hover:border-arena-ink/25 bg-white text-transparent'
                         }`}
                         title="Mark as Correct answer"
+                        aria-label="Mark as Correct answer"
                       >
                         <CheckCircle className="w-4 h-4 fill-current" />
                       </button>
@@ -260,6 +261,7 @@ export default function QuestionEditorPane({
                           onClick={() => onRemoveAnswer(ansIdx)}
                           className="text-arena-ink/45 hover:text-rose-400 transition-colors"
                           title="Remove option"
+                          aria-label="Remove option"
                         >
                           <Trash2 className="w-4 h-4" />
                         </button>

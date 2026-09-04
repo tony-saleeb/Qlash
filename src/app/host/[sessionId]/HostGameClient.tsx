@@ -53,7 +53,7 @@ import {
 } from '@/lib/game/types';
 import { maybeSeededShuffle, questionsInPlayOrder } from '@/lib/game/shuffle';
 import { aggregateTeamScores, scoreBarPercent } from '@/lib/game/teams';
-import { MAX_PLAYERS_PER_SESSION } from '@/lib/game/constants';
+import { MAX_PLAYERS_PER_SESSION, SUBMIT_LATE_GRACE_MS } from '@/lib/game/constants';
 import { remainingSeconds } from '@/lib/game/clock';
 import { answerUsesInk, resolveAnswerColor } from '@/lib/game/marks';
 import { AnswerSwatch } from '@/components/brand/AnswerMark';
@@ -305,7 +305,7 @@ export default function HostGameClient({
     revealingRef.current = true;
 
     playRevealSound();
-    const loadingToast = toast.loading('Calculating scores...');
+    const loadingToast = toast.loading(t('calculatingScores'));
     try {
       const results = await revealQuestionResults(session.id, activeQuestion.id);
       setRevealData(results);
@@ -319,13 +319,13 @@ export default function HostGameClient({
         option_counts: results.optionCounts,
       });
 
-      toast.success('Results calculated!', { id: loadingToast });
+      toast.success(t('resultsCalculated'), { id: loadingToast });
     } catch (err) {
-      toast.error(err instanceof Error ? err.message : 'Failed to reveal results.', { id: loadingToast });
+      toast.error(err instanceof Error ? err.message : t('failedReveal'), { id: loadingToast });
     } finally {
       revealingRef.current = false;
     }
-  }, [session.id, activeQuestion, sendSessionEvent]);
+  }, [session.id, activeQuestion, sendSessionEvent, t]);
 
   // One Realtime channel for players, session row, and submissions
   useEffect(() => {
@@ -481,6 +481,7 @@ export default function HostGameClient({
 
     const timeLimit = activeQuestion.time_limit_seconds;
     const startedAt = new Date(session.question_started_at).getTime();
+    let graceTimer: ReturnType<typeof setTimeout> | null = null;
 
     const updateTimer = () => {
       const elapsed = (Date.now() - startedAt) / 1000;
@@ -497,7 +498,11 @@ export default function HostGameClient({
 
       if (remaining <= 0) {
         if (timerRef.current) clearInterval(timerRef.current);
-        handleRevealAnswer();
+        if (!graceTimer) {
+          graceTimer = setTimeout(() => {
+            handleRevealAnswer();
+          }, SUBMIT_LATE_GRACE_MS);
+        }
       }
     };
 
@@ -506,6 +511,7 @@ export default function HostGameClient({
 
     return () => {
       if (timerRef.current) clearInterval(timerRef.current);
+      if (graceTimer) clearTimeout(graceTimer);
     };
   }, [session.status, session.question_started_at, activeQuestion?.id, activeQuestion?.time_limit_seconds, handleRevealAnswer]);
 
@@ -548,9 +554,9 @@ export default function HostGameClient({
     setKickingId(playerId);
     try {
       await kickPlayer(playerId, session.id);
-      toast.success(`Kicked player "${nickname}" from the lobby.`);
+      toast.success(`${t('kickedPlayer')} "${nickname}"`);
     } catch (err) {
-      toast.error(err instanceof Error ? err.message : 'Failed to kick player.');
+      toast.error(err instanceof Error ? err.message : t('failedKick'));
     } finally {
       setKickingId(null);
     }
@@ -569,7 +575,7 @@ export default function HostGameClient({
             ? remainingSeconds(serverStartedAt, activeQuestion.time_limit_seconds)
             : timeLeft,
         });
-        toast.success('Game resumed!');
+        toast.success(t('gameResumed'));
       } else {
         const remaining = timeLeft;
         await pauseGameSession(session.id);
@@ -577,10 +583,10 @@ export default function HostGameClient({
           status: 'question_paused',
           remaining_seconds: remaining,
         });
-        toast.success('Game paused!');
+        toast.success(t('gamePausedToast'));
       }
     } catch (err) {
-      toast.error(err instanceof Error ? err.message : 'Failed to toggle pause.');
+      toast.error(err instanceof Error ? err.message : t('failedPause'));
     }
   };
 
@@ -595,9 +601,9 @@ export default function HostGameClient({
         server_started_at: serverStartedAt,
         remaining_seconds: remaining,
       });
-      toast.success('Added 10 seconds to the clock!');
+      toast.success(t('addedTenSeconds'));
     } catch (err) {
-      toast.error(err instanceof Error ? err.message : 'Failed to add time.');
+      toast.error(err instanceof Error ? err.message : t('failedAddTime'));
     }
   };
 
@@ -638,28 +644,24 @@ export default function HostGameClient({
       const firstQ = ordered[0];
       void sendSessionEvent('question:start', buildQuestionStartPayload(firstQ, 0, serverStartedAt));
 
-      toast.success(
-        randomizeQuestions
-          ? 'Game started! Question order randomized.'
-          : 'Game started! Broadcasting first question.'
-      );
+      toast.success(randomizeQuestions ? t('gameStartedRandom') : t('gameStartedFirst'));
     } catch (err) {
-      toast.error(err instanceof Error ? err.message : 'Failed to start game.');
+      toast.error(err instanceof Error ? err.message : t('failedStartGame'));
     } finally {
       setClashRunning(false);
       clashLockRef.current = false;
     }
-  }, [questions, randomizeQuestions, session.id, prepareQuestionForPlay, sendSessionEvent]);
+  }, [questions, randomizeQuestions, session.id, prepareQuestionForPlay, sendSessionEvent, t]);
 
   const handleStartGame = async () => {
     void unlockGameAudio();
     if (clashLockRef.current || clashRunning) return;
     if (!questions || questions.length === 0) {
-      toast.error('You cannot start a game with 0 questions.');
+      toast.error(t('cannotStartNoQuestions'));
       return;
     }
     if (players.length === 0) {
-      toast.error('You cannot start a game with 0 players.');
+      toast.error(t('cannotStartNoPlayers'));
       return;
     }
     clashLockRef.current = true;
@@ -674,7 +676,7 @@ export default function HostGameClient({
     try {
       await goToLeaderboard(session.id);
     } catch (err) {
-      toast.error(err instanceof Error ? err.message : 'Failed to show leaderboard.');
+      toast.error(err instanceof Error ? err.message : t('failedLeaderboard'));
     }
   };
 
@@ -696,9 +698,9 @@ export default function HostGameClient({
 
       void sendSessionEvent('question:start', buildQuestionStartPayload(nextQ, nextIndex, serverStartedAt));
 
-      toast.success('Loading next question.');
+      toast.success(t('loadingNextQuestion'));
     } catch (err) {
-      toast.error(err instanceof Error ? err.message : 'Failed to load next question.');
+      toast.error(err instanceof Error ? err.message : t('failedNextQuestion'));
     }
   };
 
@@ -707,7 +709,7 @@ export default function HostGameClient({
     try {
       await goToPodium(session.id);
     } catch (err) {
-      toast.error(err instanceof Error ? err.message : 'Failed to show podium.');
+      toast.error(err instanceof Error ? err.message : t('failedPodium'));
     }
   };
 
@@ -727,13 +729,13 @@ export default function HostGameClient({
   };
 
   const handlePlayAgain = async () => {
-    const loading = toast.loading('Opening a new lobby…');
+    const loading = toast.loading(t('openingNewLobby'));
     try {
       const next = await createGameSession(quiz.id);
-      toast.success('Lobby ready.', { id: loading });
+      toast.success(t('lobbyReady'), { id: loading });
       router.push(`/host/${next.id}`);
     } catch (err: unknown) {
-      toast.error(err instanceof Error ? err.message : 'Could not start a new room.', { id: loading });
+      toast.error(err instanceof Error ? err.message : t('failedNewRoom'), { id: loading });
     }
   };
 
@@ -780,9 +782,9 @@ export default function HostGameClient({
 
       setIsEditorOpen(false);
       addActivityEntry('edit', 'Host edited the current question live');
-      toast.success('Question updated and broadcasted to players!');
+      toast.success(t('questionUpdated'));
     } catch (err) {
-      toast.error(err instanceof Error ? err.message : 'Failed to save question edits.');
+      toast.error(err instanceof Error ? err.message : t('failedSaveQuestion'));
     }
   };
 
@@ -796,9 +798,9 @@ export default function HostGameClient({
       await sendSessionEvent('multiplier:change', { multiplier: newState ? 2 : 1 });
 
       addActivityEntry('multiplier', newState ? 'Double points activated!' : 'Double points deactivated');
-      toast.success(newState ? 'Double Points Activated! (2x)' : 'Multiplier Deactivated (1x)');
+      toast.success(newState ? t('doublePointsActivated') : t('multiplierOffToast'));
     } catch (err) {
-      toast.error(err instanceof Error ? err.message : 'Failed to toggle multiplier.');
+      toast.error(err instanceof Error ? err.message : t('failedMultiplier'));
     }
   };
 
@@ -825,23 +827,23 @@ export default function HostGameClient({
       );
 
       addActivityEntry('jump', `Host jumped to Question ${targetIndex + 1}`);
-      toast.success(`Jumped to Question ${targetIndex + 1}`);
+      toast.success(`${t('jumpedToQuestion')} ${targetIndex + 1}`);
     } catch (err) {
-      toast.error(err instanceof Error ? err.message : 'Failed to jump to question.');
+      toast.error(err instanceof Error ? err.message : t('failedJump'));
     }
   };
 
   // Host Announcement: Send a text message to all players
   const handleSendAnnouncement = async () => {
     if (!announcementText.trim()) {
-      toast.error('Please enter a message to broadcast.');
+      toast.error(t('enterBroadcastMessage'));
       return;
     }
 
     await sendSessionEvent('host:announcement', { message: announcementText.trim() });
 
     addActivityEntry('announcement', `Host broadcast: "${announcementText.trim()}"`);
-    toast.success('Announcement sent to all players!');
+    toast.success(t('announcementSent'));
     setAnnouncementText('');
     setIsAnnouncementOpen(false);
   };
@@ -952,8 +954,8 @@ export default function HostGameClient({
               <div className="mb-2 flex items-center gap-3 border border-arena-signal/50 bg-arena-signal/15 p-4 text-xs font-semibold text-rose-100">
                 <AlertCircle className="h-5 w-5 shrink-0 text-arena-signal" />
                 <div>
-                  <p className="font-bold">This quiz has 0 questions</p>
-                  <p className="mt-0.5 text-rose-100/70">Add questions in the editor before starting.</p>
+                  <p className="font-bold">{t('emptyQuizTitle')}</p>
+                  <p className="mt-0.5 text-rose-100/70">{t('emptyQuizBody')}</p>
                 </div>
               </div>
             )}
@@ -1011,12 +1013,13 @@ export default function HostGameClient({
                         disabled={!!kickingId}
                         onClick={() => handleKickPlayer(p.id, p.nickname)}
                         className="shrink-0 text-white/35 opacity-0 transition group-hover:opacity-100 hover:text-arena-signal"
-                        title="Kick Player"
+                        title={t('kickPlayerAria')}
+                        aria-label={t('kickPlayerAria')}
                       >
                         <UserX className="h-3.5 w-3.5" />
                       </button>
                       {!isPlayerConnected(p) && (
-                        <span className="absolute right-1.5 top-1.5 h-1.5 w-1.5 bg-arena-signal" title="Offline" />
+                        <span className="absolute right-1.5 top-1.5 h-1.5 w-1.5 bg-arena-signal" title={t('playerOffline')} />
                       )}
                     </div>
                   ))}
@@ -1050,7 +1053,7 @@ export default function HostGameClient({
                       }));
                     })
                     .catch((err: unknown) => {
-                      toast.error(err instanceof Error ? err.message : 'Could not update late join.');
+                      toast.error(err instanceof Error ? err.message : t('failedLateJoin'));
                     });
                 }}
                 className="data-checked:bg-arena-acid"
@@ -1119,7 +1122,7 @@ export default function HostGameClient({
         <div className="z-10 flex items-center justify-between gap-4">
           <div className="flex flex-wrap items-center gap-2">
             <LiveChip>
-              Question {activeQuestionIndex + 1} of {playQuestions.length}
+              {t('questionLabel')} {activeQuestionIndex + 1} {t('ofWord')} {playQuestions.length}
             </LiveChip>
 
             {/* Question Jumper Dropdown */}
@@ -1130,7 +1133,7 @@ export default function HostGameClient({
                 className={cn(hostCtrl, isJumperOpen && 'border-arena-acid bg-arena-acid text-arena-ink')}
               >
                 <SkipForward className="h-3.5 w-3.5" />
-                Jump
+                {t('jump')}
                 {isJumperOpen ? <ChevronUp className="h-3 w-3" /> : <ChevronDown className="h-3 w-3" />}
               </Button>
               {isJumperOpen && (
@@ -1156,7 +1159,7 @@ export default function HostGameClient({
 
             {isMultiplierActive && (
               <span className="inline-flex items-center gap-1 bg-arena-acid px-2.5 py-1 text-[10px] font-black uppercase tracking-wider text-arena-ink motion-pulse-soft">
-                <Zap className="h-3 w-3" /> 2x Points
+                <Zap className="h-3 w-3" /> {t('doublePointsBadge')}
               </span>
             )}
           </div>
@@ -1269,20 +1272,20 @@ export default function HostGameClient({
               />
               <DialogContent className="max-w-md rounded-none border-2 border-white/20 bg-arena-stage text-white shadow-[8px_8px_0_rgba(0,0,0,0.45)]">
                 <DialogHeader>
-                  <DialogTitle className="text-xl font-bold text-white">Still answering</DialogTitle>
+                  <DialogTitle className="text-xl font-bold text-white">{t('stillAnswering')}</DialogTitle>
                   <DialogDescription className="text-xs text-white/50">
-                    Only you see this list — it is not on the question stage.
+                    {t('stillAnsweringHint')}
                   </DialogDescription>
                 </DialogHeader>
                 <ul className="mt-4 max-h-[50vh] space-y-2 overflow-y-auto">
                   {waiting.length === 0 ? (
-                    <li className="py-4 text-center text-sm text-white/50">Everyone has answered.</li>
+                    <li className="py-4 text-center text-sm text-white/50">{t('everyoneAnswered')}</li>
                   ) : (
                     waiting.map((player) => (
                       <li key={player.id} className="flex items-center justify-between border border-white/15 bg-white/10 px-3 py-2">
                         <span dir="auto" className="truncate text-sm font-bold">{player.nickname}</span>
                         {!isPlayerConnected(player) ? (
-                          <span className="text-[10px] uppercase tracking-wider text-white/40">offline</span>
+                          <span className="text-[10px] uppercase tracking-wider text-white/40">{t('offline')}</span>
                         ) : null}
                       </li>
                     ))
@@ -1296,36 +1299,36 @@ export default function HostGameClient({
               className={hostCtrl}
               onClick={() => window.open(hostClickerPath(session.id), '_blank')}
             >
-              <Smartphone className="h-4 w-4" /> Clicker
+              <Smartphone className="h-4 w-4" /> {t('clicker')}
             </Button>
             {/* Manage Players Dialog */}
             <Dialog open={isManagePlayersOpen} onOpenChange={setIsManagePlayersOpen}>
               <DialogTrigger
                 render={
                   <Button variant="ghost" className={hostCtrl}>
-                    <Settings className="h-4 w-4" /> Players ({players.length})
+                    <Settings className="h-4 w-4" /> {t('players')} ({players.length})
                   </Button>
                 }
               />
               <DialogContent className="max-w-md rounded-none border-2 border-white/20 bg-arena-stage text-white shadow-[8px_8px_0_rgba(0,0,0,0.45)]">
                 <DialogHeader>
                   <DialogTitle className="flex items-center gap-2 text-xl font-bold text-white">
-                    <Users className="h-5 w-5 text-arena-acid" /> Manage Session Players
+                    <Users className="h-5 w-5 text-arena-acid" /> {t('managePlayers')}
                   </DialogTitle>
                   <DialogDescription className="text-xs text-white/50">
-                    Kick players who are idle, names are inappropriate, or who have disconnected.
+                    {t('kickPlayersHint')}
                   </DialogDescription>
                 </DialogHeader>
                 <div className="mt-4 max-h-[50vh] space-y-2 overflow-y-auto pr-1">
                   {players.length === 0 ? (
-                    <p className="py-4 text-center text-sm text-white/50">No players joined yet.</p>
+                    <p className="py-4 text-center text-sm text-white/50">{t('noPlayersYet')}</p>
                   ) : (
                     players.map((p) => (
                       <div key={p.id} className="flex items-center justify-between border border-white/15 bg-white/10 p-3">
                         <div className="flex min-w-0 items-center gap-2">
                           <span className={`h-2 w-2 ${isPlayerConnected(p) ? 'bg-arena-acid' : 'bg-arena-signal'}`} />
                           <span className="max-w-[180px] truncate text-sm font-bold">{p.nickname}</span>
-                          <span className="text-[10px] text-white/50">({p.score} pts)</span>
+                          <span className="text-[10px] text-white/50">({p.score} {t('pointsWord')})</span>
                         </div>
                         <Button
                           size="sm"
@@ -1334,7 +1337,7 @@ export default function HostGameClient({
                           onClick={() => handleKickPlayer(p.id, p.nickname)}
                           className="flex h-8 items-center gap-1 rounded-none bg-arena-signal px-3 text-xs font-bold text-white hover:brightness-110"
                         >
-                          <UserX className="h-3.5 w-3.5" /> Kick
+                          <UserX className="h-3.5 w-3.5" /> {t('kick')}
                         </Button>
                       </div>
                     ))
@@ -1348,31 +1351,31 @@ export default function HostGameClient({
               <DialogTrigger
                 render={
                   <Button variant="ghost" onClick={handleOpenEditor} className={hostCtrl}>
-                    <Edit3 className="h-4 w-4" /> Edit
+                    <Edit3 className="h-4 w-4" /> {t('editQuestion')}
                   </Button>
                 }
               />
               <DialogContent className="max-w-lg rounded-none border-2 border-white/20 bg-arena-stage text-white shadow-[8px_8px_0_rgba(0,0,0,0.45)]">
                 <DialogHeader>
                   <DialogTitle className="flex items-center gap-2 text-xl font-bold text-white">
-                    <Edit3 className="h-5 w-5 text-arena-acid" /> Live Question Editor
+                    <Edit3 className="h-5 w-5 text-arena-acid" /> {t('liveEditor')}
                   </DialogTitle>
                   <DialogDescription className="text-xs text-white/50">
-                    Edit the current question prompt and answers live. Changes broadcast instantly to all players.
+                    {t('liveEditorHint')}
                   </DialogDescription>
                 </DialogHeader>
                 <div className="mt-4 space-y-4">
                   <div className="space-y-1.5">
-                    <label className="text-[10px] font-extrabold uppercase tracking-wider text-white/60">Question Prompt</label>
+                    <label className="text-[10px] font-extrabold uppercase tracking-wider text-white/60">{t('questionPrompt')}</label>
                     <Textarea
                       value={editPrompt}
                       onChange={(e) => setEditPrompt(e.target.value)}
                       className="min-h-[80px] rounded-none border-white/15 bg-white/10 text-white focus-visible:ring-arena-acid"
-                      placeholder="Enter the question..."
+                      placeholder={t('questionPlaceholder')}
                     />
                   </div>
                   <div className="space-y-2">
-                    <label className="text-[10px] font-extrabold uppercase tracking-wider text-white/60">Answer Options</label>
+                    <label className="text-[10px] font-extrabold uppercase tracking-wider text-white/60">{t('answerOptions')}</label>
                     {editAnswers.map((ans, idx) => (
                       <div key={ans.id} className="flex items-center gap-2">
                         <span className="w-5 text-[10px] font-black text-white/50">{idx + 1}.</span>
@@ -1392,7 +1395,7 @@ export default function HostGameClient({
                     onClick={handleSaveQuestionEdit}
                     className="h-10 w-full rounded-none bg-arena-acid text-sm font-bold text-arena-ink hover:brightness-105"
                   >
-                    Save & Broadcast Changes
+                    {t('saveAndBroadcast')}
                   </Button>
                 </div>
               </DialogContent>
@@ -1408,7 +1411,7 @@ export default function HostGameClient({
               )}
             >
               <Zap className={cn('h-4 w-4', isMultiplierActive && 'fill-current')} />
-              {isMultiplierActive ? '2x On' : '2x'}
+              {isMultiplierActive ? t('doublePointsOnShort') : t('doublePointsShort')}
             </Button>
 
             {/* Host Announcement */}
@@ -1416,24 +1419,24 @@ export default function HostGameClient({
               <DialogTrigger
                 render={
                   <Button variant="ghost" className={hostCtrl}>
-                    <MessageSquare className="h-4 w-4" /> Chat
+                    <MessageSquare className="h-4 w-4" /> {t('chat')}
                   </Button>
                 }
               />
               <DialogContent className="max-w-sm rounded-none border-2 border-white/20 bg-arena-stage text-white shadow-[8px_8px_0_rgba(0,0,0,0.45)]">
                 <DialogHeader>
                   <DialogTitle className="flex items-center gap-2 text-lg font-bold text-white">
-                    <MessageSquare className="h-5 w-5 text-arena-acid" /> Broadcast Announcement
+                    <MessageSquare className="h-5 w-5 text-arena-acid" /> {t('broadcastAnnouncement')}
                   </DialogTitle>
                   <DialogDescription className="text-xs text-white/50">
-                    Send a message to all player screens instantly.
+                    {t('broadcastHint')}
                   </DialogDescription>
                 </DialogHeader>
                 <div className="mt-3 space-y-3">
                   <Input
                     value={announcementText}
                     onChange={(e) => setAnnouncementText(e.target.value)}
-                    placeholder="Type your message..."
+                    placeholder={t('messagePlaceholder')}
                     maxLength={120}
                     className="h-11 rounded-none border-white/15 bg-white/10 text-white focus-visible:ring-arena-acid"
                   />
@@ -1441,7 +1444,7 @@ export default function HostGameClient({
                     onClick={handleSendAnnouncement}
                     className="flex h-10 w-full items-center justify-center gap-2 rounded-none bg-arena-signal text-sm font-bold text-white hover:brightness-110"
                   >
-                    <Send className="h-4 w-4" /> Send to All Players
+                    <Send className="h-4 w-4" /> {t('sendToAll')}
                   </Button>
                 </div>
               </DialogContent>
@@ -1457,21 +1460,21 @@ export default function HostGameClient({
               )}
             >
               <Activity className="h-4 w-4" />
-              Feed
+              {t('activityFeed')}
             </Button>
 
             <Button onClick={handleAddTime} variant="ghost" className={hostCtrl}>
-              <Clock className="h-4 w-4" /> +10s
+              <Clock className="h-4 w-4" /> {t('addTenSeconds')}
             </Button>
 
             <Button onClick={handleTogglePause} variant="ghost" className={hostCtrl}>
               {isPaused ? (
                 <>
-                  <Play className="h-4 w-4 fill-current" /> Resume
+                  <Play className="h-4 w-4 fill-current" /> {t('resume')}
                 </>
               ) : (
                 <>
-                  <Pause className="h-4 w-4" /> Pause
+                  <Pause className="h-4 w-4" /> {t('pause')}
                 </>
               )}
             </Button>
@@ -1480,7 +1483,7 @@ export default function HostGameClient({
               onClick={handleRevealAnswer}
               className="h-10 gap-1.5 rounded-none border-2 border-arena-signal bg-arena-signal px-5 font-display text-[11px] font-extrabold uppercase tracking-[0.14em] text-white shadow-none hover:brightness-110"
             >
-              Skip Question <ArrowRight className="h-4 w-4" />
+              {t('skipQuestion')} <ArrowRight className="h-4 w-4" />
             </Button>
           </div>
         </div>
@@ -1490,7 +1493,7 @@ export default function HostGameClient({
           <div className="fixed right-0 top-0 z-50 flex h-full w-80 flex-col border-l-2 border-white/15 bg-arena-stage/95 shadow-[8px_0_0_rgba(0,0,0,0.35)] animate-fade-in">
             <div className="flex items-center justify-between border-b border-white/15 p-4">
               <h3 className="flex items-center gap-1.5 text-sm font-bold text-white">
-                <Activity className="h-4 w-4 text-arena-acid" /> Activity Feed
+                <Activity className="h-4 w-4 text-arena-acid" /> {t('activityFeed')}
               </h3>
               <button type="button" onClick={() => setIsActivityOpen(false)} className="text-white/50 hover:text-white">
                 <X className="h-4 w-4" />
@@ -1498,7 +1501,7 @@ export default function HostGameClient({
             </div>
             <div className="flex-1 space-y-2 overflow-y-auto p-3">
               {activityFeed.length === 0 ? (
-                <p className="py-8 text-center text-xs text-white/50">No activity yet.</p>
+                <p className="py-8 text-center text-xs text-white/50">{t('noActivityYet')}</p>
               ) : (
                 activityFeed.map((entry) => (
                   <div key={entry.id} className="flex items-start gap-2 border border-white/15 bg-white/5 p-2.5">
@@ -1626,7 +1629,7 @@ export default function HostGameClient({
             PIN <bdi>{session.pin}</bdi>
           </span>
           <Button onClick={handleShowLeaderboard} className={hostCta}>
-            Show Leaderboard <ArrowRight className="h-4 w-4" />
+            {t('showLeaderboard')} <ArrowRight className="h-4 w-4" />
           </Button>
         </div>
       </GameShell>
@@ -1653,10 +1656,10 @@ export default function HostGameClient({
 
         <div className="z-10 my-4 text-center">
           <h1 className="font-display text-4xl font-extrabold tracking-tight text-white">
-            {teamMode ? 'Team Leaderboard' : 'Leaderboard'}
+            {teamMode ? t('teamLeaderboard') : t('leaderboard')}
           </h1>
           <p className="mt-1 text-xs text-white/50">
-            {teamMode ? 'Combined team scores' : 'Top players this round'}
+            {teamMode ? t('combinedTeamScores') : t('topThisRound')}
           </p>
           {fire ? (
             <p className="mt-3 inline-flex items-center gap-1.5 border-2 border-arena-acid bg-arena-acid px-3 py-1 font-display text-xs font-black uppercase tracking-[0.14em] text-arena-ink">
@@ -1747,11 +1750,11 @@ export default function HostGameClient({
           </span>
           {isLastQuestion ? (
             <Button onClick={handleShowPodium} className={hostCta}>
-              Show Final Podium <Trophy className="h-4 w-4 text-arena-acid" />
+              {t('showFinalPodium')} <Trophy className="h-4 w-4 text-arena-acid" />
             </Button>
           ) : (
             <Button onClick={handleNextQuestion} className={hostCta}>
-              Next Question <ArrowRight className="h-4 w-4" />
+              {t('nextQuestion')} <ArrowRight className="h-4 w-4" />
             </Button>
           )}
         </div>
@@ -1772,16 +1775,16 @@ export default function HostGameClient({
     return (
       <GameShell>
         <div className="z-10 flex items-center justify-between gap-4">
-          <LiveChip tone="acid">Final standings</LiveChip>
+          <LiveChip tone="acid">{t('finalStandings')}</LiveChip>
           <BrandMark tone="light" size="sm" />
         </div>
 
         <div className="z-10 my-4 text-center">
           <h1 className="font-display text-4xl font-extrabold leading-none tracking-tight text-white sm:text-5xl">
-            Final <span className="text-arena-acid">podium</span>
+            {t('finalPodium')}
           </h1>
           <p className="mt-2 text-xs text-white/50">
-            Champions of <span dir="auto">{quiz.title}</span>
+            {t('championsOf')} <span dir="auto">{quiz.title}</span>
           </p>
         </div>
 
@@ -1855,10 +1858,10 @@ export default function HostGameClient({
             <ClipboardList className="h-4 w-4" /> {t('classReport')}
           </Button>
           <Button onClick={handlePlayAgain} className={hostCtrl}>
-            <Play className="h-4 w-4 fill-current" /> Play again
+            <Play className="h-4 w-4 fill-current" /> {t('playAgain')}
           </Button>
           <Button onClick={handleCloseSession} className={hostCtrl}>
-            <Home className="h-4 w-4" /> Dashboard
+            <Home className="h-4 w-4" /> {t('library')}
           </Button>
         </div>
       </GameShell>

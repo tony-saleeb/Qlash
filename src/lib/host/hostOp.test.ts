@@ -32,4 +32,16 @@ describe('hostOp', () => {
     await expect(hostOp('createGameSession', { quizId: 'nope' })).rejects.toThrow(/Quiz not found/);
     vi.unstubAllGlobals();
   });
+
+  it('rejects a success response with no data payload', async () => {
+    vi.stubGlobal(
+      'fetch',
+      vi.fn(async () => ({
+        ok: true,
+        json: async () => ({}),
+      }))
+    );
+    await expect(hostOp('endGameSession', { sessionId: 'sess-1' })).rejects.toThrow(/Request failed/);
+    vi.unstubAllGlobals();
+  });
 });

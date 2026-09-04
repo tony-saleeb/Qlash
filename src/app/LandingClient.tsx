@@ -3,6 +3,7 @@
 import React, { useState, useEffect } from 'react';
 import Link from 'next/link';
 import { useRouter } from 'next/navigation';
+import { lookupTeamModeByPin } from '@/lib/game/roomByPin';
 import { createClient } from '@/lib/supabase/client';
 import { Input } from '@/components/ui/input';
 import { Button } from '@/components/ui/button';
@@ -52,23 +53,21 @@ export default function LandingClient({ initialLocale }: { initialLocale?: Local
   useEffect(() => {
     const checkTeamMode = async () => {
       if (pin.length === 6) {
-        const { data: session } = await supabase
-          .from('game_sessions')
-          .select('id, quizzes(team_mode)')
-          .eq('pin', pin)
-          .maybeSingle();
-        const sessionWithQuiz = session as unknown as { quizzes: { team_mode: boolean } | null };
-        setIsTeamQuiz(Boolean(sessionWithQuiz?.quizzes?.team_mode));
+        setIsTeamQuiz(await lookupTeamModeByPin(pin));
       } else {
         setIsTeamQuiz(false);
       }
     };
     checkTeamMode();
-  }, [pin, supabase]);
+  }, [pin]);
 
   useEffect(() => {
     const checkSession = async () => {
-      const { data } = await supabase.auth.getSession();
+      const { data, error } = await supabase.auth.getSession();
+      if (error) {
+        await supabase.auth.signOut({ scope: 'local' });
+        return;
+      }
       if (data?.session) setCurrentHost(data.session.user);
     };
     checkSession();
@@ -81,7 +80,12 @@ export default function LandingClient({ initialLocale }: { initialLocale?: Local
 
   useEffect(() => {
     if (typeof window === 'undefined') return;
-    const importCode = new URLSearchParams(window.location.search).get('import');
+    const params = new URLSearchParams(window.location.search);
+    if (params.get('host') === '1') {
+      setPanel('host');
+      setAuthMode('signup');
+    }
+    const importCode = params.get('import');
     if (importCode) {
       try {
         sessionStorage.setItem('qlash_import', importCode);
@@ -115,7 +119,7 @@ export default function LandingClient({ initialLocale }: { initialLocale?: Local
   const handleHostAuth = async (e: React.FormEvent) => {
     e.preventDefault();
     if (!email || !password) {
-      toast.error('Please enter both email and password.');
+      toast.error(t('enterEmailPassword'));
       return;
     }
     setAuthLoading(true);
@@ -124,10 +128,10 @@ export default function LandingClient({ initialLocale }: { initialLocale?: Local
       if (authMode === 'login') {
         const { error, data } = await supabase.auth.signInWithPassword({ email, password });
         if (error) throw error;
-        enterHost(data.user, 'Welcome back.');
+        enterHost(data.user, t('welcomeBack'));
       } else {
         if (!displayName.trim()) {
-          toast.error('Please enter a display name.');
+          toast.error(t('enterDisplayName'));
           setAuthLoading(false);
           return;
         }
@@ -146,10 +150,10 @@ export default function LandingClient({ initialLocale }: { initialLocale?: Local
         }
         const { error, data } = await supabase.auth.signInWithPassword({ email, password });
         if (error) throw error;
-        enterHost(data.user, 'Account ready.');
+        enterHost(data.user, t('accountReady'));
       }
     } catch (error) {
-      toast.error(error instanceof Error ? error.message : 'Authentication failed.');
+      toast.error(error instanceof Error ? error.message : t('authFailed'));
     } finally {
       setAuthLoading(false);
     }
@@ -159,15 +163,15 @@ export default function LandingClient({ initialLocale }: { initialLocale?: Local
     e.preventDefault();
     void unlockGameAudio();
     if (!pin || pin.length !== 6) {
-      toast.error('Enter a valid 6-digit game PIN.');
+      toast.error(t('validGamePin'));
       return;
     }
     if (!nickname.trim()) {
-      toast.error('Pick a nickname.');
+      toast.error(t('pickNickname'));
       return;
     }
     if (isTeamQuiz && !teamName.trim()) {
-      toast.error('This game needs a team name.');
+      toast.error(t('needTeamName'));
       return;
     }
     setPlayLoading(true);
@@ -178,10 +182,10 @@ export default function LandingClient({ initialLocale }: { initialLocale?: Local
         nickname: nickname.trim(),
         teamName: isTeamQuiz ? teamName.trim() : undefined,
       });
-      toast.success(result.reconnected ? `Back in as ${nickname.trim()}` : `You're in as ${nickname.trim()}`);
+      toast.success(result.reconnected ? `${t('backInAs')} ${nickname.trim()}` : `${t('youreInAs')} ${nickname.trim()}`);
       router.push(`/play/${result.sessionId}`);
     } catch (error) {
-      toast.error(error instanceof Error ? error.message : 'Could not join. Try again.');
+      toast.error(error instanceof Error ? error.message : t('joinFailed'));
     } finally {
       setPlayLoading(false);
     }
@@ -340,7 +344,7 @@ export default function LandingClient({ initialLocale }: { initialLocale?: Local
                       onClick={async () => {
                         await supabase.auth.signOut();
                         setCurrentHost(null);
-                        toast.success('Signed out.');
+                        toast.success(t('signedOutToast'));
                       }}
                       className="text-xs font-semibold text-arena-ink/45 underline-offset-4 hover:underline"
                     >

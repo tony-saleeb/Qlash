@@ -1,6 +1,7 @@
 import { describe, expect, it } from 'vitest';
 import {
   buildQuestionStartPayload,
+  correctAnswerIds,
   sanitizeAnswers,
   toPublicQuestion,
   type Question,
@@ -29,6 +30,12 @@ describe('sanitizeAnswers', () => {
       { id: 'b', text: 'Lyon', color: '#e11d2e', shape: 'slash' },
     ]);
     expect(publicAnswers[0]).not.toHaveProperty('is_correct');
+  });
+});
+
+describe('correctAnswerIds', () => {
+  it('returns only the keyed options', () => {
+    expect(correctAnswerIds(question.answers)).toEqual(['a']);
   });
 });
 

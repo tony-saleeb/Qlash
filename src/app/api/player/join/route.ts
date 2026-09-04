@@ -83,18 +83,16 @@ export async function POST(request: Request) {
             error: 'Nickname already taken in this room.',
             code: 'NICKNAME_TAKEN',
             sessionId: session.id,
-            playerId: existingMidGame.id,
           },
           { status: 409 }
         );
       }
 
       return NextResponse.json(
-        {
-          error: 'This game has already started. Reconnect with your same nickname from this device, or wait for the next lobby.',
-          code: 'GAME_STARTED',
-          sessionId: session.id,
-        },
+          {
+            error: 'This game has already started. Reconnect with your same nickname from this device, or wait for the next lobby.',
+            code: 'GAME_STARTED',
+          },
         { status: 403 }
       );
     }
@@ -131,7 +129,6 @@ export async function POST(request: Request) {
           error: 'Nickname already taken in this room.',
           code: 'NICKNAME_TAKEN',
           sessionId: session.id,
-          playerId: existingPlayer.id,
         },
         { status: 409 }
       );

@@ -49,6 +49,15 @@ describe('POST /api/player/round-result', () => {
       game_sessions: { data: { status: 'question_reveal' }, error: null },
       answers_submitted: { data: null, error: null },
       players: { data: { score: 1200, streak: 0 }, error: null },
+      questions: {
+        data: {
+          answers: [
+            { id: 'a', is_correct: true },
+            { id: 'b', is_correct: false },
+          ],
+        },
+        error: null,
+      },
     });
     const { POST } = await import('@/app/api/player/round-result/route');
     const result = await readJson(
@@ -58,5 +67,6 @@ describe('POST /api/player/round-result', () => {
     expect(result.body.hadSubmission).toBe(false);
     expect(result.body.submission).toEqual({ points_awarded: 0, is_correct: false });
     expect(result.body.player).toEqual({ score: 1200, streak: 0 });
+    expect(result.body.correctAnswerIds).toEqual(['a']);
   });
 });
