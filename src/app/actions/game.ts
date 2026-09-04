@@ -28,8 +28,9 @@ async function applyScoresBeforeAdvance(
       .eq('id', sessionId)
       .eq('host_id', hostId)
       .maybeSingle();
-    session = fallback.data;
-  }
+      session = fallback.data
+      ? { ...fallback.data, scored_question_ids: [] as string[] }
+      : null;  }
 
   if (!session) return;
   if (!['question_active', 'question_paused'].includes(session.status)) return;
