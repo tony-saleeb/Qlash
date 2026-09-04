@@ -57,25 +57,19 @@ describe('createConfirmedHost', () => {
     });
   });
 
-  it('confirms an existing unverified host so they can sign in', async () => {
+  it('does not take over an existing unverified host', async () => {
     const admin = adminMock({
       createUser: vi.fn(async () => ({ error: { message: 'User already registered' } })),
-      listUsers: vi.fn(async () => ({
-        data: {
-          users: [{ id: 'u1', email: 'host@qlash.test', email_confirmed_at: null }],
-        },
-        error: null,
-      })),
     });
-    await createConfirmedHost(admin, {
-      email: 'host@qlash.test',
-      password: 'secret1',
-      displayName: 'Mira',
-    });
-    expect(admin.auth.admin.updateUserById).toHaveBeenCalledWith('u1', {
-      email_confirm: true,
-      password: 'secret1',
-    });
+    await expect(
+      createConfirmedHost(admin, {
+        email: 'host@qlash.test',
+        password: 'secret1',
+        displayName: 'Mira',
+      })
+    ).rejects.toMatchObject({ status: 409 });
+    expect(admin.auth.admin.updateUserById).not.toHaveBeenCalled();
+    expect(admin.auth.admin.listUsers).not.toHaveBeenCalled();
   });
 
   it('does not overwrite an existing confirmed host', async () => {

@@ -1,7 +1,7 @@
 import { NextResponse } from 'next/server';
 import { createAdminClient } from '@/lib/supabase/admin';
 import { lobbyShouldCloseNow } from '@/lib/game/emptyLobby';
-import { limitPlayerHydrate, tooManyRequests } from '@/lib/api/playerLimit';
+import { limitPlayerHydrate, tooManyIfPlayerHydrateLimited, tooManyRequests } from '@/lib/api/playerLimit';
 
 export const dynamic = 'force-dynamic';
 
@@ -28,6 +28,9 @@ export async function POST(request: Request) {
     if (!tokenRow || tokenRow.client_token !== token || tokenRow.player_id !== playerId) {
       return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
     }
+
+    const perPlayer = await tooManyIfPlayerHydrateLimited(playerId, 'leave');
+    if (perPlayer) return perPlayer;
 
     if (!player) {
       return NextResponse.json({ error: 'Player not found.' }, { status: 404 });

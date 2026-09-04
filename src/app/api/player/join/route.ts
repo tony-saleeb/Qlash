@@ -82,7 +82,6 @@ export async function POST(request: Request) {
           {
             error: 'Nickname already taken in this room.',
             code: 'NICKNAME_TAKEN',
-            sessionId: session.id,
           },
           { status: 409 }
         );
@@ -128,7 +127,6 @@ export async function POST(request: Request) {
         {
           error: 'Nickname already taken in this room.',
           code: 'NICKNAME_TAKEN',
-          sessionId: session.id,
         },
         { status: 409 }
       );
@@ -168,7 +166,6 @@ export async function POST(request: Request) {
           {
             error: 'Nickname already taken in this room.',
             code: 'NICKNAME_TAKEN',
-            sessionId: session.id,
           },
           { status: 409 }
         );

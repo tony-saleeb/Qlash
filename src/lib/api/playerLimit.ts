@@ -10,6 +10,20 @@ export async function limitPlayerHydrate(request: Request, bucket: string) {
   });
 }
 
+export async function limitPlayerHydrateByPlayer(playerId: string, bucket: string) {
+  return rateLimit({
+    key: `${bucket}:player:${playerId}`,
+    limit: RATE_LIMITS.playerHydratePerPlayer.limit,
+    windowMs: RATE_LIMITS.playerHydratePerPlayer.windowMs,
+  });
+}
+
+export async function tooManyIfPlayerHydrateLimited(playerId: string, bucket: string) {
+  const limited = await limitPlayerHydrateByPlayer(playerId, bucket);
+  if (!limited.ok) return tooManyRequests(limited.retryAfterSec);
+  return null;
+}
+
 export function tooManyRequests(retryAfterSec: number) {
   return NextResponse.json(
     { error: 'Too many requests. Please wait.' },

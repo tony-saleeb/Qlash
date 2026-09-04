@@ -9,12 +9,27 @@ async function applyScoresBeforeAdvance(
   sessionId: string,
   hostId: string
 ) {
-  const { data: session } = await supabase
+  const scoredSelect =
+    'status, current_question_index, question_order, scores_applied_question_id, scored_question_ids, quiz_id';
+  const legacySelect =
+    'status, current_question_index, question_order, scores_applied_question_id, quiz_id';
+
+  let { data: session } = await supabase
     .from('game_sessions')
-    .select('status, current_question_index, question_order, scores_applied_question_id, quiz_id')
+    .select(scoredSelect)
     .eq('id', sessionId)
     .eq('host_id', hostId)
     .maybeSingle();
+
+  if (!session) {
+    const fallback = await supabase
+      .from('game_sessions')
+      .select(legacySelect)
+      .eq('id', sessionId)
+      .eq('host_id', hostId)
+      .maybeSingle();
+    session = fallback.data;
+  }
 
   if (!session) return;
   if (!['question_active', 'question_paused'].includes(session.status)) return;
@@ -30,7 +45,12 @@ async function applyScoresBeforeAdvance(
       .maybeSingle();
     questionId = question?.id ?? null;
   }
-  if (!questionId || session.scores_applied_question_id === questionId) return;
+  const scoredIds = Array.isArray((session as { scored_question_ids?: string[] }).scored_question_ids)
+    ? ((session as { scored_question_ids?: string[] }).scored_question_ids as string[])
+    : [];
+  if (!questionId || session.scores_applied_question_id === questionId || scoredIds.includes(questionId)) {
+    return;
+  }
 
   const { error } = await supabase.rpc('apply_question_scores_and_reveal', {
     p_session_id: sessionId,
@@ -85,6 +105,7 @@ export async function createGameSession(quizId: string) {
 export async function endGameSession(sessionId: string) {
   try {
     const { supabase, user } = await getHostAuth();
+    await applyScoresBeforeAdvance(supabase, sessionId, user.id);
 
     const { error } = await supabase
       .from('game_sessions')
@@ -224,6 +245,7 @@ export async function revealQuestionResults(sessionId: string, questionId: strin
 export async function goToLeaderboard(sessionId: string) {
   try {
     const { supabase, user } = await getHostAuth();
+    await applyScoresBeforeAdvance(supabase, sessionId, user.id);
     const { error } = await supabase
       .from('game_sessions')
       .update({ status: 'leaderboard' })
@@ -421,6 +443,7 @@ export async function goToNextQuestion(sessionId: string, nextIndex: number) {
 export async function goToPodium(sessionId: string) {
   try {
     const { supabase, user } = await getHostAuth();
+    await applyScoresBeforeAdvance(supabase, sessionId, user.id);
     const { error } = await supabase
       .from('game_sessions')
       .update({ status: 'finished' })

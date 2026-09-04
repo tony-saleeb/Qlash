@@ -38,24 +38,30 @@ export async function joinOrReconnect(params: {
       .filter((key) => key.startsWith('quizarena_token_'))
       .map((key) => key.slice('quizarena_token_'.length));
 
-  if (joinRes.status === 409 && joinData.sessionId) {
-    if (await tryReconnect(joinData.sessionId)) {
-      return { sessionId: joinData.sessionId, reconnected: true };
+  const reconnectFromLocalTokens = async (extraSessionId?: string) => {
+    const candidates = [extraSessionId || '', ...sessionIdsWithTokens()].filter(Boolean);
+    for (const sessionId of [...new Set(candidates)]) {
+      if (await tryReconnect(sessionId)) {
+        return sessionId;
+      }
     }
+    return null;
+  };
+
+  if (joinRes.status === 409 && joinData.code === 'NICKNAME_TAKEN') {
+    const sessionId = await reconnectFromLocalTokens(
+      typeof joinData.sessionId === 'string' ? joinData.sessionId : ''
+    );
+    if (sessionId) return { sessionId, reconnected: true };
     throw new Error('Nickname already taken in this room.');
   }
 
   // Mid-game: reconnect from a token this device already holds. Do not require sessionId in the 403.
   if (joinRes.status === 403 && joinData.code === 'GAME_STARTED') {
-    const candidates = [
-      typeof joinData.sessionId === 'string' ? joinData.sessionId : '',
-      ...sessionIdsWithTokens(),
-    ].filter(Boolean);
-    for (const sessionId of [...new Set(candidates)]) {
-      if (await tryReconnect(sessionId)) {
-        return { sessionId, reconnected: true };
-      }
-    }
+    const sessionId = await reconnectFromLocalTokens(
+      typeof joinData.sessionId === 'string' ? joinData.sessionId : ''
+    );
+    if (sessionId) return { sessionId, reconnected: true };
     throw new Error(joinData.error || 'This game has already started.');
   }
 

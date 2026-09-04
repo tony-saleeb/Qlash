@@ -68,11 +68,22 @@ describe('rateLimit remote', () => {
 });
 
 describe('clientIpFromRequest', () => {
-  it('uses the first x-forwarded-for hop', () => {
-    const request = new Request('http://localhost', {
-      headers: { 'x-forwarded-for': '10.0.0.8, 10.0.0.1' },
-    });
-    expect(clientIpFromRequest(request)).toBe('10.0.0.8');
+  it('prefers the Vercel hop, then the last x-forwarded-for hop', () => {
+    expect(
+      clientIpFromRequest(
+        new Request('http://localhost', {
+          headers: {
+            'x-forwarded-for': '10.0.0.8, 10.0.0.1',
+            'x-vercel-forwarded-for': '10.0.0.1',
+          },
+        })
+      )
+    ).toBe('10.0.0.1');
+    expect(
+      clientIpFromRequest(
+        new Request('http://localhost', { headers: { 'x-forwarded-for': '10.0.0.8, 10.0.0.1' } })
+      )
+    ).toBe('10.0.0.1');
   });
 
   it('falls back to x-real-ip then unknown', () => {

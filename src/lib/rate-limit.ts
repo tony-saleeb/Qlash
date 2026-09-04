@@ -78,9 +78,14 @@ export async function rateLimit(params: {
   return rateLimitMemory(params);
 }
 
-/** Best-effort client IP from common proxy headers. */
+/** Best-effort client IP. Prefer the platform hop so clients cannot spoof XFF. */
 export function clientIpFromRequest(request: Request): string {
+  const vercel = request.headers.get('x-vercel-forwarded-for');
+  if (vercel) return vercel.split(',')[0]?.trim() || 'unknown';
   const forwarded = request.headers.get('x-forwarded-for');
-  if (forwarded) return forwarded.split(',')[0]?.trim() || 'unknown';
+  if (forwarded) {
+    const hops = forwarded.split(',').map((part) => part.trim()).filter(Boolean);
+    return hops[hops.length - 1] || 'unknown';
+  }
   return request.headers.get('x-real-ip') || 'unknown';
 }

@@ -1,6 +1,6 @@
 import { NextResponse } from 'next/server';
 import { createAdminClient } from '@/lib/supabase/admin';
-import { limitPlayerHydrate, tooManyRequests } from '@/lib/api/playerLimit';
+import { limitPlayerHydrate, tooManyIfPlayerHydrateLimited, tooManyRequests } from '@/lib/api/playerLimit';
 import { sanitizeAnswers, type AnswerOption } from '@/lib/game/types';
 import { maybeSeededShuffle } from '@/lib/game/shuffle';
 
@@ -43,6 +43,9 @@ export async function POST(request: Request) {
     if (!player) {
       return NextResponse.json({ error: 'Player not found.' }, { status: 404 });
     }
+
+    const perPlayer = await tooManyIfPlayerHydrateLimited(playerId, 'question');
+    if (perPlayer) return perPlayer;
 
     if (!session) {
       return NextResponse.json({ error: 'Session not found.' }, { status: 404 });

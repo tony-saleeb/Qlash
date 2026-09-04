@@ -1,6 +1,6 @@
 import { NextResponse } from 'next/server';
 import { createAdminClient } from '@/lib/supabase/admin';
-import { limitPlayerHydrate, tooManyRequests } from '@/lib/api/playerLimit';
+import { limitPlayerHydrate, tooManyIfPlayerHydrateLimited, tooManyRequests } from '@/lib/api/playerLimit';
 import { correctAnswerIds, type AnswerOption } from '@/lib/game/types';
 
 export const dynamic = 'force-dynamic';
@@ -27,6 +27,9 @@ export async function POST(request: Request) {
     if (!tokenRow || tokenRow.client_token !== token) {
       return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
     }
+
+    const perPlayer = await tooManyIfPlayerHydrateLimited(playerId, 'result');
+    if (perPlayer) return perPlayer;
 
     const allowed = ['question_reveal', 'leaderboard', 'finished'].includes(session?.status || '');
     if (!allowed) {

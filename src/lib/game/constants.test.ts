@@ -34,7 +34,8 @@ describe('theme + capacity constants', () => {
     expect(RATE_LIMITS.submitPerPlayer.limit).toBe(8);
     expect(RATE_LIMITS.registerPerIp.limit).toBe(8);
     expect(RATE_LIMITS.pinLookupPerIp.limit).toBe(60);
-    expect(RATE_LIMITS.playerHydratePerIp.limit).toBe(180);
+    expect(RATE_LIMITS.playerHydratePerIp.limit).toBe(480);
+    expect(RATE_LIMITS.playerHydratePerPlayer.limit).toBe(20);
     expect(livePlayerCap('free')).toBe(80);
     expect(livePlayerCap('pro')).toBe(80);
     expect(quizLibraryCap('free')).toBe(5);

@@ -54,7 +54,7 @@ import {
 import { maybeSeededShuffle, questionsInPlayOrder } from '@/lib/game/shuffle';
 import { aggregateTeamScores, scoreBarPercent } from '@/lib/game/teams';
 import { MAX_PLAYERS_PER_SESSION, SUBMIT_LATE_GRACE_MS } from '@/lib/game/constants';
-import { remainingSeconds } from '@/lib/game/clock';
+import { remainingFromPausedElapsed, remainingSeconds } from '@/lib/game/clock';
 import { answerUsesInk, resolveAnswerColor } from '@/lib/game/marks';
 import { AnswerSwatch } from '@/components/brand/AnswerMark';
 import { Switch } from '@/components/ui/switch';
@@ -309,6 +309,7 @@ export default function HostGameClient({
     try {
       const results = await revealQuestionResults(session.id, activeQuestion.id);
       setRevealData(results);
+      setSession((prev) => ({ ...prev, status: 'question_reveal' }));
 
       const correctOptionIds = activeQuestion.answers
         .filter((ans) => ans.is_correct)
@@ -355,12 +356,12 @@ export default function HostGameClient({
             setPlayers((prev) => {
               if (prev.find((p) => p.id === payload.new.id)) return prev;
               playJoinSound();
-              addActivityEntry('join', `${(payload.new as Player).nickname} joined the lobby`);
+              addActivityEntry('join', `${(payload.new as Player).nickname} ${t('activityJoinedLobby')}`);
               return [...prev, payload.new as Player];
             });
           } else if (payload.eventType === 'DELETE') {
             const removed = playersRef.current.find((p) => p.id === payload.old.id);
-            if (removed) addActivityEntry('kick', `${removed.nickname} was removed`);
+            if (removed) addActivityEntry('kick', `${removed.nickname} ${t('activityWasRemoved')}`);
             setPlayers((prev) => prev.filter((p) => p.id !== payload.old.id));
           } else if (payload.eventType === 'UPDATE') {
             const next = payload.new as Player;
@@ -417,7 +418,7 @@ export default function HostGameClient({
               if (firstLockTimerRef.current) clearTimeout(firstLockTimerRef.current);
               firstLockTimerRef.current = setTimeout(() => setFirstLockName(null), FIRST_LOCK_BANNER_MS);
             }
-            if (answerer) addActivityEntry('answer', `${answerer.nickname} submitted an answer`);
+            if (answerer) addActivityEntry('answer', `${answerer.nickname} ${t('activitySubmittedAnswer')}`);
           }
         }
       )
@@ -430,7 +431,7 @@ export default function HostGameClient({
       }
       supabase.removeChannel(channel);
     };
-  }, [supabase, session.id, addActivityEntry]);
+  }, [supabase, session.id, addActivityEntry, t]);
 
   useEffect(() => {
     const questionId = activeQuestion?.id;
@@ -514,6 +515,14 @@ export default function HostGameClient({
       if (graceTimer) clearTimeout(graceTimer);
     };
   }, [session.status, session.question_started_at, activeQuestion?.id, activeQuestion?.time_limit_seconds, handleRevealAnswer]);
+
+  useEffect(() => {
+    if (session.status !== 'question_paused' || !activeQuestion) return;
+    if (timerRef.current) clearInterval(timerRef.current);
+    setTimeLeft(
+      remainingFromPausedElapsed(session.question_started_at, activeQuestion.time_limit_seconds)
+    );
+  }, [session.status, session.question_started_at, activeQuestion?.id, activeQuestion?.time_limit_seconds]);
 
   useEffect(() => {
     if (session.status !== 'finished') return;
@@ -781,7 +790,7 @@ export default function HostGameClient({
       });
 
       setIsEditorOpen(false);
-      addActivityEntry('edit', 'Host edited the current question live');
+      addActivityEntry('edit', t('activityEditedLive'));
       toast.success(t('questionUpdated'));
     } catch (err) {
       toast.error(err instanceof Error ? err.message : t('failedSaveQuestion'));
@@ -797,7 +806,7 @@ export default function HostGameClient({
 
       await sendSessionEvent('multiplier:change', { multiplier: newState ? 2 : 1 });
 
-      addActivityEntry('multiplier', newState ? 'Double points activated!' : 'Double points deactivated');
+      addActivityEntry('multiplier', newState ? t('activityDoubleOn') : t('activityDoubleOff'));
       toast.success(newState ? t('doublePointsActivated') : t('multiplierOffToast'));
     } catch (err) {
       toast.error(err instanceof Error ? err.message : t('failedMultiplier'));
@@ -826,7 +835,7 @@ export default function HostGameClient({
         buildQuestionStartPayload(targetQ, targetIndex, serverStartedAt)
       );
 
-      addActivityEntry('jump', `Host jumped to Question ${targetIndex + 1}`);
+      addActivityEntry('jump', `${t('activityJumpedTo')} ${targetIndex + 1}`);
       toast.success(`${t('jumpedToQuestion')} ${targetIndex + 1}`);
     } catch (err) {
       toast.error(err instanceof Error ? err.message : t('failedJump'));
@@ -842,7 +851,7 @@ export default function HostGameClient({
 
     await sendSessionEvent('host:announcement', { message: announcementText.trim() });
 
-    addActivityEntry('announcement', `Host broadcast: "${announcementText.trim()}"`);
+    addActivityEntry('announcement', `${t('activityBroadcast')} "${announcementText.trim()}"`);
     toast.success(t('announcementSent'));
     setAnnouncementText('');
     setIsAnnouncementOpen(false);
@@ -889,7 +898,7 @@ export default function HostGameClient({
             <div className="hidden sm:block">{quitControl}</div>
             <StageBadge className="motion-pulse-soft max-w-[11rem] truncate sm:max-w-none">
               <Users className="h-3.5 w-3.5 shrink-0" />
-              {connectedCount}/{players.length} · max {playerCap}
+              {connectedCount}/{players.length} · {t('maxLabel')} {playerCap}
             </StageBadge>
           </div>
         </header>
@@ -1032,7 +1041,7 @@ export default function HostGameClient({
         <footer className="sticky bottom-0 z-20 flex flex-col items-stretch justify-between gap-3 border-t border-white/10 bg-arena-stage/95 px-4 py-3 pb-[max(0.75rem,env(safe-area-inset-bottom))] backdrop-blur-sm sm:gap-4 sm:px-6 sm:py-5 sm:flex-row sm:items-center lg:static lg:bg-black/20 lg:backdrop-blur-none">
           <div className="flex flex-col gap-3 sm:max-w-md">
             <p className="hidden text-center text-xs uppercase tracking-[0.14em] text-white/40 sm:block sm:text-left">
-              Keep this screen visible · PIN <bdi className="text-white font-bold">{session.pin}</bdi>
+              {t('keepScreenVisible')} <bdi className="text-white font-bold">{session.pin}</bdi>
             </p>
             <label className="flex items-center justify-between gap-3 border border-white/15 bg-white/5 px-3 py-2">
               <span>
@@ -1208,7 +1217,7 @@ export default function HostGameClient({
               <div className="flex h-full w-full flex-col items-center justify-center border-2 border-white/15 bg-white/[0.04] p-8 text-center">
                 <Flame className="mb-3 h-16 w-16 text-arena-acid/50 motion-pulse-soft" />
                 <span className="font-display text-xs font-extrabold uppercase tracking-[0.22em] text-white/50">
-                  Qlash Showdown
+                  {t('showdownLabel')}
                 </span>
               </div>
             )}
@@ -1792,7 +1801,7 @@ export default function HostGameClient({
           {secondPlace && (
             <div className="flex w-1/4 min-w-[80px] flex-col items-center gap-3">
               <div className="w-full min-w-0 text-center">
-                <span className="font-display text-sm font-bold text-white/50">2nd</span>
+                <span className="font-display text-sm font-bold text-white/50">{t('secondPlace')}</span>
                 <h3 className="mt-1 w-full truncate text-sm font-extrabold text-white sm:text-base">
                   {secondPlace.nickname}
                 </h3>
@@ -1827,7 +1836,7 @@ export default function HostGameClient({
           {thirdPlace && (
             <div className="flex w-1/4 min-w-[80px] flex-col items-center gap-3">
               <div className="w-full min-w-0 text-center">
-                <span className="font-display text-sm font-bold text-white/50">3rd</span>
+                <span className="font-display text-sm font-bold text-white/50">{t('thirdPlace')}</span>
                 <h3 className="mt-1 w-full truncate text-sm font-extrabold text-white sm:text-base">
                   {thirdPlace.nickname}
                 </h3>

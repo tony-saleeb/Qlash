@@ -1,4 +1,5 @@
 -- Fast path: one round-trip answer submit for ~80 concurrent players.
+-- Canonical live grading. src/lib/game/scoring.ts is a TypeScript copy for unit tests only.
 -- Run in Supabase SQL editor.
 
 create or replace function public.submit_live_answer(

@@ -66,32 +66,6 @@ export function parseHostRegisterInput(body: unknown): HostRegisterInput {
   return { email, password, displayName };
 }
 
-async function confirmExistingHost(admin: HostRegisterAdmin, email: string, password: string) {
-  for (let page = 1; page <= 25; page++) {
-    const listed = await admin.auth.admin.listUsers({ page, perPage: 200 });
-    if (listed.error) {
-      throw new HostRegisterError(listed.error.message || 'Could not create account.', 400);
-    }
-    const users = listed.data?.users || [];
-    const existing = users.find((user) => (user.email || '').toLowerCase() === email);
-    if (existing) {
-      if (existing.email_confirmed_at) {
-        throw new HostRegisterError('An account with this email already exists. Sign in.', 409);
-      }
-      const confirmed = await admin.auth.admin.updateUserById(existing.id, {
-        email_confirm: true,
-        password,
-      });
-      if (confirmed.error) {
-        throw new HostRegisterError(confirmed.error.message || 'Could not create account.', 400);
-      }
-      return;
-    }
-    if (users.length < 200) break;
-  }
-  throw new HostRegisterError('An account with this email already exists. Sign in.', 409);
-}
-
 export async function createConfirmedHost(admin: HostRegisterAdmin, input: HostRegisterInput) {
   const created = await admin.auth.admin.createUser({
     email: input.email,
@@ -105,5 +79,5 @@ export async function createConfirmedHost(admin: HostRegisterAdmin, input: HostR
   if (!isAlreadyRegistered(message)) {
     throw new HostRegisterError(message, 400);
   }
-  await confirmExistingHost(admin, input.email, input.password);
+  throw new HostRegisterError('An account with this email already exists. Sign in.', 409);
 }

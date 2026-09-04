@@ -266,6 +266,31 @@ describe('host game actions', () => {
     });
   });
 
+  it('does not re-apply scores when the question is already in scored_question_ids', async () => {
+    host.setTables({
+      game_sessions: [
+        {
+          data: {
+            status: 'question_active',
+            current_question_index: 0,
+            question_order: ['q1', 'q2'],
+            scores_applied_question_id: null,
+            scored_question_ids: ['q1'],
+            quiz_id: 'quiz-1',
+          },
+          error: null,
+        },
+        { data: { question_started_at: 't-next' }, error: null },
+      ],
+    });
+    const { goToNextQuestion } = await import('@/app/actions/game');
+    await expect(goToNextQuestion('sess-1', 1)).resolves.toEqual({
+      success: true,
+      serverStartedAt: 't-next',
+    });
+    expect(host.rpc).not.toHaveBeenCalled();
+  });
+
   it('advances leaderboard, next question, podium, and end', async () => {
     host.setTable('game_sessions', { data: { question_started_at: 't' }, error: null });
     const actions = await import('@/app/actions/game');

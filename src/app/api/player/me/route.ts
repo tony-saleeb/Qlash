@@ -1,6 +1,6 @@
 import { NextResponse } from 'next/server';
 import { createAdminClient } from '@/lib/supabase/admin';
-import { limitPlayerHydrate, tooManyRequests } from '@/lib/api/playerLimit';
+import { limitPlayerHydrate, tooManyIfPlayerHydrateLimited, tooManyRequests } from '@/lib/api/playerLimit';
 
 export const dynamic = 'force-dynamic';
 
@@ -41,6 +41,9 @@ export async function POST(request: Request) {
     if (playerError || !player) {
       return NextResponse.json({ error: 'Player not found in this session.' }, { status: 404 });
     }
+
+    const perPlayer = await tooManyIfPlayerHydrateLimited(player.id, 'me');
+    if (perPlayer) return perPlayer;
 
     if (nickname && player.nickname !== nickname.trim()) {
       return NextResponse.json({ error: 'Nickname does not match this device session.' }, { status: 403 });

@@ -1,3 +1,8 @@
+/**
+ * Test-only mirror of submit_live_answer in schema-fast-submit.sql.
+ * Live grading is the SQL RPC. Do not import this from submit or the live clients.
+ * Keep the formulas in lockstep by eye until both sides share one fixture.
+ */
 export type ScoringType = 'linear' | 'flat' | 'none' | string;
 
 export interface AnswerOptionLike {

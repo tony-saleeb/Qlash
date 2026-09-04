@@ -46,7 +46,7 @@ describe('joinOrReconnect', () => {
     const fetchMock = vi
       .fn()
       .mockResolvedValueOnce(
-        jsonResponse({ error: 'taken', code: 'NICKNAME_TAKEN', sessionId: 'sess-1' }, 409)
+        jsonResponse({ error: 'taken', code: 'NICKNAME_TAKEN' }, 409)
       )
       .mockResolvedValueOnce(jsonResponse({ success: true, player: { id: 'p1' } }, 200));
     vi.stubGlobal('fetch', fetchMock);
@@ -65,7 +65,7 @@ describe('joinOrReconnect', () => {
   it('throws when nickname is taken and this device has no token', async () => {
     vi.stubGlobal(
       'fetch',
-      vi.fn().mockResolvedValueOnce(jsonResponse({ sessionId: 'sess-1' }, 409))
+      vi.fn().mockResolvedValueOnce(jsonResponse({ code: 'NICKNAME_TAKEN' }, 409))
     );
     await expect(joinOrReconnect({ pin: '123456', nickname: 'Ada' })).rejects.toThrow(
       'Nickname already taken in this room.'

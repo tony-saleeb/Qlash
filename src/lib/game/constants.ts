@@ -36,5 +36,6 @@ export const RATE_LIMITS = {
   submitPerPlayer: { limit: 8, windowMs: 60_000 },
   registerPerIp: { limit: 8, windowMs: 15 * 60_000 },
   pinLookupPerIp: { limit: 60, windowMs: 60_000 },
-  playerHydratePerIp: { limit: 180, windowMs: 60_000 },
+  playerHydratePerIp: { limit: 480, windowMs: 60_000 },
+  playerHydratePerPlayer: { limit: 20, windowMs: 60_000 },
 } as const;

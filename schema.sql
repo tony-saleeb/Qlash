@@ -55,6 +55,7 @@ create table public.game_sessions (
   question_started_at timestamptz,
   active_multiplier int default 1 not null check (active_multiplier in (1, 2)),
   scores_applied_question_id uuid references public.questions(id) on delete set null,
+  scored_question_ids uuid[] not null default '{}',
   question_order jsonb, -- ordered question UUIDs for this live session
   late_join_through_index int not null default 2 check (late_join_through_index >= -1), -- -1 lobby only; >= 0 join until the game ends
   created_at timestamptz default now()
@@ -117,11 +118,9 @@ create policy "Hosts can read own profile" on public.hosts
 create policy "Hosts can update own profile" on public.hosts
   for update using (auth.uid() = id);
 
--- Quizzes: hosts manage; public can read metadata (join needs team_mode / theme)
+-- Quizzes: hosts manage. Public dump is closed (join uses /api/player/room).
 create policy "Hosts can manage own quizzes" on public.quizzes
   for all using (auth.uid() = host_id);
-create policy "Public can view quizzes" on public.quizzes
-  for select using (true);
 
 -- Questions: hosts only (answer keys must never be public)
 create policy "Hosts can manage own quiz questions" on public.questions
@@ -135,8 +134,9 @@ create policy "Hosts can manage own quiz questions" on public.questions
 -- Game Sessions
 create policy "Hosts can manage own game sessions" on public.game_sessions
   for all using (auth.uid() = host_id);
-create policy "Public can view game sessions" on public.game_sessions
-  for select using (true);
+-- Anon: clock/status for Realtime (PIN withheld by column GRANT below).
+create policy "Anon can read live session clock" on public.game_sessions
+  for select to anon using (true);
 
 -- Players: public read for lobby/leaderboard; writes via service role / host only
 create policy "Hosts can manage players" on public.players
@@ -193,8 +193,9 @@ begin
     raise exception 'Unauthorized';
   end if;
 
-  -- Idempotent: scores already applied for this question
-  if v_session.scores_applied_question_id is not distinct from p_question_id then
+  -- Idempotent: this question was already scored (including after Jump-back)
+  if v_session.scores_applied_question_id is not distinct from p_question_id
+     or p_question_id = any(coalesce(v_session.scored_question_ids, '{}'::uuid[])) then
     select coalesce(
       (
         select jsonb_object_agg(option_id, cnt)
@@ -256,6 +257,7 @@ begin
   set
     status = 'question_reveal',
     scores_applied_question_id = p_question_id,
+    scored_question_ids = array_append(coalesce(scored_question_ids, '{}'::uuid[]), p_question_id),
     active_multiplier = 1
   where id = p_session_id;
 
@@ -318,3 +320,51 @@ alter publication supabase_realtime add table public.players;
 alter publication supabase_realtime add table public.answers_submitted;
 
 alter table public.players replica identity full;
+
+-- Anon cannot SELECT pin. Authenticated hosts use “manage own” RLS (no cross-tenant PIN dump).
+revoke select on table public.game_sessions from anon;
+grant select (
+  id,
+  quiz_id,
+  host_id,
+  status,
+  current_question_index,
+  question_started_at,
+  active_multiplier,
+  scores_applied_question_id,
+  scored_question_ids,
+  question_order,
+  late_join_through_index,
+  created_at
+) on table public.game_sessions to anon;
+
+grant select, insert, update, delete on table public.game_sessions to authenticated;
+
+comment on column public.game_sessions.late_join_through_index is
+  '-1 lobby only; any value >= 0 means join until the game ends.';
+
+create or replace function public.enforce_quiz_library_cap()
+returns trigger
+language plpgsql
+as $$
+declare
+  n int;
+  plan text;
+begin
+  select hosts.plan into plan from public.hosts where id = NEW.host_id;
+  if plan in ('pro', 'org') then
+    return NEW;
+  end if;
+  perform pg_advisory_xact_lock(hashtext('quiz-cap:' || NEW.host_id::text));
+  select count(*) into n from public.quizzes where host_id = NEW.host_id;
+  if n >= 5 then
+    raise exception 'QUIZ_CAP' using errcode = 'P0001';
+  end if;
+  return NEW;
+end;
+$$;
+
+drop trigger if exists quizzes_enforce_library_cap on public.quizzes;
+create trigger quizzes_enforce_library_cap
+  before insert on public.quizzes
+  for each row execute procedure public.enforce_quiz_library_cap();

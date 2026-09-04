@@ -118,6 +118,7 @@ describe('POST /api/player/join', () => {
     expect(result.status).toBe(409);
     expect(result.body.code).toBe('NICKNAME_TAKEN');
     expect(result.body.playerId).toBeUndefined();
+    expect(result.body.sessionId).toBeUndefined();
   });
 
   it('requires a team name on team quizzes', async () => {
@@ -209,6 +210,7 @@ describe('POST /api/player/join', () => {
     const result = await readJson(await POST(jsonRequest({ pin: '123456', nickname: 'Ada' })));
     expect(result.status).toBe(409);
     expect(result.body.code).toBe('NICKNAME_TAKEN');
+    expect(result.body.sessionId).toBeUndefined();
   });
 
   it('returns 429 when the IP join bucket is exhausted', async () => {

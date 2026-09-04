@@ -33,6 +33,8 @@ describe('i18n', () => {
     expect(t('ar', 'showFinalPodium')).toBe('ورّي المنصة النهائية');
     expect(t('en', 'resultsCalculated')).toBe('Results calculated!');
     expect(t('ar', 'validGamePin')).toContain('6');
+    expect(t('ar', 'typeYourAnswer')).toBe('اكتب إجابتك');
+    expect(t('en', 'secondPlace')).toBe('2nd');
     expect(isLocale('ar')).toBe(true);
     expect(normalizeLocale('nope')).toBe('en');
   });

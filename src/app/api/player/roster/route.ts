@@ -1,6 +1,6 @@
 import { NextResponse } from 'next/server';
 import { createAdminClient } from '@/lib/supabase/admin';
-import { limitPlayerHydrate, tooManyRequests } from '@/lib/api/playerLimit';
+import { limitPlayerHydrate, tooManyIfPlayerHydrateLimited, tooManyRequests } from '@/lib/api/playerLimit';
 
 export const dynamic = 'force-dynamic';
 
@@ -25,6 +25,9 @@ export async function POST(request: Request) {
     if (!tokenRow) {
       return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
     }
+
+    const perPlayer = await tooManyIfPlayerHydrateLimited(tokenRow.player_id, 'roster');
+    if (perPlayer) return perPlayer;
 
     const { data: player } = await admin
       .from('players')

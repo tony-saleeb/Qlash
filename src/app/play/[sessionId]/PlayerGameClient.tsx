@@ -32,7 +32,7 @@ import {
   type Player,
   type PublicQuestionPayload,
 } from '@/lib/game/types';
-import { remainingFromPausedElapsed, remainingSeconds, startedAtFromRemaining } from '@/lib/game/clock';
+import { remainingFromPausedElapsed, remainingSeconds } from '@/lib/game/clock';
 import { answerUsesInk, resolveAnswerColor } from '@/lib/game/marks';
 import { aggregateTeamScores } from '@/lib/game/teams';
 import { playerJoinedAfterQuestionStart } from '@/lib/game/lateJoin';
@@ -120,7 +120,11 @@ export default function PlayerGameClient({
   const liveRankRef = React.useRef<number | null>(null);
   const previousRankRef = React.useRef<number | null>(null);
   const previousStreakRef = React.useRef(0);
+  const sawOpenQuestionRef = React.useRef(false);
+  const sessionStatusRef = React.useRef(sessionStatus);
+  const lastStartSoundQidRef = React.useRef<string | null>(null);
   liveRankRef.current = liveRank;
+  sessionStatusRef.current = sessionStatus;
 
   React.useEffect(() => bindAudioUnlock(), []);
 
@@ -180,16 +184,12 @@ export default function PlayerGameClient({
     activeQuestionRef.current = activeQuestion;
   }, [activeQuestion]);
 
-  const applyQuestionPayload = useCallback(
+  const syncQuestionClock = useCallback(
     (
       question: ActiveQuestionPayload,
       serverStartedAt?: string | null,
       status?: string
     ) => {
-      setActiveQuestion(question);
-      lastSubmitRef.current = null;
-      revealAppliedRef.current = null;
-
       if (serverStartedAt && question.time_limit_seconds) {
         if (status === 'question_paused') {
           setClockStartedAt(null);
@@ -205,6 +205,21 @@ export default function PlayerGameClient({
         clockStartedAtRef.current = null;
         setTimeLeft(question.time_limit_seconds);
       }
+    },
+    []
+  );
+
+  const applyQuestionPayload = useCallback(
+    (
+      question: ActiveQuestionPayload,
+      serverStartedAt?: string | null,
+      status?: string
+    ) => {
+      const prevId = activeQuestionRef.current?.id;
+      setActiveQuestion(question);
+      lastSubmitRef.current = null;
+      revealAppliedRef.current = null;
+      syncQuestionClock(question, serverStartedAt, status);
 
       setSelectedAnswerIds([]);
       setTypeInputValue('');
@@ -215,8 +230,12 @@ export default function PlayerGameClient({
       previousRankRef.current = liveRankRef.current;
       previousStreakRef.current = playerRef.current?.streak ?? 0;
       if (status) setSessionStatus(status);
+      if (status === 'question_active' && question.id !== prevId && lastStartSoundQidRef.current !== question.id) {
+        lastStartSoundQidRef.current = question.id;
+        playQuestionStartSound();
+      }
     },
-    []
+    [syncQuestionClock]
   );
 
   const hydrateCurrentQuestion = useCallback(
@@ -238,11 +257,9 @@ export default function PlayerGameClient({
         if (data.question) {
           const current = activeQuestionRef.current;
           if (current?.id === data.question.id) {
-            if (data.server_started_at && data.question.time_limit_seconds) {
-              setClockStartedAt(data.server_started_at);
-              clockStartedAtRef.current = data.server_started_at;
-              setTimeLeft(remainingSeconds(data.server_started_at, data.question.time_limit_seconds));
-            }
+            setActiveQuestion(data.question);
+            activeQuestionRef.current = data.question;
+            syncQuestionClock(data.question, data.server_started_at, data.status);
           } else {
             applyQuestionPayload(data.question, data.server_started_at, data.status);
           }
@@ -294,7 +311,7 @@ export default function PlayerGameClient({
         console.error('Failed to hydrate current question', err);
       }
     },
-    [sessionId, applyQuestionPayload]
+    [sessionId, applyQuestionPayload, syncQuestionClock]
   );
 
   const loadPodium = useCallback(
@@ -365,8 +382,12 @@ export default function PlayerGameClient({
         }
         return;
       }
-      if (qid) revealAppliedRef.current = qid;
       const submit = lastSubmitRef.current;
+      if (submit && submit.questionId === currentQ?.id && submit.isCorrect === null) {
+        setSessionStatus('question_reveal');
+        return;
+      }
+      if (qid) revealAppliedRef.current = qid;
       const playedThisRound = Boolean(submit && submit.questionId === currentQ?.id);
 
       if (!playedThisRound && !sawOpenQuestionRef.current) {
@@ -422,85 +443,21 @@ export default function PlayerGameClient({
       'clash:countdown': () => {
         setClashPlay(true);
       },
-      'question:start': (msg) => {
-        const payload = msg.payload;
-        const questionId = payload.question_id as string | undefined;
-        if (!questionId) return;
+      'question:start': () => {
         setClashPlay(false);
-        applyQuestionPayload(
-          {
-            id: questionId,
-            type: payload.type as string,
-            prompt: payload.prompt as string,
-            media_url: (payload.media_url as string | null) ?? null,
-            media_type: (payload.media_type as string | null) ?? null,
-            time_limit_seconds: payload.time_limit_seconds as number,
-            answers: payload.answers as ActiveQuestionPayload['answers'],
-          },
-          (payload.server_started_at as string) || new Date().toISOString(),
-          'question_active'
-        );
-        if (typeof payload.question_index === 'number') {
-          questionIndexRef.current = payload.question_index;
+        const playerId = playerRef.current?.id;
+        if (playerId) void hydrateCurrentQuestion(playerId);
+      },
+      'question:update': () => {
+        const playerId = playerRef.current?.id;
+        if (playerId) {
+          void hydrateCurrentQuestion(playerId);
+          toast.info(t('hostUpdatedQuestion'));
         }
-        playQuestionStartSound();
-        setActiveMultiplier(1);
-      },
-      'question:reveal': (msg) => {
-        const correctIds = (msg.payload.correct_answer_ids as string[]) || [];
-        const optionCounts = msg.payload.option_counts as Record<string, number> | undefined;
-        applyRevealInstant(correctIds, optionCounts);
-      },
-      'timer:sync': (msg) => {
-        const status = msg.payload.status as string | undefined;
-        const startedAt = msg.payload.server_started_at as string | undefined;
-        const remaining = msg.payload.remaining_seconds as number | undefined;
-        const limit = activeQuestionRef.current?.time_limit_seconds;
-        if (status) setSessionStatus(status);
-        if (typeof remaining === 'number') {
-          setTimeLeft(Math.max(0, remaining));
-          if (status === 'question_active' && limit) {
-            setClockStartedAt(startedAtFromRemaining(limit, remaining));
-          }
-        } else if (startedAt && limit) {
-          if (status === 'question_paused') {
-            setTimeLeft(remainingFromPausedElapsed(startedAt, limit));
-          } else {
-            setClockStartedAt(startedAt);
-            setTimeLeft(remainingSeconds(startedAt, limit));
-          }
-        }
-      },
-      'question:update': (msg) => {
-        setActiveQuestion((prev) => {
-          if (!prev) return prev;
-          return {
-            ...prev,
-            prompt: (msg.payload.prompt as string) || prev.prompt,
-            answers: msg.payload.answers
-              ? prev.answers.map((ans) => {
-                  const updated = (
-                    msg.payload.answers as { id: string; text: string }[]
-                  ).find((a) => a.id === ans.id);
-                  return updated ? { ...ans, text: updated.text } : ans;
-                })
-              : prev.answers,
-          };
-        });
-        toast.info(t('hostUpdatedQuestion'));
       },
       'host:announcement': (msg) => {
         const message = msg.payload.message as string;
         if (message) toast.info(`${t('hostSaid')} ${message}`, { duration: 8000 });
-      },
-      'multiplier:change': (msg) => {
-        const multiplier = (msg.payload.multiplier as number) || 1;
-        setActiveMultiplier(multiplier);
-        if (multiplier > 1) {
-          toast.success(`${t('doublePointsOn')} (${multiplier}x)`, { duration: 5000 });
-        } else {
-          toast.info(t('doublePointsOff'));
-        }
       },
     },
   });
@@ -630,11 +587,18 @@ export default function PlayerGameClient({
             }
           } else if (newStatus === 'question_reveal') {
             const q = activeQuestionRef.current;
-            revealFallbackTimer = setTimeout(() => {
-              if (q && revealAppliedRef.current !== q.id) {
+            const scheduleRevealFallback = (attempt: number) => {
+              revealFallbackTimer = setTimeout(() => {
+                if (!q || revealAppliedRef.current === q.id) return;
+                const submit = lastSubmitRef.current;
+                if (submit && submit.questionId === q.id && submit.isCorrect === null && attempt < 20) {
+                  scheduleRevealFallback(attempt + 1);
+                  return;
+                }
                 applyRevealInstant([]);
-              }
-            }, 250);
+              }, 250);
+            };
+            scheduleRevealFallback(0);
           } else if (newStatus === 'leaderboard') {
             setRoundResult(null);
           } else if (newStatus === 'finished') {
@@ -824,6 +788,9 @@ export default function PlayerGameClient({
           isCorrect: Boolean(data.isCorrect),
           pointsAwarded: typeof data.pointsAwarded === 'number' ? data.pointsAwarded : 0,
         };
+        if (sessionStatusRef.current === 'question_reveal') {
+          applyRevealInstant([]);
+        }
       }
     } catch (err: unknown) {
       console.error(err);
@@ -1244,7 +1211,7 @@ export default function PlayerGameClient({
 
         <div className="z-10 my-2 text-center">
           <h1 className="font-display text-3xl font-extrabold leading-none tracking-tight text-white">
-            Qlash <span className="text-arena-acid">podium</span>
+            {t('finalPodium')}
           </h1>
         </div>
 
@@ -1252,7 +1219,7 @@ export default function PlayerGameClient({
           {secondPlace && (
             <div className="flex w-1/4 min-w-[70px] flex-col items-center gap-2 animate-scale-in">
               <div className="w-full min-w-0 text-center">
-                <span className="font-display text-sm font-bold text-white/50">2nd</span>
+                <span className="font-display text-sm font-bold text-white/50">{t('secondPlace')}</span>
                 <h3 className="mt-0.5 w-full truncate text-[11px] font-extrabold text-white sm:text-xs">
                   {secondPlace.nickname}
                 </h3>
@@ -1287,7 +1254,7 @@ export default function PlayerGameClient({
           {thirdPlace && (
             <div className="flex w-1/4 min-w-[70px] flex-col items-center gap-2 animate-scale-in">
               <div className="w-full min-w-0 text-center">
-                <span className="font-display text-sm font-bold text-white/50">3rd</span>
+                <span className="font-display text-sm font-bold text-white/50">{t('thirdPlace')}</span>
                 <h3 className="mt-0.5 w-full truncate text-[11px] font-extrabold text-white sm:text-xs">
                   {thirdPlace.nickname}
                 </h3>
@@ -1315,7 +1282,7 @@ export default function PlayerGameClient({
             <div className="flex items-center justify-between">
               <span className="text-xs text-white/60">Team ({player.team_name})</span>
               <span className="text-sm font-bold text-arena-acid">
-                #{myTeamRank || '-'} · {teamRows.find((t) => t.team_name === player.team_name)?.score ?? 0} pts
+                #{myTeamRank || '-'} · {teamRows.find((t) => t.team_name === player.team_name)?.score ?? 0} {t('pointsAbbrev')}
               </span>
             </div>
           )}
@@ -1466,7 +1433,7 @@ export default function PlayerGameClient({
                   >
                     {timeLeft}
                   </span>
-                  <span className="text-[9px] font-bold uppercase tracking-wider text-white/45">sec</span>
+                  <span className="text-[9px] font-bold uppercase tracking-wider text-white/45">{t('secAbbrev')}</span>
                 </div>
               </div>
             )}
@@ -1480,12 +1447,12 @@ export default function PlayerGameClient({
             <form onSubmit={handleTextSubmit} className="w-full space-y-4 border-2 border-white/15 bg-white/[0.05] p-6">
               <div className="mb-4 space-y-1 text-center">
                 <h2 className="text-xs font-extrabold uppercase tracking-wider text-white/50">
-                  Type your answer
+                  {t('typeYourAnswer')}
                 </h2>
               </div>
 
               <Input
-                placeholder="Type here..."
+                placeholder={t('typeHerePlaceholder')}
                 value={typeInputValue}
                 onChange={(e) => setTypeInputValue(e.target.value)}
                 className="h-14 rounded-none border-white/15 bg-arena-stage text-center text-lg font-bold focus-visible:ring-arena-acid"
@@ -1497,17 +1464,17 @@ export default function PlayerGameClient({
                 type="submit"
                 className="h-12 w-full rounded-none bg-arena-signal text-base font-bold text-white shadow-[4px_4px_0_rgba(0,0,0,0.3)] hover:brightness-110"
               >
-                Lock answer
+                {t('lockAnswer')}
               </Button>
             </form>
           ) : activeQuestion.type === 'multi_select' ? (
             <div className="w-full space-y-6">
               <div className="mb-2 space-y-1 text-center">
                 <h2 className="text-xs font-extrabold uppercase tracking-wider text-arena-acid">
-                  Select all that apply
+                  {t('selectAllThatApply')}
                 </h2>
                 <p className="text-xs text-white/50">
-                  Tap every correct option, then lock in.
+                  {t('tapEveryCorrect')}
                 </p>
               </div>
 

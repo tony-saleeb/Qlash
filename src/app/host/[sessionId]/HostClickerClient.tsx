@@ -310,6 +310,7 @@ export default function HostClickerClient({
       revealingRef.current = true;
       try {
         const results = await revealQuestionResults(session.id, activeQuestion.id);
+        setSession((prev) => ({ ...prev, status: 'question_reveal' }));
         const correctOptionIds = activeQuestion.answers.filter((ans) => ans.is_correct).map((ans) => ans.id);
         void sendSessionEvent('question:reveal', {
           correct_answer_ids: correctOptionIds,
