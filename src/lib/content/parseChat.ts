@@ -1,6 +1,6 @@
 import type { PackQuestion } from '@/lib/content/packs';
 
-const CORRECT_MARK = /(?:\s*(?:\*|✓|✔|✔︎|\(صح\)|\[x\]|\[X\]))\s*$/u;
+const CORRECT_MARK = /(?:\s*(?:\*|✓|✔|✔︎|✅|\(صح\)|\[x\]|\[X\]))\s*$/u;
 
 function stripChatPrefix(line: string): string {
   return line

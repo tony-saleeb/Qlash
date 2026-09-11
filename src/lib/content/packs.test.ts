@@ -12,11 +12,13 @@ describe('content packs', () => {
       'advent',
       'christmas',
       'easter',
+      'nayrouz',
     ]);
-    expect(CONTENT_PACKS).toHaveLength(6);
+    expect(CONTENT_PACKS).toHaveLength(7);
     expect(getContentPack('advent')?.questions).toHaveLength(8);
     expect(getContentPack('christmas')?.questions).toHaveLength(8);
     expect(getContentPack('easter')?.questions).toHaveLength(8);
+    expect(getContentPack('nayrouz')?.questions).toHaveLength(30);
     for (const pack of CONTENT_PACKS) {
       expect(pack.questions.length).toBeGreaterThan(0);
       expect(pack.questions.every((question) => question.answers.some((answer) => answer.correct))).toBe(true);

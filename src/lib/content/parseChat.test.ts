@@ -21,6 +21,16 @@ describe('parseChatQuestions', () => {
     expect(questions[1]?.answers.find((answer) => answer.correct)?.text).toBe('7');
   });
 
+  it('treats ✅ as a correct-answer mark', () => {
+    const [question] = parseChatQuestions(`
+1. أول شهر قبطي؟
+أ) بابه
+ب) توت ✅
+ج) كيهك
+`);
+    expect(question?.answers.find((answer) => answer.correct)?.text).toBe('توت');
+  });
+
   it('reads A/B/C English lists and WhatsApp name prefixes', () => {
     const questions = parseChatQuestions(`
 [12:03] Mona: 1) Where was Jesus born?

@@ -13,7 +13,8 @@ export type ContentPackId =
   | 'warmup'
   | 'advent'
   | 'christmas'
-  | 'easter';
+  | 'easter'
+  | 'nayrouz';
 
 export interface ContentPack {
   id: ContentPackId;
