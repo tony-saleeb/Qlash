@@ -8,6 +8,7 @@ import {
   RATE_LIMITS,
   livePlayerCap,
   quizLibraryCap,
+  roomIsFull,
   SUBMIT_LATE_GRACE_MS,
 } from '@/lib/game/constants';
 
@@ -30,14 +31,17 @@ describe('theme + capacity constants', () => {
     expect(NICKNAME_MIN_LEN).toBe(1);
     expect(NICKNAME_MAX_LEN).toBe(20);
     expect(SUBMIT_LATE_GRACE_MS).toBe(1500);
-    expect(RATE_LIMITS.joinPerIp.limit).toBe(120);
+    expect(RATE_LIMITS.joinPerIp.limit).toBe(240);
     expect(RATE_LIMITS.submitPerPlayer.limit).toBe(8);
     expect(RATE_LIMITS.registerPerIp.limit).toBe(8);
-    expect(RATE_LIMITS.pinLookupPerIp.limit).toBe(60);
-    expect(RATE_LIMITS.playerHydratePerIp.limit).toBe(480);
-    expect(RATE_LIMITS.playerHydratePerPlayer.limit).toBe(20);
+    expect(RATE_LIMITS.pinLookupPerIp.limit).toBe(240);
+    expect(RATE_LIMITS.playerHydratePerIp.limit).toBe(2000);
+    expect(RATE_LIMITS.playerHydratePerPlayer.limit).toBe(40);
     expect(livePlayerCap('free')).toBe(80);
     expect(livePlayerCap('pro')).toBe(80);
+    expect(roomIsFull(79)).toBe(false);
+    expect(roomIsFull(80)).toBe(true);
+    expect(roomIsFull(80, 80)).toBe(true);
     expect(quizLibraryCap('free')).toBe(5);
     expect(quizLibraryCap('org')).toBe(Number.POSITIVE_INFINITY);
   });

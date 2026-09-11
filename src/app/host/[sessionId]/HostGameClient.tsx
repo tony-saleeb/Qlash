@@ -999,8 +999,8 @@ export default function HostGameClient({
                 </div>
               </div>
             ) : (
-              <div className="max-h-40 flex-1 overflow-y-auto pr-1 sm:max-h-[52vh]">
-                <div className="grid grid-cols-2 gap-2.5 sm:grid-cols-3">
+              <div className="max-h-[45vh] flex-1 overflow-y-auto pr-1 sm:max-h-[52vh]">
+                <div className="grid grid-cols-2 gap-2.5 sm:grid-cols-3 lg:grid-cols-4">
                   {players.map((p) => (
                     <div
                       key={p.id}

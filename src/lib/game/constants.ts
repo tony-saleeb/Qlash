@@ -25,17 +25,22 @@ export function livePlayerCap(plan: unknown): number {
   return Math.min(MAX_PLAYERS_PER_SESSION, PLAN_LIMITS[normalizeHostPlan(plan)].maxLivePlayers);
 }
 
+/** True when the next join would exceed the live seat cap (count is existing rows). */
+export function roomIsFull(playerCount: number, cap = MAX_PLAYERS_PER_SESSION): boolean {
+  return playerCount >= cap;
+}
+
 export function quizLibraryCap(plan: unknown): number {
   return PLAN_LIMITS[normalizeHostPlan(plan)].maxQuizzes;
 }
 
-/** Classroom Wi‑Fi often NATs many devices behind one IP — keep limits high. */
+/** Classroom Wi‑Fi often NATs ~80 devices behind one IP — keep limits above a full lobby. */
 export const RATE_LIMITS = {
-  joinPerIp: { limit: 120, windowMs: 60_000 },
+  joinPerIp: { limit: 240, windowMs: 60_000 },
   submitPerIp: { limit: 400, windowMs: 60_000 },
   submitPerPlayer: { limit: 8, windowMs: 60_000 },
   registerPerIp: { limit: 8, windowMs: 15 * 60_000 },
-  pinLookupPerIp: { limit: 60, windowMs: 60_000 },
-  playerHydratePerIp: { limit: 480, windowMs: 60_000 },
-  playerHydratePerPlayer: { limit: 20, windowMs: 60_000 },
+  pinLookupPerIp: { limit: 240, windowMs: 60_000 },
+  playerHydratePerIp: { limit: 2000, windowMs: 60_000 },
+  playerHydratePerPlayer: { limit: 40, windowMs: 60_000 },
 } as const;

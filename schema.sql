@@ -368,3 +368,27 @@ drop trigger if exists quizzes_enforce_library_cap on public.quizzes;
 create trigger quizzes_enforce_library_cap
   before insert on public.quizzes
   for each row execute procedure public.enforce_quiz_library_cap();
+
+-- Live rooms cap at 80. Advisory lock closes the count-then-insert race.
+create or replace function public.enforce_session_player_cap()
+returns trigger
+language plpgsql
+as $$
+declare
+  n int;
+  v_cap int := 80;
+begin
+  perform pg_advisory_xact_lock(hashtext(NEW.session_id::text));
+  v_cap := 80;
+  select count(*) into n from public.players where session_id = NEW.session_id;
+  if n >= v_cap then
+    raise exception 'ROOM_FULL' using errcode = 'P0001';
+  end if;
+  return NEW;
+end;
+$$;
+
+drop trigger if exists players_enforce_session_cap on public.players;
+create trigger players_enforce_session_cap
+  before insert on public.players
+  for each row execute procedure public.enforce_session_player_cap();

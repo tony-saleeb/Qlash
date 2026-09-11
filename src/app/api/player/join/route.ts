@@ -7,6 +7,7 @@ import {
   NICKNAME_MIN_LEN,
   RATE_LIMITS,
   livePlayerCap,
+  roomIsFull,
 } from '@/lib/game/constants';
 import { canInsertNewPlayer } from '@/lib/game/lateJoin';
 
@@ -135,7 +136,7 @@ export async function POST(request: Request) {
     const { count, error: countError } = countResult;
     if (countError) throw countError;
 
-    if ((count || 0) >= playerCap) {
+    if (roomIsFull(count || 0, playerCap)) {
       return NextResponse.json(
         {
           error: `This room is full (${playerCap} players max).`,

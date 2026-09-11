@@ -146,7 +146,13 @@ function tone(
   osc.stop(start + duration);
 }
 
+let lastJoinSoundAt = 0;
+const JOIN_SOUND_GAP_MS = 80;
+
 export function playJoinSound() {
+  const now = Date.now();
+  if (now - lastJoinSoundAt < JOIN_SOUND_GAP_MS) return;
+  lastJoinSoundAt = now;
   const ctx = getAudioContext();
   if (!ctx) return;
   tone(ctx, { type: 'sine', freq: 400, endFreq: 880, start: ctx.currentTime, duration: 0.16, gain: 0.18 });

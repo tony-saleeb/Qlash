@@ -146,6 +146,31 @@ describe('POST /api/player/join', () => {
     expect(result.body.code).toBe('ROOM_FULL');
   });
 
+  it('lets the 80th player in when 79 are already seated', async () => {
+    const player = {
+      id: 'p-80',
+      session_id: 'sess-1',
+      nickname: 'Zed',
+      team_name: null,
+      score: 0,
+      streak: 0,
+      connected: true,
+    };
+    admin.setTables({
+      game_sessions: { data: lobbySession, error: null },
+      players: [
+        { data: null, error: null },
+        { data: null, error: null, count: 79 },
+        { data: player, error: null },
+      ],
+      player_tokens: { data: {}, error: null },
+    });
+    const { POST } = await import('@/app/api/player/join/route');
+    const result = await readJson(await POST(jsonRequest({ pin: '123456', nickname: 'Zed' })));
+    expect(result.status).toBe(200);
+    expect(result.body.player.id).toBe('p-80');
+  });
+
   it('inserts the player, stores a token, and returns both', async () => {
     const player = {
       id: 'p1',
