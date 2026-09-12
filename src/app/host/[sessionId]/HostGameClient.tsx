@@ -63,6 +63,13 @@ import { lobbyJoinPath, lobbyWhatsAppHref } from '@/lib/game/lobbyLink';
 import { podiumPath, podiumWhatsAppHref } from '@/lib/game/podiumShare';
 import { waitingPlayers } from '@/lib/game/waitingPlayers';
 import { connectedPlayerCount, isPlayerConnected } from '@/lib/game/emptyLobby';
+import { seatArrivals } from '@/lib/game/seatArrivals';
+import {
+  activeQuestionForIndex,
+  isLastSessionIndex,
+  sessionIndexForQuestion,
+  sessionQuestionCount,
+} from '@/lib/game/playOrder';
 import { buildTeachableReveal, formatTeachableCopy } from '@/lib/game/teachableReveal';
 import {
   canCheerOnProjector,
@@ -206,9 +213,14 @@ export default function HostGameClient({
   }, []);
 
   const activeQuestionIndex = session.current_question_index;
-  const activeQuestion = (playQuestions && playQuestions.length > 0)
-    ? (playQuestions[activeQuestionIndex] || playQuestions[0])
-    : null;
+  // Resolve by id from question_order — never by array position. Falling back
+  // to another question here would show the room something the phones are not
+  // answering, and would reveal and score the wrong question id.
+  const activeQuestion = activeQuestionForIndex(
+    playQuestions,
+    session.question_order,
+    activeQuestionIndex
+  );
   const activeQuestionRef = useRef(activeQuestion);
   activeQuestionRef.current = activeQuestion;
   const submissionsCount = answeredIds.size;
@@ -268,11 +280,14 @@ export default function HostGameClient({
   const revealingRef = useRef(false);
   const playersFlushRef = useRef<Map<string, Player>>(new Map());
   const playersFlushTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
+  const playersInsertRef = useRef<Player[]>([]);
+  const playersInsertTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
 
   useEffect(() => {
     return () => {
       if (activityTimerRef.current) clearTimeout(activityTimerRef.current);
       if (playersFlushTimerRef.current) clearTimeout(playersFlushTimerRef.current);
+      if (playersInsertTimerRef.current) clearTimeout(playersInsertTimerRef.current);
       if (firstLockTimerRef.current) clearTimeout(firstLockTimerRef.current);
     };
   }, []);
@@ -341,6 +356,18 @@ export default function HostGameClient({
       setPlayers((prev) => prev.map((player) => batch.get(player.id) ?? player));
     };
 
+    // A class arrives in one burst — seat them in batches, not one render each.
+    const flushPlayerInserts = () => {
+      if (playersInsertTimerRef.current) {
+        clearTimeout(playersInsertTimerRef.current);
+        playersInsertTimerRef.current = null;
+      }
+      const arrivals = playersInsertRef.current;
+      if (arrivals.length === 0) return;
+      playersInsertRef.current = [];
+      setPlayers((prev) => seatArrivals(prev, arrivals));
+    };
+
     const channel = supabase
       .channel(`host_live_${session.id}`)
       .on(
@@ -353,18 +380,31 @@ export default function HostGameClient({
         },
         (payload) => {
           if (payload.eventType === 'INSERT') {
-            setPlayers((prev) => {
-              if (prev.find((p) => p.id === payload.new.id)) return prev;
-              playJoinSound();
-              addActivityEntry('join', `${(payload.new as Player).nickname} ${t('activityJoinedLobby')}`);
-              return [...prev, payload.new as Player];
-            });
+            const arrival = payload.new as Player;
+            const known =
+              playersRef.current.some((p) => p.id === arrival.id) ||
+              playersInsertRef.current.some((p) => p.id === arrival.id);
+            if (known) return;
+            playersInsertRef.current.push(arrival);
+            playJoinSound();
+            addActivityEntry('join', `${arrival.nickname} ${t('activityJoinedLobby')}`);
+            if (!playersInsertTimerRef.current) {
+              playersInsertTimerRef.current = setTimeout(flushPlayerInserts, 120);
+            }
           } else if (payload.eventType === 'DELETE') {
-            const removed = playersRef.current.find((p) => p.id === payload.old.id);
+            const removedId = payload.old.id as string;
+            playersInsertRef.current = playersInsertRef.current.filter((p) => p.id !== removedId);
+            const removed = playersRef.current.find((p) => p.id === removedId);
             if (removed) addActivityEntry('kick', `${removed.nickname} ${t('activityWasRemoved')}`);
-            setPlayers((prev) => prev.filter((p) => p.id !== payload.old.id));
+            setPlayers((prev) => prev.filter((p) => p.id !== removedId));
           } else if (payload.eventType === 'UPDATE') {
             const next = payload.new as Player;
+            const pendingIndex = playersInsertRef.current.findIndex((p) => p.id === next.id);
+            if (pendingIndex >= 0) {
+              // Still queued from the join burst — update in place so it is not lost.
+              playersInsertRef.current[pendingIndex] = next;
+              return;
+            }
             const prev = playersRef.current.find((p) => p.id === next.id);
             playersFlushRef.current.set(next.id, next);
             const connectedChanged = prev != null && prev.connected !== next.connected;
@@ -693,12 +733,10 @@ export default function HostGameClient({
   const handleNextQuestion = async () => {
     try {
       const nextIndex = activeQuestionIndex + 1;
-      const nextQ = prepareQuestionForPlay(playQuestions[nextIndex]);
-      setPlayQuestions((prev) => {
-        const copy = [...prev];
-        copy[nextIndex] = nextQ;
-        return copy;
-      });
+      const queued = activeQuestionForIndex(playQuestions, session.question_order, nextIndex);
+      if (!queued) throw new Error(t('questionUnavailable'));
+      const nextQ = prepareQuestionForPlay(queued);
+      setPlayQuestions((prev) => prev.map((item) => (item.id === nextQ.id ? nextQ : item)));
 
       const { serverStartedAt } = await goToNextQuestion(session.id, nextIndex);
       setRevealData(null);
@@ -814,15 +852,16 @@ export default function HostGameClient({
   };
 
   // Question Jumper: Jump to any question index
-  const handleJumpToQuestion = async (targetIndex: number) => {
-    if (targetIndex < 0 || targetIndex >= playQuestions.length || targetIndex === activeQuestionIndex) return;
+  const handleJumpToQuestion = async (listIndex: number) => {
+    const target = playQuestions[listIndex];
+    if (!target) return;
+    // The jumper lists the host's own array; the session stores a position in
+    // question_order. Translate, or the phones jump somewhere else.
+    const targetIndex = sessionIndexForQuestion(session.question_order, target.id, listIndex);
+    if (targetIndex === activeQuestionIndex) return;
     try {
-      const targetQ = prepareQuestionForPlay(playQuestions[targetIndex]);
-      setPlayQuestions((prev) => {
-        const copy = [...prev];
-        copy[targetIndex] = targetQ;
-        return copy;
-      });
+      const targetQ = prepareQuestionForPlay(target);
+      setPlayQuestions((prev) => prev.map((item) => (item.id === targetQ.id ? targetQ : item)));
 
       const { serverStartedAt } = await goToNextQuestion(session.id, targetIndex);
       setRevealData(null);
@@ -858,7 +897,12 @@ export default function HostGameClient({
   };
 
   const connectedCount = connectedPlayerCount(players);
-  const isLastQuestion = activeQuestionIndex === playQuestions.length - 1;
+  const totalQuestions = sessionQuestionCount(session.question_order, playQuestions.length);
+  const isLastQuestion = isLastSessionIndex(
+    session.question_order,
+    playQuestions.length,
+    activeQuestionIndex
+  );
   const quitControl = (
     <Button type="button" variant="ghost" className={hostCtrl} onClick={() => void handleCloseSession()}>
       <LogOut className="h-3.5 w-3.5" /> {t('quitRoom')}
@@ -1131,7 +1175,7 @@ export default function HostGameClient({
         <div className="z-10 flex items-center justify-between gap-4">
           <div className="flex flex-wrap items-center gap-2">
             <LiveChip>
-              {t('questionLabel')} {activeQuestionIndex + 1} {t('ofWord')} {playQuestions.length}
+              {t('questionLabel')} {activeQuestionIndex + 1} {t('ofWord')} {totalQuestions}
             </LiveChip>
 
             {/* Question Jumper Dropdown */}
@@ -1153,12 +1197,15 @@ export default function HostGameClient({
                       type="button"
                       onClick={() => handleJumpToQuestion(idx)}
                       className={`w-full px-3 py-2 text-left text-xs font-semibold transition-colors ${
-                        idx === activeQuestionIndex
+                        sessionIndexForQuestion(session.question_order, q.id, idx) ===
+                        activeQuestionIndex
                           ? 'bg-arena-signal text-white cursor-default'
                           : 'text-white/80 hover:bg-white/10 hover:text-white'
                       }`}
                     >
-                      <span className="font-black">Q{idx + 1}</span>{' '}
+                      <span className="font-black">
+                        Q{sessionIndexForQuestion(session.question_order, q.id, idx) + 1}
+                      </span>{' '}
                       <span dir="auto" className="truncate text-white/60">{q.prompt.slice(0, 30)}{q.prompt.length > 30 ? '...' : ''}</span>
                     </button>
                   ))}

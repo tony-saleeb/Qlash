@@ -1,10 +1,23 @@
 import { NextResponse } from 'next/server';
 import { RATE_LIMITS } from '@/lib/game/constants';
-import { clientIpFromRequest, rateLimit } from '@/lib/rate-limit';
+import { clientIpFromRequest, rateLimit, rateLimitSharded } from '@/lib/rate-limit';
 
 export async function limitPlayerHydrate(request: Request, bucket: string) {
   return rateLimit({
     key: `${bucket}:${clientIpFromRequest(request)}`,
+    limit: RATE_LIMITS.playerHydratePerIp.limit,
+    windowMs: RATE_LIMITS.playerHydratePerIp.windowMs,
+  });
+}
+
+/**
+ * Same budget as limitPlayerHydrate, spread across shards. Use on paths where
+ * all 80 phones fire at the same moment and the player id is known.
+ */
+export async function limitPlayerHydrateSharded(request: Request, bucket: string, playerId: string) {
+  return rateLimitSharded({
+    key: `${bucket}:${clientIpFromRequest(request)}`,
+    seed: playerId,
     limit: RATE_LIMITS.playerHydratePerIp.limit,
     windowMs: RATE_LIMITS.playerHydratePerIp.windowMs,
   });

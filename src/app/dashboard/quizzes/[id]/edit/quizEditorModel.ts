@@ -79,6 +79,25 @@ export function createDefaultQuestion(
   };
 }
 
+/**
+ * Imported rows must stay inside the editor's own ranges. A zero or negative
+ * time limit grades every answer as late and kills the round for the whole
+ * room, so an unusable CSV value falls back to the default instead.
+ */
+export const TIME_LIMIT_MIN_SECONDS = 5;
+export const TIME_LIMIT_MAX_SECONDS = 120;
+export const POINTS_BASE_MAX = 2000;
+
+export function clampTimeLimit(seconds: number, fallback = 20): number {
+  if (!Number.isFinite(seconds) || seconds <= 0) return fallback;
+  return Math.min(TIME_LIMIT_MAX_SECONDS, Math.max(TIME_LIMIT_MIN_SECONDS, Math.round(seconds)));
+}
+
+export function clampPointsBase(points: number, fallback = 1000): number {
+  if (!Number.isFinite(points) || points < 0) return fallback;
+  return Math.min(POINTS_BASE_MAX, Math.round(points));
+}
+
 export function parseCsvQuestions(csvText: string): Question[] {
   const lines = csvText.split('\n');
   const importedQs: Question[] = [];
@@ -116,8 +135,8 @@ export function parseCsvQuestions(csvText: string): Question[] {
 
     const [prompt, typeInput, timeLimit, points, gradingField, ...choices] = cells;
     const type = (typeInput.trim().toLowerCase() as Question['type']) || 'mcq';
-    const limitSec = parseInt(timeLimit) || 20;
-    const basePts = parseInt(points) || 1000;
+    const limitSec = clampTimeLimit(parseInt(timeLimit));
+    const basePts = clampPointsBase(parseInt(points));
 
     let answers: AnswerOption[] = [];
 

@@ -12,6 +12,7 @@ const { rateLimitMock } = vi.hoisted(() => ({
 
 vi.mock('@/lib/rate-limit', () => ({
   rateLimit: (...args: unknown[]) => rateLimitMock(...args),
+  rateLimitSharded: (...args: unknown[]) => rateLimitMock(...args),
   clientIpFromRequest: () => 'test-ip',
 }));
 

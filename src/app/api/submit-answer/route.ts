@@ -1,6 +1,6 @@
 import { NextResponse } from 'next/server';
 import { createAdminClient } from '@/lib/supabase/admin';
-import { clientIpFromRequest, rateLimit } from '@/lib/rate-limit';
+import { clientIpFromRequest, rateLimit, rateLimitSharded } from '@/lib/rate-limit';
 import { RATE_LIMITS } from '@/lib/game/constants';
 
 export const dynamic = 'force-dynamic';
@@ -40,8 +40,9 @@ export async function POST(request: Request) {
 
     // Both buckets are needed for every valid submit — one round-trip, not two.
     const [ipLimit, playerLimit] = await Promise.all([
-      rateLimit({
+      rateLimitSharded({
         key: `submit:${ip}`,
+        seed: String(playerId),
         limit: RATE_LIMITS.submitPerIp.limit,
         windowMs: RATE_LIMITS.submitPerIp.windowMs,
       }),

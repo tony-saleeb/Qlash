@@ -1,6 +1,10 @@
 import { NextResponse } from 'next/server';
 import { createAdminClient } from '@/lib/supabase/admin';
-import { limitPlayerHydrate, tooManyIfPlayerHydrateLimited, tooManyRequests } from '@/lib/api/playerLimit';
+import {
+  limitPlayerHydrateSharded,
+  tooManyIfPlayerHydrateLimited,
+  tooManyRequests,
+} from '@/lib/api/playerLimit';
 import { sanitizeAnswers, type AnswerOption } from '@/lib/game/types';
 import { maybeSeededShuffle } from '@/lib/game/shuffle';
 
@@ -13,14 +17,14 @@ export const dynamic = 'force-dynamic';
  */
 export async function POST(request: Request) {
   try {
-    const limited = await limitPlayerHydrate(request, 'question');
-    if (!limited.ok) return tooManyRequests(limited.retryAfterSec);
-
     const { sessionId, playerId, token } = await request.json();
 
     if (!sessionId || !playerId || !token) {
       return NextResponse.json({ error: 'Missing parameters' }, { status: 400 });
     }
+
+    const limited = await limitPlayerHydrateSharded(request, 'question', playerId);
+    if (!limited.ok) return tooManyRequests(limited.retryAfterSec);
 
     const admin = createAdminClient();
 

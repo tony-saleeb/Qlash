@@ -41,6 +41,18 @@ export function rateLimitMemory(params: {
   return { ok: true };
 }
 
+/**
+ * When the RPC is missing, stop paying a doomed round-trip on every request.
+ * Re-probe once a minute so applying the migration heals without a redeploy.
+ */
+const REMOTE_PROBE_COOLDOWN_MS = 60_000;
+let remoteUnavailableUntil = 0;
+
+/** Test seam — clears the "RPC is missing" memo. */
+export function resetRemoteRateLimitProbe() {
+  remoteUnavailableUntil = 0;
+}
+
 async function rateLimitRemote(params: {
   key: string;
   limit: number;
@@ -49,6 +61,7 @@ async function rateLimitRemote(params: {
   if (!process.env.SUPABASE_SERVICE_ROLE_KEY || !process.env.NEXT_PUBLIC_SUPABASE_URL) {
     return null;
   }
+  if (Date.now() < remoteUnavailableUntil) return null;
   try {
     const admin = createAdminClient();
     const { data, error } = await admin.rpc('consume_rate_limit', {
@@ -56,7 +69,11 @@ async function rateLimitRemote(params: {
       p_limit: params.limit,
       p_window_ms: params.windowMs,
     });
-    if (error || data == null) return null;
+    if (error || data == null) {
+      remoteUnavailableUntil = Date.now() + REMOTE_PROBE_COOLDOWN_MS;
+      return null;
+    }
+    remoteUnavailableUntil = 0;
     const result = data as { ok?: boolean; retryAfterSec?: number };
     if (result.ok) return { ok: true };
     return {
@@ -64,6 +81,7 @@ async function rateLimitRemote(params: {
       retryAfterSec: Math.max(1, Number(result.retryAfterSec) || 1),
     };
   } catch {
+    remoteUnavailableUntil = Date.now() + REMOTE_PROBE_COOLDOWN_MS;
     return null;
   }
 }
@@ -76,6 +94,41 @@ export async function rateLimit(params: {
   const remote = await rateLimitRemote(params);
   if (remote) return remote;
   return rateLimitMemory(params);
+}
+
+/**
+ * A class shares one school IP, so an un-sharded per-IP bucket is a single
+ * Postgres row that all 80 phones must lock in turn. Spreading the bucket over
+ * fixed shards keeps the same total budget without the queue.
+ */
+export const RATE_LIMIT_SHARDS = 8;
+
+export function shardedRateLimitKey(key: string, seed: string, shards = RATE_LIMIT_SHARDS): string {
+  let hash = 0;
+  for (let i = 0; i < seed.length; i += 1) {
+    hash = (hash * 31 + seed.charCodeAt(i)) | 0;
+  }
+  return `${key}#${Math.abs(hash) % shards}`;
+}
+
+export function shardedRateLimitBudget(limit: number, shards = RATE_LIMIT_SHARDS): number {
+  return Math.max(1, Math.ceil(limit / shards));
+}
+
+/** Per-IP limiting for a hot path. `seed` must be stable per player. */
+export async function rateLimitSharded(params: {
+  key: string;
+  seed: string;
+  limit: number;
+  windowMs: number;
+  shards?: number;
+}): Promise<RateLimitResult> {
+  const shards = params.shards ?? RATE_LIMIT_SHARDS;
+  return rateLimit({
+    key: shardedRateLimitKey(params.key, params.seed, shards),
+    limit: shardedRateLimitBudget(params.limit, shards),
+    windowMs: params.windowMs,
+  });
 }
 
 /** Best-effort client IP. Prefer the platform hop so clients cannot spoof XFF. */

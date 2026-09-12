@@ -61,6 +61,8 @@ SENTRY_DSN=...
 
 After `schema-p4-ops.sql`, run `scripts/verify-rate-limit.sql`. If `consume_rate_limit` is missing, join/submit limits are per Vercel instance only.
 
+Live grading lives in `submit_live_answer`; `src/lib/game/scoring.ts` only mirrors it for the provisional score a phone shows before the reveal. Both are pinned to `src/lib/game/scoringFixture.ts` — CI checks the TypeScript side, and `scripts/verify-scoring.sql` replays the same cases through the real RPC and rolls back. Run it after touching either grader.
+
 Players can add `/play` to the home screen (PWA). Live rooms still need a network.
 
 Supabase **Authentication → URL configuration**:

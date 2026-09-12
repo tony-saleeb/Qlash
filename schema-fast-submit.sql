@@ -1,6 +1,9 @@
 -- Fast path: one round-trip answer submit for ~80 concurrent players.
 -- Canonical live grading. src/lib/game/scoring.ts is a TypeScript copy for unit tests only.
 -- Run in Supabase SQL editor.
+--
+-- Both graders are pinned to src/lib/game/scoringFixture.ts. After changing any
+-- formula below, re-run scripts/verify-scoring.sql and the contract test.
 
 create or replace function public.submit_live_answer(
   p_player_id uuid,

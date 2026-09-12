@@ -1,7 +1,10 @@
 /**
  * Test-only mirror of submit_live_answer in schema-fast-submit.sql.
  * Live grading is the SQL RPC. Do not import this from submit or the live clients.
- * Keep the formulas in lockstep by eye until both sides share one fixture.
+ *
+ * Both sides are pinned to scoringFixture.ts: scoringContract.test.ts checks
+ * this file on every run, scripts/verify-scoring.sql checks the RPC. Change a
+ * formula here only together with the SQL and the fixture.
  */
 export type ScoringType = 'linear' | 'flat' | 'none' | string;
 
@@ -77,7 +80,11 @@ export function calculatePoints(params: {
   let pointsAwarded = 0;
 
   if (scoringType === 'linear') {
-    const ratio = Math.max(0, Math.min(1, timeTakenMs / timeLimitMs));
+    // A missing or zero limit has no clock to decay against. Postgres divides by
+    // nullif(limit, 0) and greatest() drops the null, so the canonical grader
+    // pays full base here — match it rather than decaying or returning NaN.
+    const ratio =
+      timeLimitMs > 0 ? Math.max(0, Math.min(1, timeTakenMs / timeLimitMs)) : 0;
     const decay = 1 - 0.5 * ratio;
     pointsAwarded = Math.round(pointsBase * decay);
   } else if (scoringType === 'flat') {

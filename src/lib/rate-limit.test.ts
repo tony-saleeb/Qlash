@@ -1,7 +1,16 @@
 import { beforeEach, describe, expect, it, vi } from 'vitest';
 import { createClientMock } from '@/test/supabaseMock';
 import { createAdminClient } from '@/lib/supabase/admin';
-import { clientIpFromRequest, rateLimit, rateLimitMemory } from '@/lib/rate-limit';
+import {
+  RATE_LIMIT_SHARDS,
+  clientIpFromRequest,
+  rateLimit,
+  rateLimitMemory,
+  rateLimitSharded,
+  resetRemoteRateLimitProbe,
+  shardedRateLimitBudget,
+  shardedRateLimitKey,
+} from '@/lib/rate-limit';
 
 vi.mock('@/lib/supabase/admin', () => ({
   createAdminClient: vi.fn(),
@@ -43,9 +52,19 @@ describe('rateLimitMemory', () => {
 describe('rateLimit remote', () => {
   beforeEach(() => {
     admin.reset();
+    resetRemoteRateLimitProbe();
     vi.mocked(createAdminClient).mockReturnValue(admin as never);
     process.env.SUPABASE_SERVICE_ROLE_KEY = 'service-role';
     process.env.NEXT_PUBLIC_SUPABASE_URL = 'https://example.supabase.co';
+  });
+
+  it('stops calling a missing RPC on every request', async () => {
+    admin.setRpc('consume_rate_limit', { data: null, error: { message: 'function does not exist' } });
+    await rateLimit({ key: `probe-${Math.random()}`, limit: 50, windowMs: 30_000 });
+    expect(admin.rpc).toHaveBeenCalledTimes(1);
+    await rateLimit({ key: `probe-${Math.random()}`, limit: 50, windowMs: 30_000 });
+    await rateLimit({ key: `probe-${Math.random()}`, limit: 50, windowMs: 30_000 });
+    expect(admin.rpc).toHaveBeenCalledTimes(1);
   });
 
   it('uses consume_rate_limit when the RPC answers', async () => {
@@ -63,6 +82,38 @@ describe('rateLimit remote', () => {
     const key = `fallback-${Math.random()}`;
     await expect(rateLimit({ key, limit: 1, windowMs: 30_000 })).resolves.toEqual({ ok: true });
     const blocked = await rateLimit({ key, limit: 1, windowMs: 30_000 });
+    expect(blocked.ok).toBe(false);
+  });
+});
+
+describe('sharded buckets', () => {
+  beforeEach(() => {
+    resetRemoteRateLimitProbe();
+    delete process.env.SUPABASE_SERVICE_ROLE_KEY;
+  });
+
+  it('keeps a player on one shard and spreads a class over many', () => {
+    expect(shardedRateLimitKey('submit:1.2.3.4', 'p1')).toBe(
+      shardedRateLimitKey('submit:1.2.3.4', 'p1')
+    );
+    const shards = new Set(
+      Array.from({ length: 80 }, (_, i) => shardedRateLimitKey('submit:1.2.3.4', `player-${i}`))
+    );
+    expect(shards.size).toBeGreaterThan(1);
+    expect(shards.size).toBeLessThanOrEqual(RATE_LIMIT_SHARDS);
+  });
+
+  it('divides the budget so the total stays put', () => {
+    expect(shardedRateLimitBudget(900)).toBe(113);
+    expect(shardedRateLimitBudget(900) * RATE_LIMIT_SHARDS).toBeGreaterThanOrEqual(900);
+    expect(shardedRateLimitBudget(2)).toBe(1);
+  });
+
+  it('still throttles a single player hammering one shard', async () => {
+    const key = `sharded-${Math.random()}`;
+    const params = { key, seed: 'p1', limit: 8, windowMs: 30_000, shards: 8 };
+    await expect(rateLimitSharded(params)).resolves.toEqual({ ok: true });
+    const blocked = await rateLimitSharded(params);
     expect(blocked.ok).toBe(false);
   });
 });

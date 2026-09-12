@@ -205,6 +205,7 @@ const en = {
   failedLeaderboard: 'Failed to show leaderboard.',
   loadingNextQuestion: 'Loading next question.',
   failedNextQuestion: 'Failed to load next question.',
+  questionUnavailable: 'That question is no longer in this quiz. Reload the room.',
   failedPodium: 'Failed to show podium.',
   openingNewLobby: 'Opening a new lobby…',
   lobbyReady: 'Lobby ready.',

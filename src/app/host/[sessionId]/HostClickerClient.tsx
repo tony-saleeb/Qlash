@@ -30,6 +30,11 @@ import {
   type GameSessionRow,
 } from '@/lib/game/types';
 import { maybeSeededShuffle, questionsInPlayOrder } from '@/lib/game/shuffle';
+import {
+  activeQuestionForIndex,
+  isLastSessionIndex,
+  sessionQuestionCount,
+} from '@/lib/game/playOrder';
 import { remainingFromPausedElapsed, remainingSeconds } from '@/lib/game/clock';
 import {
   DEFAULT_LATE_JOIN_THROUGH_INDEX,
@@ -119,7 +124,12 @@ export default function HostClickerClient({
     [randomizeAnswers, session.id]
   );
 
-  const activeQuestion = playQuestions[session.current_question_index] || playQuestions[0] || null;
+  // By id from question_order, like the phones — array position desyncs the room.
+  const activeQuestion = activeQuestionForIndex(
+    playQuestions,
+    session.question_order,
+    session.current_question_index
+  );
   const activeQuestionRef = useRef(activeQuestion);
   activeQuestionRef.current = activeQuestion;
 
@@ -326,7 +336,9 @@ export default function HostClickerClient({
   const handleNext = () =>
     run(async () => {
       const nextIndex = session.current_question_index + 1;
-      const nextQ = prepareQuestionForPlay(playQuestions[nextIndex]);
+      const queued = activeQuestionForIndex(playQuestions, session.question_order, nextIndex);
+      if (!queued) throw new Error(t('questionUnavailable'));
+      const nextQ = prepareQuestionForPlay(queued);
       const { serverStartedAt } = await goToNextQuestion(session.id, nextIndex);
       revealingRef.current = false;
       void sendSessionEvent('question:start', buildQuestionStartPayload(nextQ, nextIndex, serverStartedAt));
@@ -449,7 +461,8 @@ export default function HostClickerClient({
       {(session.status === 'question_active' || session.status === 'question_paused') && activeQuestion && (
         <div className="mt-5 flex flex-1 flex-col gap-4">
           <p className="text-[11px] font-bold uppercase tracking-[0.2em] text-white/45">
-            {t('questionLabel')} {session.current_question_index + 1} {t('ofWord')} {playQuestions.length}
+            {t('questionLabel')} {session.current_question_index + 1} {t('ofWord')}{' '}
+            {sessionQuestionCount(session.question_order, playQuestions.length)}
             {session.status === 'question_paused' ? ` · ${t('paused')}` : ''}
           </p>
           <p dir="auto" className="line-clamp-3 font-display text-xl font-extrabold">
@@ -521,7 +534,11 @@ export default function HostClickerClient({
 
       {session.status === 'leaderboard' && (
         <div className="mt-8 flex flex-1 flex-col justify-end gap-3">
-          {session.current_question_index < playQuestions.length - 1 ? (
+          {!isLastSessionIndex(
+            session.question_order,
+            playQuestions.length,
+            session.current_question_index
+          ) ? (
             <Button
               type="button"
               disabled={busy}

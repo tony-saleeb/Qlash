@@ -1,6 +1,12 @@
 import { describe, expect, it } from 'vitest';
 import { ANSWER_MARKS } from '@/lib/game/marks';
-import { createDefaultQuestion, importQuestionsFromText, parseCsvQuestions } from '@/app/dashboard/quizzes/[id]/edit/quizEditorModel';
+import {
+  clampPointsBase,
+  clampTimeLimit,
+  createDefaultQuestion,
+  importQuestionsFromText,
+  parseCsvQuestions,
+} from '@/app/dashboard/quizzes/[id]/edit/quizEditorModel';
 
 describe('createDefaultQuestion', () => {
   it('builds a 4-choice MCQ on linear scoring', () => {
@@ -28,6 +34,32 @@ describe('createDefaultQuestion', () => {
     const question = createDefaultQuestion('poll');
     expect(question.scoring_type).toBe('none');
     expect(question.answers.every((a) => a.is_correct === false)).toBe(true);
+  });
+});
+
+describe('imported question limits', () => {
+  it('never lets an import produce an ungradeable clock', () => {
+    expect(clampTimeLimit(-5)).toBe(20);
+    expect(clampTimeLimit(0)).toBe(20);
+    expect(clampTimeLimit(NaN)).toBe(20);
+    expect(clampTimeLimit(1)).toBe(5);
+    expect(clampTimeLimit(15)).toBe(15);
+    expect(clampTimeLimit(9000)).toBe(120);
+  });
+
+  it('keeps base points inside the editor slider range', () => {
+    expect(clampPointsBase(-100)).toBe(1000);
+    expect(clampPointsBase(NaN)).toBe(1000);
+    expect(clampPointsBase(0)).toBe(0);
+    expect(clampPointsBase(800)).toBe(800);
+    expect(clampPointsBase(99999)).toBe(2000);
+  });
+
+  it('clamps a hostile CSV row instead of killing the round', () => {
+    const csv = 'Capital?,mcq,-30,999999,2,Paris,Lyon,Nice,Lille';
+    const [question] = parseCsvQuestions(csv);
+    expect(question.time_limit_seconds).toBe(20);
+    expect(question.points_base).toBe(2000);
   });
 });
 

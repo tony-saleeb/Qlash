@@ -1,6 +1,10 @@
 import { NextResponse } from 'next/server';
 import { createAdminClient } from '@/lib/supabase/admin';
-import { limitPlayerHydrate, tooManyIfPlayerHydrateLimited, tooManyRequests } from '@/lib/api/playerLimit';
+import {
+  limitPlayerHydrateSharded,
+  tooManyIfPlayerHydrateLimited,
+  tooManyRequests,
+} from '@/lib/api/playerLimit';
 import { correctAnswerIds, type AnswerOption } from '@/lib/game/types';
 
 export const dynamic = 'force-dynamic';
@@ -8,14 +12,14 @@ export const dynamic = 'force-dynamic';
 /** Return the calling player's own submission for a question (token-gated). */
 export async function POST(request: Request) {
   try {
-    const limited = await limitPlayerHydrate(request, 'result');
-    if (!limited.ok) return tooManyRequests(limited.retryAfterSec);
-
     const { sessionId, playerId, token, questionId } = await request.json();
 
     if (!sessionId || !playerId || !token || !questionId) {
       return NextResponse.json({ error: 'Missing parameters' }, { status: 400 });
     }
+
+    const limited = await limitPlayerHydrateSharded(request, 'result', playerId);
+    if (!limited.ok) return tooManyRequests(limited.retryAfterSec);
 
     const admin = createAdminClient();
 
