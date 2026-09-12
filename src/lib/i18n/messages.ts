@@ -484,6 +484,7 @@ const ar: Record<keyof typeof en, string> = {
   failedLeaderboard: 'فشل عرض الترتيب.',
   loadingNextQuestion: 'بنحمّل السؤال اللي بعده.',
   failedNextQuestion: 'فشل تحميل السؤال اللي بعده.',
+  questionUnavailable: 'السؤال ده مش موجود في الكويز. حدّث الغرفة.',
   failedPodium: 'فشل عرض المنصة.',
   openingNewLobby: 'بنفتح غرفة جديدة…',
   lobbyReady: 'الغرفة جاهزة.',
