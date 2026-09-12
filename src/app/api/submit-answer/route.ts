@@ -28,18 +28,6 @@ function mapRpcError(message: string) {
 export async function POST(request: Request) {
   try {
     const ip = clientIpFromRequest(request);
-    const ipLimit = await rateLimit({
-      key: `submit:${ip}`,
-      limit: RATE_LIMITS.submitPerIp.limit,
-      windowMs: RATE_LIMITS.submitPerIp.windowMs,
-    });
-    if (!ipLimit.ok) {
-      return NextResponse.json(
-        { error: 'Too many submissions from this network. Please wait.' },
-        { status: 429, headers: { 'Retry-After': String(ipLimit.retryAfterSec) } }
-      );
-    }
-
     const body = await request.json();
     const { sessionId, playerId, token, questionId, selectedAnswerIds } = body;
 
@@ -50,11 +38,27 @@ export async function POST(request: Request) {
       return NextResponse.json({ error: 'Invalid answer payload.' }, { status: 400 });
     }
 
-    const playerLimit = await rateLimit({
-      key: `submit:player:${playerId}`,
-      limit: RATE_LIMITS.submitPerPlayer.limit,
-      windowMs: RATE_LIMITS.submitPerPlayer.windowMs,
-    });
+    // Both buckets are needed for every valid submit — one round-trip, not two.
+    const [ipLimit, playerLimit] = await Promise.all([
+      rateLimit({
+        key: `submit:${ip}`,
+        limit: RATE_LIMITS.submitPerIp.limit,
+        windowMs: RATE_LIMITS.submitPerIp.windowMs,
+      }),
+      rateLimit({
+        key: `submit:player:${playerId}`,
+        limit: RATE_LIMITS.submitPerPlayer.limit,
+        windowMs: RATE_LIMITS.submitPerPlayer.windowMs,
+      }),
+    ]);
+
+    if (!ipLimit.ok) {
+      return NextResponse.json(
+        { error: 'Too many submissions from this network. Please wait.' },
+        { status: 429, headers: { 'Retry-After': String(ipLimit.retryAfterSec) } }
+      );
+    }
+
     if (!playerLimit.ok) {
       return NextResponse.json(
         { error: 'Slow down — answer already being processed.' },

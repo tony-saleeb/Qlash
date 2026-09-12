@@ -24,7 +24,8 @@ export async function POST(request: Request) {
 
     const admin = createAdminClient();
 
-    const [{ data: tokenRow }, { data: player }, { data: session }] = await Promise.all([
+    // 80 phones hydrate at once — keep this to a single round-trip of reads.
+    const [{ data: tokenRow }, { data: player }, { data: session }, perPlayer] = await Promise.all([
       admin.from('player_tokens').select('client_token').eq('player_id', playerId).maybeSingle(),
       admin.from('players').select('id').eq('id', playerId).eq('session_id', sessionId).maybeSingle(),
       admin
@@ -34,6 +35,7 @@ export async function POST(request: Request) {
         )
         .eq('id', sessionId)
         .single(),
+      tooManyIfPlayerHydrateLimited(playerId, 'question'),
     ]);
 
     if (!tokenRow || tokenRow.client_token !== token) {
@@ -44,7 +46,6 @@ export async function POST(request: Request) {
       return NextResponse.json({ error: 'Player not found.' }, { status: 404 });
     }
 
-    const perPlayer = await tooManyIfPlayerHydrateLimited(playerId, 'question');
     if (perPlayer) return perPlayer;
 
     if (!session) {

@@ -168,6 +168,53 @@ describe('PlayerGameClient', () => {
     expect(screen.getByRole('button', { name: /lyon/i })).toBeInTheDocument();
   });
 
+  it('still shows the question after a throttled hydrate', async () => {
+    localStorage.setItem('quizarena_token_sess-1', 'tok');
+    let hydrateCalls = 0;
+    vi.stubGlobal(
+      'fetch',
+      vi.fn(async (input: RequestInfo | URL) => {
+        const url = String(input);
+        if (url.includes('/api/player/me')) {
+          return jsonResponse({ player, sessionStatus: 'question_active' });
+        }
+        if (url.includes('/api/player/current-question')) {
+          hydrateCalls += 1;
+          if (hydrateCalls === 1) {
+            return new Response(JSON.stringify({ error: 'Too many requests. Please wait.' }), {
+              status: 429,
+              headers: { 'Content-Type': 'application/json', 'Retry-After': '1' },
+            });
+          }
+          return jsonResponse({
+            success: true,
+            status: 'question_active',
+            server_started_at: new Date().toISOString(),
+            question: {
+              id: 'q1',
+              type: 'mcq',
+              prompt: 'Which month starts the Coptic year?',
+              media_url: null,
+              media_type: null,
+              time_limit_seconds: 20,
+              answers: [
+                { id: 'a', text: 'Tout', color: '#e11d2e', shape: 'slash' },
+                { id: 'b', text: 'Baba', color: '#4a2aff', shape: 'qring' },
+              ],
+            },
+          });
+        }
+        return jsonResponse({}, 404);
+      })
+    );
+
+    render(<PlayerGameClient sessionId="sess-1" initialSessionStatus="question_active" />);
+    expect(
+      await screen.findByText('Which month starts the Coptic year?', undefined, { timeout: 5000 })
+    ).toBeInTheDocument();
+    expect(hydrateCalls).toBeGreaterThan(1);
+  });
+
   it('locks an MCQ choice through submit-answer', async () => {
     localStorage.setItem('quizarena_token_sess-1', 'tok');
     const fetchMock = vi.fn(async (input: RequestInfo | URL, init?: RequestInit) => {

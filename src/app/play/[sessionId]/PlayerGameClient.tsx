@@ -37,6 +37,13 @@ import { answerUsesInk, resolveAnswerColor } from '@/lib/game/marks';
 import { aggregateTeamScores } from '@/lib/game/teams';
 import { playerJoinedAfterQuestionStart } from '@/lib/game/lateJoin';
 import { canSendReaction, type LobbyReactionId } from '@/lib/game/reactions';
+import {
+  HYDRATE_MAX_ATTEMPTS,
+  HYDRATE_WATCHDOG_MS,
+  hydrateRetryDelayMs,
+  hydrateShouldRetry,
+  needsQuestionHydrate,
+} from '@/lib/game/hydrateRetry';
 import { rankMove, rankOfPlayer } from '@/lib/game/rankMove';
 import { roundCallout } from '@/lib/game/roundCallout';
 import { LocaleToggle } from '@/components/brand/LocaleToggle';
@@ -123,6 +130,8 @@ export default function PlayerGameClient({
   const sawOpenQuestionRef = React.useRef(false);
   const sessionStatusRef = React.useRef(sessionStatus);
   const lastStartSoundQidRef = React.useRef<string | null>(null);
+  const hydrateInFlightRef = React.useRef(false);
+  const hydrateAgainRef = React.useRef(false);
   liveRankRef.current = liveRank;
   sessionStatusRef.current = sessionStatus;
 
@@ -238,17 +247,31 @@ export default function PlayerGameClient({
     [syncQuestionClock]
   );
 
-  const hydrateCurrentQuestion = useCallback(
+  const hydrateOnce = useCallback(
     async (playerId: string) => {
       const token = localStorage.getItem(`quizarena_token_${sessionId}`) || '';
       try {
-        const res = await fetch('/api/player/current-question', {
-          method: 'POST',
-          headers: { 'Content-Type': 'application/json' },
-          body: JSON.stringify({ sessionId, playerId, token }),
-        });
+        let res: Response | null = null;
+        for (let attempt = 0; attempt < HYDRATE_MAX_ATTEMPTS; attempt += 1) {
+          try {
+            res = await fetch('/api/player/current-question', {
+              method: 'POST',
+              headers: { 'Content-Type': 'application/json' },
+              body: JSON.stringify({ sessionId, playerId, token }),
+            });
+          } catch {
+            res = null;
+          }
+          if (res?.ok) break;
+          if (res && !hydrateShouldRetry(res.status)) return;
+          if (attempt === HYDRATE_MAX_ATTEMPTS - 1) return;
+          const retryAfter = Number(res?.headers.get('Retry-After'));
+          await new Promise((resolve) =>
+            setTimeout(resolve, hydrateRetryDelayMs(attempt, Number.isFinite(retryAfter) ? retryAfter : null))
+          );
+        }
+        if (!res?.ok) return;
         const data = await res.json();
-        if (!res.ok) return;
 
         if (data.status) setSessionStatus(data.status);
         if (typeof data.active_multiplier === 'number') {
@@ -312,6 +335,31 @@ export default function PlayerGameClient({
       }
     },
     [sessionId, applyQuestionPayload, syncQuestionClock]
+  );
+
+  /**
+   * question:start and the game_sessions UPDATE both land at once, so collapse
+   * overlapping calls into one request and replay only the last one.
+   */
+  const hydrateCurrentQuestion = useCallback(
+    async (playerId: string) => {
+      if (hydrateInFlightRef.current) {
+        hydrateAgainRef.current = true;
+        return;
+      }
+      hydrateInFlightRef.current = true;
+      try {
+        await hydrateOnce(playerId);
+        while (hydrateAgainRef.current) {
+          hydrateAgainRef.current = false;
+          await hydrateOnce(playerId);
+        }
+      } finally {
+        hydrateInFlightRef.current = false;
+        hydrateAgainRef.current = false;
+      }
+    },
+    [hydrateOnce]
   );
 
   const loadPodium = useCallback(
@@ -648,6 +696,21 @@ export default function PlayerGameClient({
       window.removeEventListener('pagehide', handlePageHide);
     };
   }, [supabase, player?.id, sessionId, router, hydrateCurrentQuestion, applyRevealInstant, loadPodium, t]);
+
+  /**
+   * Last line of defence against a spinner: if the room is on a question and
+   * this player still has no payload, keep asking until it arrives. Covers a
+   * dropped broadcast, a missed Realtime frame, and a throttled hydrate alike.
+   */
+  useEffect(() => {
+    const playerId = player?.id;
+    if (!playerId) return;
+    if (!needsQuestionHydrate({ status: sessionStatus, hasQuestion: Boolean(activeQuestion) })) return;
+    const id = window.setInterval(() => {
+      void hydrateCurrentQuestion(playerId);
+    }, HYDRATE_WATCHDOG_MS);
+    return () => window.clearInterval(id);
+  }, [player?.id, sessionStatus, activeQuestion, hydrateCurrentQuestion]);
 
   useEffect(() => {
     if (sessionStatus !== 'question_active' || !activeQuestion || !clockStartedAt) return;
