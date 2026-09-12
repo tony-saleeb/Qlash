@@ -54,7 +54,16 @@ describe('POST /api/player/join', () => {
     expect(result.body.error).toMatch(/finished/);
   });
 
-  it('blocks new joins mid-game when late join is off and reports GAME_STARTED', async () => {
+  it('lets a first-time player in mid-question even when the old cutoff was lobby-only', async () => {
+    const player = {
+      id: 'p-late',
+      session_id: 'sess-1',
+      nickname: 'Ada',
+      team_name: null,
+      score: 0,
+      streak: 0,
+      connected: true,
+    };
     admin.setTables({
       game_sessions: {
         data: {
@@ -65,13 +74,18 @@ describe('POST /api/player/join', () => {
         },
         error: null,
       },
-      players: { data: null, error: null },
+      players: [
+        { data: null, error: null },
+        { data: null, error: null, count: 4 },
+        { data: player, error: null },
+      ],
+      player_tokens: { data: {}, error: null },
     });
     const { POST } = await import('@/app/api/player/join/route');
     const result = await readJson(await POST(jsonRequest({ pin: '123456', nickname: 'Ada' })));
-    expect(result.status).toBe(403);
-    expect(result.body.code).toBe('GAME_STARTED');
-    expect(result.body.sessionId).toBeUndefined();
+    expect(result.status).toBe(200);
+    expect(result.body.success).toBe(true);
+    expect(result.body.player.id).toBe('p-late');
   });
 
   it('allows a first-time join on a later question when late join is on', async () => {

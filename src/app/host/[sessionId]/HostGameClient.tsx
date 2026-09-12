@@ -20,7 +20,6 @@ import {
   pauseGameSession,
   resumeGameSession,
   addQuestionTime,
-  setLateJoinThroughIndex,
   setHostLocale,
 } from '@/lib/host/hostApi';
 import { Flame, Users, Play, Pause, UserX, AlertCircle, Trophy, ArrowRight, Home, CheckCircle2, Clock, Settings, Edit3, Zap, SkipForward, Send, Activity, ChevronDown, ChevronUp, MessageSquare, X, ClipboardList, Smartphone, Link2, LogOut, MessageCircle } from 'lucide-react';
@@ -57,8 +56,7 @@ import { MAX_PLAYERS_PER_SESSION, SUBMIT_LATE_GRACE_MS } from '@/lib/game/consta
 import { remainingFromPausedElapsed, remainingSeconds } from '@/lib/game/clock';
 import { answerUsesInk, resolveAnswerColor } from '@/lib/game/marks';
 import { AnswerSwatch } from '@/components/brand/AnswerMark';
-import { Switch } from '@/components/ui/switch';
-import { hostClickerPath, isLateJoinEnabled, DEFAULT_LATE_JOIN_THROUGH_INDEX, LATE_JOIN_LOBBY_ONLY } from '@/lib/game/lateJoin';
+import { hostClickerPath } from '@/lib/game/lateJoin';
 import { lobbyJoinPath, lobbyWhatsAppHref } from '@/lib/game/lobbyLink';
 import { podiumPath, podiumWhatsAppHref } from '@/lib/game/podiumShare';
 import { waitingPlayers } from '@/lib/game/waitingPlayers';
@@ -227,7 +225,6 @@ export default function HostGameClient({
   const waiting = waitingPlayers(players, answeredIds);
   const pulsePercent = answerPulsePercent(submissionsCount, players.length);
   const roomLocked = isRoomLocked(submissionsCount, players.length);
-  const lateJoinOn = isLateJoinEnabled(session.late_join_through_index);
   const copyLobbyLink = useCallback(async () => {
     const url = `${window.location.origin}${lobbyJoinPath(session.pin)}`;
     try {
@@ -1083,36 +1080,9 @@ export default function HostGameClient({
         </main>
 
         <footer className="sticky bottom-0 z-20 flex flex-col items-stretch justify-between gap-3 border-t border-white/10 bg-arena-stage/95 px-4 py-3 pb-[max(0.75rem,env(safe-area-inset-bottom))] backdrop-blur-sm sm:gap-4 sm:px-6 sm:py-5 sm:flex-row sm:items-center lg:static lg:bg-black/20 lg:backdrop-blur-none">
-          <div className="flex flex-col gap-3 sm:max-w-md">
-            <p className="hidden text-center text-xs uppercase tracking-[0.14em] text-white/40 sm:block sm:text-left">
-              {t('keepScreenVisible')} <bdi className="text-white font-bold">{session.pin}</bdi>
-            </p>
-            <label className="flex items-center justify-between gap-3 border border-white/15 bg-white/5 px-3 py-2">
-              <span>
-                <span className="block text-xs font-bold text-white/80">{t('lateJoin')}</span>
-                <span className="mt-0.5 hidden text-[10px] font-medium leading-snug text-white/40 sm:block">
-                  {t('lateJoinHint')}
-                </span>
-              </span>
-              <Switch
-                checked={lateJoinOn}
-                onCheckedChange={(enabled) => {
-                  const value = enabled ? DEFAULT_LATE_JOIN_THROUGH_INDEX : LATE_JOIN_LOBBY_ONLY;
-                  void setLateJoinThroughIndex(session.id, value)
-                    .then((result) => {
-                      setSession((prev) => ({
-                        ...prev,
-                        late_join_through_index: result.late_join_through_index,
-                      }));
-                    })
-                    .catch((err: unknown) => {
-                      toast.error(err instanceof Error ? err.message : t('failedLateJoin'));
-                    });
-                }}
-                className="data-checked:bg-arena-acid"
-              />
-            </label>
-          </div>
+          <p className="hidden text-center text-xs uppercase tracking-[0.14em] text-white/40 sm:block sm:text-left">
+            {t('keepScreenVisible')} <bdi className="text-white font-bold">{session.pin}</bdi>
+          </p>
           <div className="flex w-full flex-col gap-2 sm:w-auto sm:flex-row sm:items-center">
             {quitControl}
             <Button

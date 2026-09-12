@@ -4,7 +4,6 @@ import React, { useCallback, useEffect, useMemo, useRef, useState } from 'react'
 import { useRouter } from 'next/navigation';
 import { createClient } from '@/lib/supabase/client';
 import { Button } from '@/components/ui/button';
-import { Switch } from '@/components/ui/switch';
 import { toast } from 'sonner';
 import {
   addQuestionTime,
@@ -14,7 +13,6 @@ import {
   pauseGameSession,
   revealQuestionResults,
   resumeGameSession,
-  setLateJoinThroughIndex,
   startGameSession,
   endGameSession,
 } from '@/lib/host/hostApi';
@@ -36,11 +34,6 @@ import {
   sessionQuestionCount,
 } from '@/lib/game/playOrder';
 import { remainingFromPausedElapsed, remainingSeconds } from '@/lib/game/clock';
-import {
-  DEFAULT_LATE_JOIN_THROUGH_INDEX,
-  LATE_JOIN_LOBBY_ONLY,
-  isLateJoinEnabled,
-} from '@/lib/game/lateJoin';
 import { waitingPlayers } from '@/lib/game/waitingPlayers';
 import { isPlayerConnected } from '@/lib/game/emptyLobby';
 import { answerPulsePercent, isRoomLocked } from '@/lib/game/roomPulse';
@@ -136,7 +129,6 @@ export default function HostClickerClient({
   const waiting = useMemo(() => waitingPlayers(players, answeredIds), [players, answeredIds]);
   const pulsePercent = answerPulsePercent(answeredIds.size, players.length);
   const roomLocked = isRoomLocked(answeredIds.size, players.length);
-  const lateJoinOn = isLateJoinEnabled(session.late_join_through_index);
   const remaining = displayRemaining(session, activeQuestion, clockNow);
   const orderKey = Array.isArray(session.question_order) ? session.question_order.join(',') : '';
   const closeEmptyLobby = useCallback(() => {
@@ -243,14 +235,6 @@ export default function HostClickerClient({
     } finally {
       setBusy(false);
     }
-  };
-
-  const handleToggleLateJoin = (enabled: boolean) => {
-    const value = enabled ? DEFAULT_LATE_JOIN_THROUGH_INDEX : LATE_JOIN_LOBBY_ONLY;
-    void run(async () => {
-      const result = await setLateJoinThroughIndex(session.id, value);
-      setSession((prev) => ({ ...prev, late_join_through_index: result.late_join_through_index }));
-    });
   };
 
   const handleStart = () =>
@@ -410,17 +394,6 @@ export default function HostClickerClient({
           <p className="flex items-center gap-2 font-display text-xl font-extrabold sm:text-2xl">
             <Users className="h-6 w-6 text-arena-acid" /> {players.length} {t('inLobby')}
           </p>
-          <label className="flex items-center justify-between gap-3 border border-white/15 bg-white/5 p-4">
-            <span>
-              <span className="block text-sm font-bold">{t('lateJoin')}</span>
-              <span className="text-xs text-white/50">{t('lateJoinHint')}</span>
-            </span>
-            <Switch
-              checked={lateJoinOn}
-              onCheckedChange={handleToggleLateJoin}
-              className="data-checked:bg-arena-acid"
-            />
-          </label>
           <Button
             type="button"
             variant="ghost"

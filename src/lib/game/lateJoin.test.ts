@@ -1,7 +1,6 @@
 import { describe, expect, it } from 'vitest';
 import {
   DEFAULT_LATE_JOIN_THROUGH_INDEX,
-  LATE_JOIN_LOBBY_ONLY,
   canInsertNewPlayer,
   hostClickerPath,
   isHostClickerView,
@@ -18,42 +17,13 @@ describe('late join', () => {
     expect(isLateJoinEnabled(2)).toBe(true);
   });
 
-  it('always allows lobby inserts and never finished rooms', () => {
-    expect(canInsertNewPlayer({ status: 'lobby', late_join_through_index: LATE_JOIN_LOBBY_ONLY })).toBe(true);
-    expect(canInsertNewPlayer({ status: 'finished', current_question_index: 0, late_join_through_index: 8 })).toBe(
-      false
-    );
-  });
-
-  it('allows live inserts on any question when late join is on', () => {
-    expect(
-      canInsertNewPlayer({
-        status: 'question_active',
-        current_question_index: 1,
-        late_join_through_index: 2,
-      })
-    ).toBe(true);
-    expect(
-      canInsertNewPlayer({
-        status: 'leaderboard',
-        current_question_index: 7,
-        late_join_through_index: 2,
-      })
-    ).toBe(true);
-    expect(
-      canInsertNewPlayer({
-        status: 'question_active',
-        current_question_index: 12,
-        late_join_through_index: 2,
-      })
-    ).toBe(true);
-    expect(
-      canInsertNewPlayer({
-        status: 'question_active',
-        current_question_index: 0,
-        late_join_through_index: LATE_JOIN_LOBBY_ONLY,
-      })
-    ).toBe(false);
+  it('allows inserts in any live room and never in a finished one', () => {
+    expect(canInsertNewPlayer({ status: 'lobby' })).toBe(true);
+    expect(canInsertNewPlayer({ status: 'finished' })).toBe(false);
+    expect(canInsertNewPlayer({ status: 'question_active' })).toBe(true);
+    expect(canInsertNewPlayer({ status: 'question_paused' })).toBe(true);
+    expect(canInsertNewPlayer({ status: 'question_reveal' })).toBe(true);
+    expect(canInsertNewPlayer({ status: 'leaderboard' })).toBe(true);
   });
 
   it('treats a join after question start as a later arrival', () => {

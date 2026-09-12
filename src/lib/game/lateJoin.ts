@@ -19,15 +19,14 @@ export function isLateJoinEnabled(throughIndex: unknown): boolean {
   return normalizeLateJoinThroughIndex(throughIndex) >= 0;
 }
 
-/** Whether a brand-new player (not a reconnect) may insert into this session. */
+/**
+ * Brand-new players may enter any live room. They hydrate the current
+ * question and remaining clock — the host never gates this.
+ */
 export function canInsertNewPlayer(session: {
   status: string;
-  current_question_index?: number | null;
-  late_join_through_index?: number | null;
 }): boolean {
-  if (session.status === 'finished') return false;
-  if (session.status === 'lobby') return true;
-  return isLateJoinEnabled(session.late_join_through_index);
+  return session.status !== 'finished';
 }
 
 /** True when this player arrived after the current question had already started. */

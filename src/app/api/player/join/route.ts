@@ -56,45 +56,15 @@ export async function POST(request: Request) {
       return NextResponse.json({ error: 'Game room not found.' }, { status: 404 });
     }
 
-    if (session.status === 'finished') {
-      return NextResponse.json({ error: 'This game has already finished.' }, { status: 403 });
-    }
-
     const sessionWithQuiz = session as unknown as {
       id: string;
       status: string;
-      current_question_index?: number | null;
-      late_join_through_index?: number | null;
       quizzes: { team_mode: boolean } | { team_mode: boolean }[] | null;
       hosts: { plan: string } | { plan: string }[] | null;
     };
 
-    // New players: lobby, or any live round when late join is on. Reconnect is always 409 + /me.
     if (!canInsertNewPlayer(sessionWithQuiz)) {
-      const { data: existingMidGame } = await admin
-        .from('players')
-        .select('id')
-        .eq('session_id', session.id)
-        .eq('nickname', trimmedNickname)
-        .maybeSingle();
-
-      if (existingMidGame) {
-        return NextResponse.json(
-          {
-            error: 'Nickname already taken in this room.',
-            code: 'NICKNAME_TAKEN',
-          },
-          { status: 409 }
-        );
-      }
-
-      return NextResponse.json(
-          {
-            error: 'This game has already started. Reconnect with your same nickname from this device, or wait for the next lobby.',
-            code: 'GAME_STARTED',
-          },
-        { status: 403 }
-      );
+      return NextResponse.json({ error: 'This game has already finished.' }, { status: 403 });
     }
 
     const quizMeta = Array.isArray(sessionWithQuiz.quizzes)
