@@ -1,7 +1,6 @@
 /** @vitest-environment jsdom */
 import { act, renderHook } from '@testing-library/react';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
-import { LAST_LOBBY_PLAYER_ABANDON_MS } from '@/lib/game/emptyLobby';
 import { useAutoCloseEmptyLobby } from '@/hooks/useAutoCloseEmptyLobby';
 
 describe('useAutoCloseEmptyLobby', () => {
@@ -33,33 +32,21 @@ describe('useAutoCloseEmptyLobby', () => {
     expect(onClose).toHaveBeenCalledTimes(1);
   });
 
-  it('closes after a grace period when every lobby player is offline', () => {
-    const first = vi.fn();
-    const second = vi.fn();
-    const players = [{ connected: false }, { connected: false }];
-    const { rerender } = renderHook((props) => useAutoCloseEmptyLobby(props), {
-      initialProps: {
+  it('never closes a lobby whose players are all offline', () => {
+    const onClose = vi.fn();
+    const players = Array.from({ length: 80 }, () => ({ connected: false }));
+    renderHook(() =>
+      useAutoCloseEmptyLobby({
         status: 'lobby',
         players,
         initiallyOccupied: true,
-        onClose: first,
-      },
-    });
+        onClose,
+      })
+    );
     act(() => {
-      vi.advanceTimersByTime(LAST_LOBBY_PLAYER_ABANDON_MS - 1);
+      vi.advanceTimersByTime(10 * 60_000);
     });
-    expect(first).not.toHaveBeenCalled();
-    rerender({
-      status: 'lobby',
-      players,
-      initiallyOccupied: true,
-      onClose: second,
-    });
-    act(() => {
-      vi.advanceTimersByTime(1);
-    });
-    expect(first).not.toHaveBeenCalled();
-    expect(second).toHaveBeenCalledTimes(1);
+    expect(onClose).not.toHaveBeenCalled();
   });
 
   it('treats missing connected as online', () => {
@@ -73,7 +60,7 @@ describe('useAutoCloseEmptyLobby', () => {
       })
     );
     act(() => {
-      vi.advanceTimersByTime(LAST_LOBBY_PLAYER_ABANDON_MS + 100);
+      vi.advanceTimersByTime(60_000);
     });
     expect(onClose).not.toHaveBeenCalled();
   });

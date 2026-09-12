@@ -37,8 +37,8 @@ export function quizLibraryCap(plan: unknown): number {
 /** Classroom Wi‑Fi often NATs ~80 devices behind one IP — keep limits above a full lobby. */
 export const RATE_LIMITS = {
   joinPerIp: { limit: 240, windowMs: 60_000 },
-  submitPerIp: { limit: 400, windowMs: 60_000 },
-  submitPerPlayer: { limit: 8, windowMs: 60_000 },
+  submitPerIp: { limit: 900, windowMs: 60_000 },
+  submitPerPlayer: { limit: 20, windowMs: 60_000 },
   registerPerIp: { limit: 8, windowMs: 15 * 60_000 },
   pinLookupPerIp: { limit: 240, windowMs: 60_000 },
   playerHydratePerIp: { limit: 2000, windowMs: 60_000 },

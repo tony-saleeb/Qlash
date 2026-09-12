@@ -7,32 +7,15 @@ export function connectedPlayerCount(players: { connected?: boolean | null }[]):
   return players.filter(isPlayerConnected).length;
 }
 
-/** Close an occupied lobby as soon as the last player row is gone. */
+/**
+ * Close an occupied lobby only when the last player row is gone (Quit or kick).
+ * Offline players do not seal a room: a locked phone or an app switch reports
+ * connected=false, and a whole class waiting with dark screens is normal.
+ */
 export function lobbyShouldCloseNow(params: {
   status: string;
   hadPlayers: boolean;
   playerCount: number;
 }): boolean {
   return params.status === 'lobby' && params.hadPlayers && params.playerCount === 0;
-}
-
-/**
- * Lobby players went offline (closed the tab). Wait this long before
- * closing so a refresh can reconnect.
- */
-export const LAST_LOBBY_PLAYER_ABANDON_MS = 4_000;
-
-/** True when everyone who joined the lobby is no longer connected. */
-export function lobbyAbandonedOffline(params: {
-  status: string;
-  hadPlayers: boolean;
-  playerCount: number;
-  connectedCount: number;
-}): boolean {
-  return (
-    params.status === 'lobby' &&
-    params.hadPlayers &&
-    params.playerCount > 0 &&
-    params.connectedCount === 0
-  );
 }

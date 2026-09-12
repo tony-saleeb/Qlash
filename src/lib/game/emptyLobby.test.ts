@@ -1,9 +1,7 @@
 import { describe, expect, it } from 'vitest';
 import {
-  LAST_LOBBY_PLAYER_ABANDON_MS,
   connectedPlayerCount,
   isPlayerConnected,
-  lobbyAbandonedOffline,
   lobbyShouldCloseNow,
 } from '@/lib/game/emptyLobby';
 
@@ -26,39 +24,10 @@ describe('empty lobby close', () => {
     expect(connectedPlayerCount([{ connected: false }, {}])).toBe(1);
   });
 
-  it('treats every disconnected lobby player as abandoned', () => {
+  it('keeps a full lobby open when every phone is asleep', () => {
     expect(
-      lobbyAbandonedOffline({
-        status: 'lobby',
-        hadPlayers: true,
-        playerCount: 1,
-        connectedCount: 0,
-      })
-    ).toBe(true);
-    expect(
-      lobbyAbandonedOffline({
-        status: 'lobby',
-        hadPlayers: true,
-        playerCount: 2,
-        connectedCount: 0,
-      })
-    ).toBe(true);
-    expect(
-      lobbyAbandonedOffline({
-        status: 'lobby',
-        hadPlayers: true,
-        playerCount: 2,
-        connectedCount: 1,
-      })
+      lobbyShouldCloseNow({ status: 'lobby', hadPlayers: true, playerCount: 80 })
     ).toBe(false);
-    expect(
-      lobbyAbandonedOffline({
-        status: 'lobby',
-        hadPlayers: true,
-        playerCount: 1,
-        connectedCount: 1,
-      })
-    ).toBe(false);
-    expect(LAST_LOBBY_PLAYER_ABANDON_MS).toBe(4_000);
+    expect(connectedPlayerCount(Array.from({ length: 80 }, () => ({ connected: false })))).toBe(0);
   });
 });

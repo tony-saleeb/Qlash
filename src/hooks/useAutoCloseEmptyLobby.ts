@@ -1,13 +1,13 @@
 'use client';
 
 import { useEffect, useRef } from 'react';
-import {
-  LAST_LOBBY_PLAYER_ABANDON_MS,
-  connectedPlayerCount,
-  lobbyAbandonedOffline,
-  lobbyShouldCloseNow,
-} from '@/lib/game/emptyLobby';
+import { lobbyShouldCloseNow } from '@/lib/game/emptyLobby';
 
+/**
+ * Seal a lobby that emptied out. Only player rows count — never presence.
+ * Phones report connected=false on screen lock, so an offline room is still
+ * a full room waiting for the host to press Start.
+ */
 export function useAutoCloseEmptyLobby(params: {
   status: string;
   players: { connected?: boolean | null }[];
@@ -21,33 +21,15 @@ export function useAutoCloseEmptyLobby(params: {
 
   if (params.players.length > 0) hadPlayersRef.current = true;
 
-  const playerCount = params.players.length;
-  const connectedCount = connectedPlayerCount(params.players);
   const empty = lobbyShouldCloseNow({
     status: params.status,
     hadPlayers: hadPlayersRef.current,
-    playerCount,
-  });
-  const abandoned = lobbyAbandonedOffline({
-    status: params.status,
-    hadPlayers: hadPlayersRef.current,
-    playerCount,
-    connectedCount,
+    playerCount: params.players.length,
   });
 
   useEffect(() => {
-    if (closedRef.current) return;
-    if (empty) {
-      closedRef.current = true;
-      onCloseRef.current();
-      return;
-    }
-    if (!abandoned) return;
-    const timer = window.setTimeout(() => {
-      if (closedRef.current) return;
-      closedRef.current = true;
-      onCloseRef.current();
-    }, LAST_LOBBY_PLAYER_ABANDON_MS);
-    return () => window.clearTimeout(timer);
-  }, [abandoned, empty, params.status]);
+    if (closedRef.current || !empty) return;
+    closedRef.current = true;
+    onCloseRef.current();
+  }, [empty]);
 }

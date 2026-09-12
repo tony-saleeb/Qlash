@@ -32,7 +32,8 @@ describe('theme + capacity constants', () => {
     expect(NICKNAME_MAX_LEN).toBe(20);
     expect(SUBMIT_LATE_GRACE_MS).toBe(1500);
     expect(RATE_LIMITS.joinPerIp.limit).toBe(240);
-    expect(RATE_LIMITS.submitPerPlayer.limit).toBe(8);
+    expect(RATE_LIMITS.submitPerIp.limit).toBe(900);
+    expect(RATE_LIMITS.submitPerPlayer.limit).toBe(20);
     expect(RATE_LIMITS.registerPerIp.limit).toBe(8);
     expect(RATE_LIMITS.pinLookupPerIp.limit).toBe(240);
     expect(RATE_LIMITS.playerHydratePerIp.limit).toBe(2000);
