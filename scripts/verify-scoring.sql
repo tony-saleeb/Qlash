@@ -63,9 +63,9 @@ begin
          'mcq', '[{"id":"1","text":"Cairo","is_correct":false},{"id":"2","text":"Alexandria","is_correct":true}]'::jsonb,
          '["2"]'::jsonb, 21000, 20, 1000, 'linear', 5, 1, true, 750, 6),
 
-        ('an answer past the grace is late and scores nothing',
+        ('an answer past the grace is late, still correct, and scores nothing',
          'mcq', '[{"id":"1","text":"Cairo","is_correct":false},{"id":"2","text":"Alexandria","is_correct":true}]'::jsonb,
-         '["2"]'::jsonb, 21501, 20, 1000, 'linear', 5, 1, false, 0, 0),
+         '["2"]'::jsonb, 21501, 20, 1000, 'linear', 5, 1, true, 0, 0),
 
         ('multi_select accepts the exact set in any order',
          'multi_select', '[{"id":"1","text":"Tout","is_correct":true},{"id":"2","text":"Baba","is_correct":true},{"id":"3","text":"Kiahk","is_correct":false}]'::jsonb,

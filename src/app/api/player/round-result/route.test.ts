@@ -65,6 +65,7 @@ describe('POST /api/player/round-result', () => {
     );
     expect(result.status).toBe(200);
     expect(result.body.hadSubmission).toBe(false);
+    expect(result.body.submitted).toBe(false);
     expect(result.body.submission).toEqual({ points_awarded: 0, is_correct: false });
     expect(result.body.player).toEqual({ score: 1200, streak: 0 });
     expect(result.body.correctAnswerIds).toEqual(['a']);

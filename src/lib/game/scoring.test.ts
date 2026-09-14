@@ -21,8 +21,9 @@ describe('gradeAnswer', () => {
     expect(gradeAnswer({ type: 'true_false', answers, selectedAnswerIds: ['f'], isLate: false })).toBe(false);
   });
 
-  it('rejects late answers even when the choice is right', () => {
-    expect(gradeAnswer({ type: 'mcq', answers: mcq, selectedAnswerIds: ['b'], isLate: true })).toBe(false);
+  it('grades the choice even when the answer is late', () => {
+    expect(gradeAnswer({ type: 'mcq', answers: mcq, selectedAnswerIds: ['b'], isLate: true })).toBe(true);
+    expect(gradeAnswer({ type: 'mcq', answers: mcq, selectedAnswerIds: ['a'], isLate: true })).toBe(false);
   });
 
   it('grades multi_select requiring the exact set regardless of order', () => {

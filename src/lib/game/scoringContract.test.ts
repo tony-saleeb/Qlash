@@ -1,11 +1,11 @@
 import { describe, expect, it } from 'vitest';
-import { SUBMIT_LATE_GRACE_MS } from '@/lib/game/constants';
+import { SERVER_LATE_CUTOFF_MS } from '@/lib/game/constants';
 import { calculatePoints, gradeAnswer } from '@/lib/game/scoring';
 import { SCORING_CASES } from '@/lib/game/scoringFixture';
 
 /** Mirrors v_is_late in submit_live_answer. */
 function isLate(timeTakenMs: number, timeLimitMs: number): boolean {
-  return timeTakenMs > timeLimitMs + SUBMIT_LATE_GRACE_MS;
+  return timeTakenMs > timeLimitMs + SERVER_LATE_CUTOFF_MS;
 }
 
 describe('scoring contract', () => {

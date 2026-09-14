@@ -52,7 +52,7 @@ import {
 } from '@/lib/game/types';
 import { maybeSeededShuffle, questionsInPlayOrder } from '@/lib/game/shuffle';
 import { aggregateTeamScores, scoreBarPercent } from '@/lib/game/teams';
-import { MAX_PLAYERS_PER_SESSION, SUBMIT_LATE_GRACE_MS } from '@/lib/game/constants';
+import { MAX_PLAYERS_PER_SESSION, HOST_REVEAL_DELAY_MS } from '@/lib/game/constants';
 import { remainingFromPausedElapsed, remainingSeconds } from '@/lib/game/clock';
 import { answerUsesInk, resolveAnswerColor } from '@/lib/game/marks';
 import { AnswerSwatch } from '@/components/brand/AnswerMark';
@@ -518,12 +518,11 @@ export default function HostGameClient({
     displayedSecondRef.current = null;
 
     const timeLimit = activeQuestion.time_limit_seconds;
-    const startedAt = new Date(session.question_started_at).getTime();
+    const startedAtIso = session.question_started_at;
     let graceTimer: ReturnType<typeof setTimeout> | null = null;
 
     const updateTimer = () => {
-      const elapsed = (Date.now() - startedAt) / 1000;
-      const remaining = Math.max(0, Math.ceil(timeLimit - elapsed));
+      const remaining = remainingSeconds(startedAtIso, timeLimit);
       if (remaining !== displayedSecondRef.current) {
         displayedSecondRef.current = remaining;
         setTimeLeft(remaining);
@@ -539,7 +538,7 @@ export default function HostGameClient({
         if (!graceTimer) {
           graceTimer = setTimeout(() => {
             handleRevealAnswer();
-          }, SUBMIT_LATE_GRACE_MS);
+          }, HOST_REVEAL_DELAY_MS);
         }
       }
     };

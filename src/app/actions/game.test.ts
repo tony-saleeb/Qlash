@@ -28,6 +28,7 @@ describe('host game actions', () => {
     host.auth.getSession.mockResolvedValue({
       data: { session: { user: { id: 'host-1', email: 'host@qlash.test' } } },
     });
+    host.setRpc('start_question_clock', { data: 'pg-now', error: null });
   });
 
   it('refuses unauthenticated hosts', async () => {
@@ -258,7 +259,7 @@ describe('host game actions', () => {
     const { goToNextQuestion } = await import('@/app/actions/game');
     await expect(goToNextQuestion('sess-1', 1)).resolves.toEqual({
       success: true,
-      serverStartedAt: 't-next',
+      serverStartedAt: 'pg-now',
     });
     expect(host.rpc).toHaveBeenCalledWith('apply_question_scores_and_reveal', {
       p_session_id: 'sess-1',
@@ -286,9 +287,12 @@ describe('host game actions', () => {
     const { goToNextQuestion } = await import('@/app/actions/game');
     await expect(goToNextQuestion('sess-1', 1)).resolves.toEqual({
       success: true,
-      serverStartedAt: 't-next',
+      serverStartedAt: 'pg-now',
     });
-    expect(host.rpc).not.toHaveBeenCalled();
+    expect(host.rpc).toHaveBeenCalledWith('start_question_clock', { p_session_id: 'sess-1' });
+    expect(
+      host.rpc.mock.calls.every((call) => call[0] !== 'apply_question_scores_and_reveal')
+    ).toBe(true);
   });
 
   it('advances leaderboard, next question, podium, and end', async () => {
@@ -297,7 +301,7 @@ describe('host game actions', () => {
     await expect(actions.goToLeaderboard('sess-1')).resolves.toEqual({ success: true });
     await expect(actions.goToNextQuestion('sess-1', 2)).resolves.toEqual({
       success: true,
-      serverStartedAt: 't',
+      serverStartedAt: 'pg-now',
     });
     expect(host.lastUpdate('game_sessions')).toMatchObject({
       status: 'question_active',

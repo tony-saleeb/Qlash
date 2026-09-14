@@ -32,7 +32,8 @@ import {
   type Player,
   type PublicQuestionPayload,
 } from '@/lib/game/types';
-import { remainingFromPausedElapsed, remainingSeconds } from '@/lib/game/clock';
+import { remainingFromPausedElapsed, remainingMs, remainingSeconds } from '@/lib/game/clock';
+import { SERVER_LATE_CUTOFF_MS } from '@/lib/game/constants';
 import { answerUsesInk, resolveAnswerColor } from '@/lib/game/marks';
 import { aggregateTeamScores } from '@/lib/game/teams';
 import { playerJoinedAfterQuestionStart } from '@/lib/game/lateJoin';
@@ -97,6 +98,7 @@ export default function PlayerGameClient({
     pointsAwarded: number;
     correctAnswerIds: string[];
     optionCounts?: Record<string, number>;
+    timedOut?: boolean;
   } | null>(null);
   const [timeLeft, setTimeLeft] = useState<number>(0);
   const [clockStartedAt, setClockStartedAt] = useState<string | null>(null);
@@ -115,6 +117,7 @@ export default function PlayerGameClient({
     selected: string[];
     isCorrect: boolean | null;
     pointsAwarded: number;
+    error: string | null;
   } | null>(null);
   const revealAppliedRef = React.useRef<string | null>(null);
   const lastTickSecondRef = React.useRef<number | null>(null);
@@ -132,8 +135,19 @@ export default function PlayerGameClient({
   const lastStartSoundQidRef = React.useRef<string | null>(null);
   const hydrateInFlightRef = React.useRef(false);
   const hydrateAgainRef = React.useRef(false);
+  const serverClockOffsetMsRef = React.useRef<number | null>(null);
   liveRankRef.current = liveRank;
   sessionStatusRef.current = sessionStatus;
+
+  const nowMs = useCallback(() => Date.now() + (serverClockOffsetMsRef.current ?? 0), []);
+
+  const captureServerClock = (serverNow: unknown) => {
+    if (serverClockOffsetMsRef.current !== null) return;
+    if (typeof serverNow !== 'string') return;
+    const parsed = Date.parse(serverNow);
+    if (!Number.isFinite(parsed)) return;
+    serverClockOffsetMsRef.current = parsed - Date.now();
+  };
 
   React.useEffect(() => bindAudioUnlock(), []);
 
@@ -207,7 +221,7 @@ export default function PlayerGameClient({
         } else {
           setClockStartedAt(serverStartedAt);
           clockStartedAtRef.current = serverStartedAt;
-          setTimeLeft(remainingSeconds(serverStartedAt, question.time_limit_seconds));
+          setTimeLeft(remainingSeconds(serverStartedAt, question.time_limit_seconds, nowMs()));
         }
       } else {
         setClockStartedAt(null);
@@ -215,7 +229,7 @@ export default function PlayerGameClient({
         setTimeLeft(question.time_limit_seconds);
       }
     },
-    []
+    [nowMs]
   );
 
   const applyQuestionPayload = useCallback(
@@ -272,6 +286,7 @@ export default function PlayerGameClient({
         }
         if (!res?.ok) return;
         const data = await res.json();
+        captureServerClock(data.server_now);
 
         if (data.status) setSessionStatus(data.status);
         if (typeof data.active_multiplier === 'number') {
@@ -311,7 +326,15 @@ export default function PlayerGameClient({
                 playerRef.current?.joined_at,
                 data.server_started_at
               );
-              if (round.hadSubmission && round.submission) {
+              if (round.submitted === false && lastSubmitRef.current?.selected.length) {
+                setRoundResult({
+                  isCorrect: false,
+                  pointsAwarded: 0,
+                  correctAnswerIds: Array.isArray(round.correctAnswerIds) ? round.correctAnswerIds : [],
+                  optionCounts: undefined,
+                  timedOut: true,
+                });
+              } else if ((round.submitted ?? round.hadSubmission) && round.submission) {
                 setRoundResult({
                   isCorrect: Boolean(round.submission.is_correct),
                   pointsAwarded: Number(round.submission.points_awarded) || 0,
@@ -431,7 +454,7 @@ export default function PlayerGameClient({
         return;
       }
       const submit = lastSubmitRef.current;
-      if (submit && submit.questionId === currentQ?.id && submit.isCorrect === null) {
+      if (submit && submit.questionId === currentQ?.id && submit.isCorrect === null && !submit.error) {
         setSessionStatus('question_reveal');
         return;
       }
@@ -442,6 +465,23 @@ export default function PlayerGameClient({
         setRoundResult(null);
         setSessionStatus('question_reveal');
         setSubmissionState('idle');
+        return;
+      }
+
+      if (submit && submit.questionId === currentQ?.id && submit.error) {
+        setRoundResult({
+          isCorrect: false,
+          pointsAwarded: 0,
+          correctAnswerIds,
+          optionCounts,
+          timedOut: true,
+        });
+        setSessionStatus('question_reveal');
+        setSubmissionState('idle');
+        const playerId = playerRef.current?.id;
+        if (playerId && currentQ) {
+          void syncOfficialScore(playerId, currentQ.id);
+        }
         return;
       }
 
@@ -630,7 +670,7 @@ export default function PlayerGameClient({
               } else {
                 setClockStartedAt(startedAt);
                 clockStartedAtRef.current = startedAt;
-                setTimeLeft(remainingSeconds(startedAt, limit));
+                setTimeLeft(remainingSeconds(startedAt, limit, nowMs()));
               }
             }
           } else if (newStatus === 'question_reveal') {
@@ -639,7 +679,7 @@ export default function PlayerGameClient({
               revealFallbackTimer = setTimeout(() => {
                 if (!q || revealAppliedRef.current === q.id) return;
                 const submit = lastSubmitRef.current;
-                if (submit && submit.questionId === q.id && submit.isCorrect === null && attempt < 20) {
+                if (submit && submit.questionId === q.id && submit.isCorrect === null && !submit.error && attempt < 20) {
                   scheduleRevealFallback(attempt + 1);
                   return;
                 }
@@ -695,7 +735,7 @@ export default function PlayerGameClient({
       document.removeEventListener('visibilitychange', handleVisibilityChange);
       window.removeEventListener('pagehide', handlePageHide);
     };
-  }, [supabase, player?.id, sessionId, router, hydrateCurrentQuestion, applyRevealInstant, loadPodium, t]);
+  }, [supabase, player?.id, sessionId, router, hydrateCurrentQuestion, applyRevealInstant, loadPodium, t, nowMs]);
 
   /**
    * Last line of defence against a spinner: if the room is on a question and
@@ -716,14 +756,13 @@ export default function PlayerGameClient({
     if (sessionStatus !== 'question_active' || !activeQuestion || !clockStartedAt) return;
 
     const limit = activeQuestion.time_limit_seconds;
-    const started = new Date(clockStartedAt).getTime();
-    if (!Number.isFinite(started) || !limit) return;
+    if (!limit) return;
 
     displayedSecondRef.current = null;
     lastTickSecondRef.current = null;
 
     const tick = () => {
-      const remaining = Math.max(0, Math.ceil(limit - (Date.now() - started) / 1000));
+      const remaining = remainingSeconds(clockStartedAt, limit, nowMs());
       if (remaining !== displayedSecondRef.current) {
         displayedSecondRef.current = remaining;
         setTimeLeft(remaining);
@@ -736,7 +775,7 @@ export default function PlayerGameClient({
     tick();
     const id = window.setInterval(tick, 200);
     return () => window.clearInterval(id);
-  }, [sessionStatus, activeQuestion?.id, activeQuestion?.time_limit_seconds, clockStartedAt]);
+  }, [sessionStatus, activeQuestion?.id, activeQuestion?.time_limit_seconds, clockStartedAt, nowMs]);
 
   useEffect(() => {
     if (sessionStatus !== 'finished') return;
@@ -811,6 +850,24 @@ export default function PlayerGameClient({
   // Instant lock-in UX — never wait on the network to feel responsive
   const submitAnswer = async (answersToSubmit: string[]) => {
     if (!player || !activeQuestion || submissionState !== 'idle') return;
+
+    const startedAt = clockStartedAtRef.current;
+    const limit = activeQuestion.time_limit_seconds;
+    if (
+      startedAt &&
+      remainingMs(startedAt, limit, nowMs()) + SERVER_LATE_CUTOFF_MS <= 0
+    ) {
+      toast.message(t('timesUp'));
+      lastSubmitRef.current = {
+        questionId: activeQuestion.id,
+        selected: answersToSubmit,
+        isCorrect: null,
+        pointsAwarded: 0,
+        error: 'timesUp',
+      };
+      return;
+    }
+
     void unlockGameAudio();
     playLockSound();
 
@@ -822,12 +879,13 @@ export default function PlayerGameClient({
       selected: answersToSubmit,
       isCorrect: null,
       pointsAwarded: 0,
+      error: null,
     };
     lockedRemainingRef.current = timeLeft;
     playHaptic(16);
 
-    try {
-      const response = await fetch('/api/submit-answer', {
+    const postSubmit = () =>
+      fetch('/api/submit-answer', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({
@@ -840,9 +898,29 @@ export default function PlayerGameClient({
         keepalive: true,
       });
 
+    try {
+      let response = await postSubmit();
+      if (!response.ok && response.status !== 403) {
+        await new Promise((resolve) => setTimeout(resolve, 400));
+        response = await postSubmit();
+      }
+
       const data = await response.json().catch(() => ({}));
       if (!response.ok) {
-        throw new Error(data.error || 'Failed to submit answer.');
+        const closed =
+          response.status === 403 &&
+          typeof data.error === 'string' &&
+          /submissions are closed/i.test(data.error);
+        const errKey = closed ? 'timesUp' : 'submitFailed';
+        lastSubmitRef.current = {
+          questionId: activeQuestion.id,
+          selected: answersToSubmit,
+          isCorrect: null,
+          pointsAwarded: 0,
+          error: errKey,
+        };
+        toast.message(closed ? t('timesUp') : t('submitFailed'));
+        return;
       }
       if (!data.duplicate || data.isCorrect === true || (typeof data.pointsAwarded === 'number' && data.pointsAwarded > 0)) {
         lastSubmitRef.current = {
@@ -850,6 +928,7 @@ export default function PlayerGameClient({
           selected: answersToSubmit,
           isCorrect: Boolean(data.isCorrect),
           pointsAwarded: typeof data.pointsAwarded === 'number' ? data.pointsAwarded : 0,
+          error: null,
         };
         if (sessionStatusRef.current === 'question_reveal') {
           applyRevealInstant([]);
@@ -857,9 +936,16 @@ export default function PlayerGameClient({
       }
     } catch (err: unknown) {
       console.error(err);
-      lastSubmitRef.current = null;
-      setSubmissionState('idle');
-      toast.error(err instanceof Error ? err.message : t('submitFailed'));
+      if (!lastSubmitRef.current?.error) {
+        lastSubmitRef.current = {
+          questionId: activeQuestion.id,
+          selected: answersToSubmit,
+          isCorrect: null,
+          pointsAwarded: 0,
+          error: err instanceof Error ? err.message : 'submitFailed',
+        };
+        toast.error(err instanceof Error ? err.message : t('submitFailed'));
+      }
     }
   };
 
@@ -990,15 +1076,18 @@ export default function PlayerGameClient({
   if (roundResult && activeQuestion) {
     const isPoll = activeQuestion.type === 'poll';
     const isCorrect = roundResult.isCorrect;
+    const timedOut = Boolean(roundResult.timedOut);
     const points = roundResult.pointsAwarded;
     const move = rankMove(previousRankRef.current, liveRank);
-    const callout = roundCallout({
-      isCorrect,
-      isPoll,
-      lockedRemaining: lockedRemainingRef.current,
-      timeLimit: activeQuestion.time_limit_seconds,
-      previousStreak: previousStreakRef.current,
-    });
+    const callout = timedOut
+      ? null
+      : roundCallout({
+          isCorrect,
+          isPoll,
+          lockedRemaining: lockedRemainingRef.current,
+          timeLimit: activeQuestion.time_limit_seconds,
+          previousStreak: previousStreakRef.current,
+        });
     const winTone = isPoll || isCorrect;
 
     return (
@@ -1013,12 +1102,14 @@ export default function PlayerGameClient({
           <div className="flex justify-center">
             {winTone ? (
               <CheckCircle className="h-20 w-20 text-arena-ink" />
+            ) : timedOut ? (
+              <Clock className="h-20 w-20 text-white" />
             ) : (
               <XCircle className="h-20 w-20 text-white" />
             )}
           </div>
           <h1 className="font-display text-4xl font-extrabold uppercase tracking-tight sm:text-5xl">
-            {isPoll ? t('answerLocked') : isCorrect ? t('correct') : t('missed')}
+            {isPoll ? t('answerLocked') : timedOut ? t('timesUp') : isCorrect ? t('correct') : t('missed')}
           </h1>
           {!isPoll ? (
             <p className={`font-display text-xl font-bold ${winTone ? 'text-arena-ink/80' : 'text-white/85'}`}>
@@ -1405,24 +1496,26 @@ export default function PlayerGameClient({
             </div>
             <h1 className="font-display text-3xl font-extrabold text-white">{t('answerLocked')}</h1>
             <p dir="auto" className="mt-2 text-sm font-bold text-arena-acid">{player.nickname}</p>
-            {timeLeft > 0 && (
-              <div className="mt-6 flex justify-center">
+            <div className="mt-6 flex justify-center">
                 <div
                   className={`relative flex h-24 w-24 flex-col items-center justify-center border-4 bg-black/35 transition-all duration-300 ${
                     timeLeft <= 5 ? 'scale-105 border-arena-signal' : 'border-arena-acid'
                   }`}
                 >
-                  <span
-                    className={`font-display text-3xl font-extrabold tabular-nums ${
-                      timeLeft <= 5 ? 'text-arena-signal' : 'text-white'
-                    }`}
-                  >
-                    {timeLeft}
-                  </span>
+                  {timeLeft > 0 ? (
+                    <span
+                      className={`font-display text-3xl font-extrabold tabular-nums ${
+                        timeLeft <= 5 ? 'text-arena-signal' : 'text-white'
+                      }`}
+                    >
+                      {timeLeft}
+                    </span>
+                  ) : (
+                    <span className="block h-1.5 w-10 animate-pulse bg-arena-signal" />
+                  )}
                   <span className="text-[9px] font-bold uppercase tracking-wider text-white/45">{t('seconds')}</span>
                 </div>
               </div>
-            )}
             <p className="mt-6 max-w-xs text-sm text-white/55">
               {t('waitingForReveal')}
             </p>
@@ -1480,8 +1573,7 @@ export default function PlayerGameClient({
               </div>
             )}
             
-            {timeLeft > 0 && (
-              <div className="my-2 flex justify-center">
+            <div className="my-2 flex justify-center">
                 <div
                   className={`relative flex h-24 w-24 flex-col items-center justify-center border-4 bg-black/35 transition-all duration-300 ${
                     timeLeft <= 5
@@ -1489,17 +1581,20 @@ export default function PlayerGameClient({
                       : 'border-arena-acid'
                   }`}
                 >
-                  <span
-                    className={`font-display text-3xl font-extrabold tabular-nums ${
-                      timeLeft <= 5 ? 'text-arena-signal' : 'text-white'
-                    }`}
-                  >
-                    {timeLeft}
-                  </span>
+                  {timeLeft > 0 ? (
+                    <span
+                      className={`font-display text-3xl font-extrabold tabular-nums ${
+                        timeLeft <= 5 ? 'text-arena-signal' : 'text-white'
+                      }`}
+                    >
+                      {timeLeft}
+                    </span>
+                  ) : (
+                    <span className="block h-1.5 w-10 animate-pulse bg-arena-signal" />
+                  )}
                   <span className="text-[9px] font-bold uppercase tracking-wider text-white/45">{t('secAbbrev')}</span>
                 </div>
               </div>
-            )}
 
             <h2 dir="auto" className="font-display text-lg font-extrabold leading-snug tracking-tight text-white sm:text-xl">
               {activeQuestion.prompt}

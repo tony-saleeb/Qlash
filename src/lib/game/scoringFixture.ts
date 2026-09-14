@@ -95,7 +95,7 @@ export const SCORING_CASES: ScoringCase[] = [
     expect: { isCorrect: true, pointsAwarded: 750, newStreak: 6 },
   },
   {
-    name: 'an answer past the grace is late and scores nothing',
+    name: 'an answer past the grace is late, still correct, and scores nothing',
     type: 'mcq',
     answers: MCQ,
     selected: ['2'],
@@ -105,7 +105,7 @@ export const SCORING_CASES: ScoringCase[] = [
     scoringType: 'linear',
     previousStreak: 5,
     activeMultiplier: 1,
-    expect: { isCorrect: false, pointsAwarded: 0, newStreak: 0 },
+    expect: { isCorrect: true, pointsAwarded: 0, newStreak: 0 },
   },
   {
     name: 'multi_select accepts the exact set in any order',

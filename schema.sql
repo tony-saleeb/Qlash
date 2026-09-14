@@ -91,6 +91,7 @@ create table public.answers_submitted (
   time_taken_ms int not null,
   points_awarded int not null,
   is_correct boolean not null,
+  was_late boolean not null default false,
   unique(session_id, question_id, player_id)
 );
 
@@ -241,7 +242,10 @@ begin
   update public.players as p
   set
     score = p.score + coalesce(s.points_awarded, 0),
-    streak = case when s.is_correct is true then p.streak + 1 else 0 end
+    streak = case
+      when s.is_correct is true and coalesce(s.points_awarded, 0) > 0 then p.streak + 1
+      else 0
+    end
   from (
     select pl.id as player_id, a.points_awarded, a.is_correct
     from public.players pl
@@ -392,3 +396,33 @@ drop trigger if exists players_enforce_session_cap on public.players;
 create trigger players_enforce_session_cap
   before insert on public.players
   for each row execute procedure public.enforce_session_player_cap();
+
+-- P10 bootstrap: Postgres stamps the question clock. Full grader is schema-p10-late-grading.sql.
+create or replace function public.start_question_clock(p_session_id uuid)
+returns timestamptz
+language plpgsql
+security definer
+set search_path = public
+as $$
+declare
+  v_started timestamptz;
+begin
+  if auth.uid() is null then
+    raise exception 'Unauthorized';
+  end if;
+
+  update public.game_sessions
+  set question_started_at = now()
+  where id = p_session_id
+    and host_id = auth.uid()
+  returning question_started_at into v_started;
+
+  if v_started is null then
+    raise exception 'Unauthorized or session not found';
+  end if;
+  return v_started;
+end;
+$$;
+
+revoke all on function public.start_question_clock(uuid) from public;
+grant execute on function public.start_question_clock(uuid) to authenticated;

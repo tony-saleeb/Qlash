@@ -111,6 +111,7 @@ export async function POST(request: Request) {
         answers,
       },
       server_started_at: session.question_started_at,
+      server_now: new Date().toISOString(),
     });
   } catch (err) {
     console.error('current-question error:', err);

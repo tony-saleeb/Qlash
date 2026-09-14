@@ -41,8 +41,9 @@ Run these in the Supabase SQL editor, in order, on a new project:
 11. `schema-p7-share.sql`
 12. `schema-p8-rls.sql` — hide PINs and public quiz dumps; quiz-cap trigger
 13. `schema-p9-live.sql` — jump-back score idempotency; drop public session SELECT so hosts cannot list other rooms’ PINs
+14. `schema-p10-late-grading.sql` — late-correct answers stay correct (0 points); Postgres stamps `question_started_at`
 
-Existing projects that already have the live loop: run **5–13** (re-run fast-submit, then p3, p4, media, p5, p6, p7, p8, p9).
+Existing projects that already have the live loop: run **5–14** (re-run fast-submit, then p3, p4, media, p5, p6, p7, p8, p9, p10).
 
 ## Production URL + Google login
 

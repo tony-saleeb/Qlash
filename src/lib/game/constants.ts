@@ -4,8 +4,14 @@ export const MAX_PLAYERS_PER_SESSION = 80;
 export const NICKNAME_MIN_LEN = 1;
 export const NICKNAME_MAX_LEN = 20;
 
-/** Matches submit_live_answer: answers after the clock are late, not rejected, for this long. */
-export const SUBMIT_LATE_GRACE_MS = 1500;
+/**
+ * These two values must never be equal. HOST_REVEAL_DELAY_MS must always
+ * exceed SERVER_LATE_CUTOFF_MS by at least the worst expected player
+ * round-trip (and the host's 200 ms setInterval tick), or in-flight
+ * answers are lost when the host reveals.
+ */
+export const SERVER_LATE_CUTOFF_MS = 1500;
+export const HOST_REVEAL_DELAY_MS = 2700;
 
 export type HostPlan = 'free' | 'pro' | 'org';
 

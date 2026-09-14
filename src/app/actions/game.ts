@@ -4,6 +4,21 @@ import { getHostAuth } from '@/lib/supabase/hostAuth';
 import { DEFAULT_LATE_JOIN_THROUGH_INDEX } from '@/lib/game/lateJoin';
 import { randomLivePin } from '@/lib/game/livePin';
 
+async function stampQuestionClock(
+  supabase: Awaited<ReturnType<typeof getHostAuth>>['supabase'],
+  sessionId: string
+): Promise<string> {
+  const { data, error } = await supabase.rpc('start_question_clock', {
+    p_session_id: sessionId,
+  });
+  if (error || (typeof data !== 'string' && !(data instanceof Date))) {
+    throw new Error(
+      error?.message || 'Unable to start the question clock. Run schema-p10-late-grading.sql.'
+    );
+  }
+  return typeof data === 'string' ? data : data.toISOString();
+}
+
 async function applyScoresBeforeAdvance(
   supabase: Awaited<ReturnType<typeof getHostAuth>>['supabase'],
   sessionId: string,
@@ -265,7 +280,6 @@ export async function goToLeaderboard(sessionId: string) {
 export async function startGameSession(sessionId: string, questionOrder: string[]) {
   try {
     const { supabase, user } = await getHostAuth();
-    const serverStartedAt = new Date().toISOString();
 
     if (!Array.isArray(questionOrder) || questionOrder.length === 0) {
       throw new Error('Question order is required to start the game.');
@@ -276,7 +290,6 @@ export async function startGameSession(sessionId: string, questionOrder: string[
       .update({
         status: 'question_active',
         current_question_index: 0,
-        question_started_at: serverStartedAt,
         active_multiplier: 1,
         scores_applied_question_id: null,
         question_order: questionOrder,
@@ -284,14 +297,15 @@ export async function startGameSession(sessionId: string, questionOrder: string[
       .eq('id', sessionId)
       .eq('host_id', user.id)
       .eq('status', 'lobby')
-      .select('id, status, question_started_at')
+      .select('id, status')
       .single();
 
     if (error || !data) {
       throw new Error('Unable to start game. Ensure the session is in lobby and you are the host.');
     }
 
-    return { success: true, serverStartedAt: data.question_started_at as string };
+    const serverStartedAt = await stampQuestionClock(supabase, sessionId);
+    return { success: true, serverStartedAt };
   } catch (err) {
     console.error('startGameSession error:', err);
     throw new Error(err instanceof Error ? err.message : 'Failed to start game.');
@@ -418,23 +432,22 @@ export async function goToNextQuestion(sessionId: string, nextIndex: number) {
   try {
     const { supabase, user } = await getHostAuth();
     await applyScoresBeforeAdvance(supabase, sessionId, user.id);
-    const serverStartedAt = new Date().toISOString();
     const { data, error } = await supabase
       .from('game_sessions')
       .update({
         status: 'question_active',
         current_question_index: nextIndex,
-        question_started_at: serverStartedAt,
         active_multiplier: 1,
         scores_applied_question_id: null,
       })
       .eq('id', sessionId)
       .eq('host_id', user.id)
-      .select('question_started_at')
+      .select('id')
       .single();
 
     if (error || !data) throw error || new Error('Failed to open next question.');
-    return { success: true, serverStartedAt: data.question_started_at as string };
+    const serverStartedAt = await stampQuestionClock(supabase, sessionId);
+    return { success: true, serverStartedAt };
   } catch (err) {
     console.error('goToNextQuestion error:', err);
     throw new Error(err instanceof Error ? err.message : 'Failed to open next question.');

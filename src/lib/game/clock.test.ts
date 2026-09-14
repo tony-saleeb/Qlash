@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest';
-import { remainingFromPausedElapsed, remainingSeconds, startedAtFromRemaining } from '@/lib/game/clock';
+import { remainingFromPausedElapsed, remainingMs, remainingSeconds, startedAtFromRemaining } from '@/lib/game/clock';
 
 describe('remainingSeconds', () => {
   it('counts down from a server timestamp', () => {
@@ -27,10 +27,11 @@ describe('remainingSeconds', () => {
     expect(remainingSeconds('2026-08-13T20:00:00.000Z', -5)).toBe(0);
   });
 
-  it('ceils partial seconds so the last second still shows 1', () => {
+  it('floors partial seconds so 1 means a full second remains', () => {
     const started = '2026-08-13T20:00:00.000Z';
-    const now = Date.parse('2026-08-13T20:00:19.200Z');
-    expect(remainingSeconds(started, 20, now)).toBe(1);
+    expect(remainingSeconds(started, 20, Date.parse('2026-08-13T20:00:19.200Z'))).toBe(0);
+    expect(remainingSeconds(started, 20, Date.parse('2026-08-13T20:00:18.200Z'))).toBe(1);
+    expect(remainingMs(started, 20, Date.parse('2026-08-13T20:00:19.200Z'))).toBe(800);
   });
 });
 

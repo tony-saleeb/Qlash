@@ -9,7 +9,8 @@ import {
   livePlayerCap,
   quizLibraryCap,
   roomIsFull,
-  SUBMIT_LATE_GRACE_MS,
+  SERVER_LATE_CUTOFF_MS,
+  HOST_REVEAL_DELAY_MS,
 } from '@/lib/game/constants';
 
 describe('cn', () => {
@@ -30,7 +31,9 @@ describe('theme + capacity constants', () => {
     expect(MAX_PLAYERS_PER_SESSION).toBe(80);
     expect(NICKNAME_MIN_LEN).toBe(1);
     expect(NICKNAME_MAX_LEN).toBe(20);
-    expect(SUBMIT_LATE_GRACE_MS).toBe(1500);
+    expect(SERVER_LATE_CUTOFF_MS).toBe(1500);
+    expect(HOST_REVEAL_DELAY_MS).toBe(2700);
+    expect(HOST_REVEAL_DELAY_MS).toBeGreaterThan(SERVER_LATE_CUTOFF_MS);
     expect(RATE_LIMITS.joinPerIp.limit).toBe(240);
     expect(RATE_LIMITS.submitPerIp.limit).toBe(900);
     expect(RATE_LIMITS.submitPerPlayer.limit).toBe(20);

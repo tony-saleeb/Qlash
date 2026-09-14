@@ -20,8 +20,7 @@ export function gradeAnswer(params: {
   selectedAnswerIds: string[];
   isLate: boolean;
 }): boolean {
-  const { type, answers, selectedAnswerIds, isLate } = params;
-  if (isLate) return false;
+  const { type, answers, selectedAnswerIds } = params;
 
   const correctOptions = answers.filter((ans) => ans.is_correct);
 
