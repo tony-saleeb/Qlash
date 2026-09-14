@@ -28,6 +28,7 @@ import {
   type GameSessionRow,
 } from '@/lib/game/types';
 import { maybeSeededShuffle, questionsInPlayOrder } from '@/lib/game/shuffle';
+import { mergeLiveSession } from '@/lib/game/liveQuestion';
 import {
   activeQuestionForIndex,
   isLastSessionIndex,
@@ -100,6 +101,7 @@ export default function HostClickerClient({
   const [busy, setBusy] = useState(false);
   const [clockNow, setClockNow] = useState(() => Date.now());
   const revealingRef = useRef(false);
+  const pendingClockIndexRef = useRef<number | null>(null);
   const [clashRunning, setClashRunning] = useState(false);
   const clashLockRef = useRef(false);
   const [joinOrigin, setJoinOrigin] = useState('');
@@ -195,7 +197,23 @@ export default function HostClickerClient({
         'postgres_changes',
         { event: 'UPDATE', schema: 'public', table: 'game_sessions', filter: `id=eq.${session.id}` },
         (payload) => {
-          setSession(payload.new as GameSessionRow);
+          const updatedSession = payload.new as GameSessionRow;
+          setSession((prev) => {
+            if (
+              pendingClockIndexRef.current !== null &&
+              updatedSession.current_question_index === pendingClockIndexRef.current
+            ) {
+              return {
+                ...prev,
+                ...updatedSession,
+                status: 'question_active',
+                current_question_index: pendingClockIndexRef.current,
+                question_started_at: prev.question_started_at,
+                active_multiplier: 1,
+              };
+            }
+            return mergeLiveSession(prev, updatedSession);
+          });
         }
       )
       .on(
@@ -259,6 +277,17 @@ export default function HostClickerClient({
         ordered.map((q) => q.id)
       );
       revealingRef.current = false;
+      pendingClockIndexRef.current = 0;
+      setSession((prev) =>
+        mergeLiveSession(prev, {
+          ...prev,
+          status: 'question_active',
+          current_question_index: 0,
+          question_started_at: serverStartedAt,
+          active_multiplier: 1,
+        })
+      );
+      pendingClockIndexRef.current = null;
       void sendSessionEvent('question:start', buildQuestionStartPayload(ordered[0], 0, serverStartedAt));
     } catch (err) {
       toast.error(err instanceof Error ? err.message : t('couldNotUpdateRoom'));
@@ -320,13 +349,41 @@ export default function HostClickerClient({
 
   const handleNext = () =>
     run(async () => {
+      const previous = session;
       const nextIndex = session.current_question_index + 1;
       const queued = activeQuestionForIndex(playQuestions, session.question_order, nextIndex);
       if (!queued) throw new Error(t('questionUnavailable'));
       const nextQ = prepareQuestionForPlay(queued);
-      const { serverStartedAt } = await goToNextQuestion(session.id, nextIndex);
-      revealingRef.current = false;
-      void sendSessionEvent('question:start', buildQuestionStartPayload(nextQ, nextIndex, serverStartedAt));
+      pendingClockIndexRef.current = nextIndex;
+      setAnsweredIds(new Set());
+      setSession((prev) =>
+        mergeLiveSession(prev, {
+          ...prev,
+          status: 'question_active',
+          current_question_index: nextIndex,
+          question_started_at: null,
+          active_multiplier: 1,
+        })
+      );
+      try {
+        const { serverStartedAt } = await goToNextQuestion(session.id, nextIndex);
+        revealingRef.current = false;
+        setSession((prev) =>
+          mergeLiveSession(prev, {
+            ...prev,
+            status: 'question_active',
+            current_question_index: nextIndex,
+            question_started_at: serverStartedAt,
+            active_multiplier: 1,
+          })
+        );
+        pendingClockIndexRef.current = null;
+        void sendSessionEvent('question:start', buildQuestionStartPayload(nextQ, nextIndex, serverStartedAt));
+      } catch (err) {
+        pendingClockIndexRef.current = null;
+        setSession(previous);
+        throw err;
+      }
     });
 
   const handlePodium = () => run(async () => { await goToPodium(session.id); });

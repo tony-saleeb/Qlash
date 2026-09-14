@@ -68,6 +68,7 @@ import {
   sessionQuestionCount,
 } from '@/lib/game/playOrder';
 import { buildTeachableReveal, formatTeachableCopy } from '@/lib/game/teachableReveal';
+import { mergeLiveSession } from '@/lib/game/liveQuestion';
 import {
   canCheerOnProjector,
   isLobbyReactionId,
@@ -276,6 +277,7 @@ export default function HostGameClient({
   const lastTickSecondRef = useRef<number | null>(null);
   const displayedSecondRef = useRef<number | null>(null);
   const revealingRef = useRef(false);
+  const pendingClockIndexRef = useRef<number | null>(null);
   const playersFlushRef = useRef<Map<string, Player>>(new Map());
   const playersFlushTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
   const playersInsertRef = useRef<Player[]>([]);
@@ -424,7 +426,22 @@ export default function HostGameClient({
         },
         (payload) => {
           const updatedSession = payload.new as typeof session;
-          setSession(updatedSession);
+          setSession((prev) => {
+            if (
+              pendingClockIndexRef.current !== null &&
+              updatedSession.current_question_index === pendingClockIndexRef.current
+            ) {
+              return {
+                ...prev,
+                ...updatedSession,
+                status: 'question_active',
+                current_question_index: pendingClockIndexRef.current,
+                question_started_at: prev.question_started_at,
+                active_multiplier: 1,
+              };
+            }
+            return mergeLiveSession(prev, updatedSession);
+          });
           if (typeof updatedSession.active_multiplier === 'number') {
             setIsMultiplierActive(updatedSession.active_multiplier === 2);
           }
@@ -665,6 +682,24 @@ export default function HostGameClient({
     [randomizeAnswers, session.id]
   );
 
+  const paintLiveQuestion = useCallback((nextIndex: number, question: Question, serverStartedAt: string | null) => {
+    setRevealData(null);
+    setIsMultiplierActive(false);
+    revealingRef.current = false;
+    setAnsweredIds(new Set());
+    setFirstLockName(null);
+    setTimeLeft(question.time_limit_seconds);
+    setSession((prev) =>
+      mergeLiveSession(prev, {
+        ...prev,
+        status: 'question_active',
+        current_question_index: nextIndex,
+        question_started_at: serverStartedAt,
+        active_multiplier: 1,
+      })
+    );
+  }, []);
+
   useEffect(() => {
     setPlayQuestions(
       questionsInPlayOrder(questions, session.question_order).map(prepareQuestionForPlay)
@@ -687,6 +722,9 @@ export default function HostGameClient({
       revealingRef.current = false;
 
       const firstQ = ordered[0];
+      pendingClockIndexRef.current = 0;
+      paintLiveQuestion(0, firstQ, serverStartedAt);
+      pendingClockIndexRef.current = null;
       void sendSessionEvent('question:start', buildQuestionStartPayload(firstQ, 0, serverStartedAt));
 
       toast.success(randomizeQuestions ? t('gameStartedRandom') : t('gameStartedFirst'));
@@ -696,7 +734,7 @@ export default function HostGameClient({
       setClashRunning(false);
       clashLockRef.current = false;
     }
-  }, [questions, randomizeQuestions, session.id, prepareQuestionForPlay, sendSessionEvent, t]);
+  }, [questions, randomizeQuestions, session.id, prepareQuestionForPlay, paintLiveQuestion, sendSessionEvent, t]);
 
   const handleStartGame = async () => {
     void unlockGameAudio();
@@ -727,22 +765,24 @@ export default function HostGameClient({
 
   // Progress to Next Question
   const handleNextQuestion = async () => {
+    const previous = session;
     try {
       const nextIndex = activeQuestionIndex + 1;
       const queued = activeQuestionForIndex(playQuestions, session.question_order, nextIndex);
       if (!queued) throw new Error(t('questionUnavailable'));
       const nextQ = prepareQuestionForPlay(queued);
       setPlayQuestions((prev) => prev.map((item) => (item.id === nextQ.id ? nextQ : item)));
+      pendingClockIndexRef.current = nextIndex;
+      paintLiveQuestion(nextIndex, nextQ, null);
 
       const { serverStartedAt } = await goToNextQuestion(session.id, nextIndex);
-      setRevealData(null);
-      setIsMultiplierActive(false);
-      revealingRef.current = false;
+      paintLiveQuestion(nextIndex, nextQ, serverStartedAt);
+      pendingClockIndexRef.current = null;
 
       void sendSessionEvent('question:start', buildQuestionStartPayload(nextQ, nextIndex, serverStartedAt));
-
-      toast.success(t('loadingNextQuestion'));
     } catch (err) {
+      pendingClockIndexRef.current = null;
+      setSession(previous);
       toast.error(err instanceof Error ? err.message : t('failedNextQuestion'));
     }
   };
@@ -851,12 +891,13 @@ export default function HostGameClient({
     try {
       const targetQ = prepareQuestionForPlay(target);
       setPlayQuestions((prev) => prev.map((item) => (item.id === targetQ.id ? targetQ : item)));
+      pendingClockIndexRef.current = targetIndex;
+      paintLiveQuestion(targetIndex, targetQ, null);
 
       const { serverStartedAt } = await goToNextQuestion(session.id, targetIndex);
-      setRevealData(null);
-      setIsMultiplierActive(false);
+      paintLiveQuestion(targetIndex, targetQ, serverStartedAt);
+      pendingClockIndexRef.current = null;
       setIsJumperOpen(false);
-      revealingRef.current = false;
 
       void sendSessionEvent(
         'question:start',
@@ -866,6 +907,7 @@ export default function HostGameClient({
       addActivityEntry('jump', `${t('activityJumpedTo')} ${targetIndex + 1}`);
       toast.success(`${t('jumpedToQuestion')} ${targetIndex + 1}`);
     } catch (err) {
+      pendingClockIndexRef.current = null;
       toast.error(err instanceof Error ? err.message : t('failedJump'));
     }
   };

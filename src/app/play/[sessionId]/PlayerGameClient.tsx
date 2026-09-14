@@ -32,6 +32,11 @@ import {
   type Player,
   type PublicQuestionPayload,
 } from '@/lib/game/types';
+import {
+  isStaleHydrate,
+  publicQuestionFromStartPayload,
+  shouldAcceptQuestionClock,
+} from '@/lib/game/liveQuestion';
 import { remainingFromPausedElapsed, remainingMs, remainingSeconds } from '@/lib/game/clock';
 import { SERVER_LATE_CUTOFF_MS } from '@/lib/game/constants';
 import { answerUsesInk, resolveAnswerColor } from '@/lib/game/marks';
@@ -219,6 +224,9 @@ export default function PlayerGameClient({
           clockStartedAtRef.current = null;
           setTimeLeft(remainingFromPausedElapsed(serverStartedAt, question.time_limit_seconds));
         } else {
+          if (!shouldAcceptQuestionClock(clockStartedAtRef.current, serverStartedAt)) {
+            return;
+          }
           setClockStartedAt(serverStartedAt);
           clockStartedAtRef.current = serverStartedAt;
           setTimeLeft(remainingSeconds(serverStartedAt, question.time_limit_seconds, nowMs()));
@@ -242,6 +250,9 @@ export default function PlayerGameClient({
       setActiveQuestion(question);
       lastSubmitRef.current = null;
       revealAppliedRef.current = null;
+      if (question.id !== prevId) {
+        clockStartedAtRef.current = null;
+      }
       syncQuestionClock(question, serverStartedAt, status);
 
       setSelectedAnswerIds([]);
@@ -291,6 +302,12 @@ export default function PlayerGameClient({
         if (data.status) setSessionStatus(data.status);
         if (typeof data.active_multiplier === 'number') {
           setActiveMultiplier(data.active_multiplier);
+        }
+        if (isStaleHydrate({ liveIndex: questionIndexRef.current, hydrateIndex: data.question_index })) {
+          return;
+        }
+        if (typeof data.question_index === 'number') {
+          questionIndexRef.current = data.question_index;
         }
         if (data.question) {
           const current = activeQuestionRef.current;
@@ -531,8 +548,17 @@ export default function PlayerGameClient({
       'clash:countdown': () => {
         setClashPlay(true);
       },
-      'question:start': () => {
+      'question:start': (msg) => {
         setClashPlay(false);
+        const question = publicQuestionFromStartPayload(msg.payload);
+        if (question) {
+          if (typeof msg.payload.question_index === 'number') {
+            questionIndexRef.current = msg.payload.question_index;
+          }
+          const started =
+            typeof msg.payload.server_started_at === 'string' ? msg.payload.server_started_at : null;
+          applyQuestionPayload(question, started, 'question_active');
+        }
         const playerId = playerRef.current?.id;
         if (playerId) void hydrateCurrentQuestion(playerId);
       },
@@ -656,6 +682,12 @@ export default function PlayerGameClient({
               (newStatus === 'question_active' || newStatus === 'question_paused') &&
               (indexChanged || !activeQuestionRef.current)
             ) {
+              if (indexChanged) {
+                setRoundResult(null);
+                setSubmissionState('idle');
+                setActiveQuestion(null);
+                activeQuestionRef.current = null;
+              }
               hydrateCurrentQuestion(playerId);
               return;
             }
@@ -667,7 +699,7 @@ export default function PlayerGameClient({
             } else if (startedAt && limit) {
               if (newStatus === 'question_paused') {
                 setTimeLeft(remainingFromPausedElapsed(startedAt, limit));
-              } else {
+              } else if (shouldAcceptQuestionClock(clockStartedAtRef.current, startedAt)) {
                 setClockStartedAt(startedAt);
                 clockStartedAtRef.current = startedAt;
                 setTimeLeft(remainingSeconds(startedAt, limit, nowMs()));
@@ -1073,7 +1105,7 @@ export default function PlayerGameClient({
   // ==========================================
   // RENDER: ROUND REVEAL RESULTS (CORRECT / INCORRECT STATE)
   // ==========================================
-  if (roundResult && activeQuestion) {
+  if (roundResult && activeQuestion && (sessionStatus === 'question_reveal' || sessionStatus === 'leaderboard')) {
     const isPoll = activeQuestion.type === 'poll';
     const isCorrect = roundResult.isCorrect;
     const timedOut = Boolean(roundResult.timedOut);

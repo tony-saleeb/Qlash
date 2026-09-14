@@ -111,6 +111,7 @@ export async function POST(request: Request) {
         answers,
       },
       server_started_at: session.question_started_at,
+      question_index: session.current_question_index,
       server_now: new Date().toISOString(),
     });
   } catch (err) {
