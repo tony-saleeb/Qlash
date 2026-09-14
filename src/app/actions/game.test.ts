@@ -75,6 +75,35 @@ describe('host game actions', () => {
     expect(session.id).toBe('sess-2');
   });
 
+  it('creates a lobby in one RPC round-trip when create_live_lobby exists', async () => {
+    host.setRpc('create_live_lobby', {
+      data: {
+        id: 'sess-rpc',
+        pin: '654321',
+        status: 'lobby',
+        host_id: 'host-1',
+        quiz_id: 'quiz-1',
+        current_question_index: 0,
+      },
+      error: null,
+    });
+    const { createGameSession } = await import('@/app/actions/game');
+    const session = await createGameSession('quiz-1');
+    expect(session.id).toBe('sess-rpc');
+    expect(session.pin).toBe('654321');
+    expect(host.from).not.toHaveBeenCalled();
+  });
+
+  it('does not fall back to insert when the quiz is unauthorized', async () => {
+    host.setRpc('create_live_lobby', {
+      data: null,
+      error: { message: 'Quiz not found or unauthorized.' },
+    });
+    const { createGameSession } = await import('@/app/actions/game');
+    await expect(createGameSession('quiz-1')).rejects.toThrow(/Quiz not found or unauthorized/);
+    expect(host.from).not.toHaveBeenCalled();
+  });
+
   it('refuses to start without a question order and only from lobby', async () => {
     const { startGameSession } = await import('@/app/actions/game');
     await expect(startGameSession('sess-1', [])).rejects.toThrow(/Question order is required/);

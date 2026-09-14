@@ -1,8 +1,7 @@
 'use server';
 
 import { getHostAuth } from '@/lib/supabase/hostAuth';
-import { DEFAULT_LATE_JOIN_THROUGH_INDEX } from '@/lib/game/lateJoin';
-import { randomLivePin } from '@/lib/game/livePin';
+import { createLiveLobby } from '@/lib/host/createLiveLobby';
 
 async function stampQuestionClock(
   supabase: Awaited<ReturnType<typeof getHostAuth>>['supabase'],
@@ -77,41 +76,7 @@ async function applyScoresBeforeAdvance(
 
 export async function createGameSession(quizId: string) {
   try {
-    const { supabase, user } = await getHostAuth();
-
-    const { data: quiz, error: quizError } = await supabase
-      .from('quizzes')
-      .select('id')
-      .eq('id', quizId)
-      .eq('host_id', user.id)
-      .single();
-
-    if (quizError || !quiz) {
-      throw new Error('Quiz not found or unauthorized.');
-    }
-
-    for (let attempt = 0; attempt < 8; attempt++) {
-      const pin = randomLivePin();
-      const { data: session, error: sessionError } = await supabase
-        .from('game_sessions')
-        .insert({
-          quiz_id: quizId,
-          host_id: user.id,
-          pin,
-          status: 'lobby',
-          current_question_index: 0,
-          active_multiplier: 1,
-          late_join_through_index: DEFAULT_LATE_JOIN_THROUGH_INDEX,
-        })
-        .select()
-        .single();
-
-      if (session) return session;
-      if ((sessionError as { code?: string } | null)?.code === '23505') continue;
-      throw sessionError || new Error('Failed to create game session.');
-    }
-
-    throw new Error('Failed to generate a unique PIN code. Please try again.');
+    return await createLiveLobby(quizId);
   } catch (err) {
     console.error('createGameSession error:', err);
     throw new Error(err instanceof Error ? err.message : 'Failed to start game room.');

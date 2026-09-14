@@ -6,7 +6,7 @@ import { ArrowLeft, Download, MessageCircle, Play, Printer } from 'lucide-react'
 import { Button } from '@/components/ui/button';
 import { BrandMark } from '@/components/brand/BrandMark';
 import { LocaleToggle } from '@/components/brand/LocaleToggle';
-import { createGameSession, createRecapQuiz, setHostLocale } from '@/lib/host/hostApi';
+import { createRecapQuiz, setHostLocale } from '@/lib/host/hostApi';
 import { recapQuestionIds } from '@/lib/game/sessionReport';
 import { reportWhatsAppHref } from '@/lib/game/reportShare';
 import { useLocale } from '@/lib/i18n/useLocale';
@@ -54,9 +54,8 @@ export default function SessionReportClient({
     const loading = toast.loading('Building a recap quiz…');
     try {
       const quiz = await createRecapQuiz(report.sessionId);
-      const session = await createGameSession(quiz.id);
       toast.success('Recap lobby ready.', { id: loading });
-      router.push(`/host/${session.id}`);
+      router.push(`/host/open/${quiz.id}`);
     } catch (err: unknown) {
       toast.error(err instanceof Error ? err.message : 'Could not build a recap quiz.', { id: loading });
     }
@@ -67,14 +66,7 @@ export default function SessionReportClient({
       toast.error('This quiz is no longer in your library.');
       return;
     }
-    const loading = toast.loading('Opening a new lobby…');
-    try {
-      const session = await createGameSession(report.quizId);
-      toast.success('Lobby ready.', { id: loading });
-      router.push(`/host/${session.id}`);
-    } catch (err: unknown) {
-      toast.error(err instanceof Error ? err.message : 'Could not start a new room.', { id: loading });
-    }
+    router.push(`/host/open/${report.quizId}`);
   };
 
   const when = new Date(report.createdAt).toLocaleString();

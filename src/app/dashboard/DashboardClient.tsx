@@ -22,10 +22,9 @@ import {
   cloneQuiz,
   createPackQuiz,
   enableQuizShare,
-  createGameSession,
   setHostLocale,
 } from '@/lib/host/hostApi';
-import { Plus, Play, Edit, Copy, Trash2, LogOut, BookTemplate, ClipboardList, Link2 } from 'lucide-react';
+import { Plus, Play, Edit, Copy, Trash2, LogOut, BookTemplate, ClipboardList, Link2, Loader2 } from 'lucide-react';
 import { BrandMark } from '@/components/brand/BrandMark';
 import { livePlayerCap, normalizeHostPlan, quizLibraryCap } from '@/lib/game/constants';
 import { LocaleToggle } from '@/components/brand/LocaleToggle';
@@ -84,6 +83,7 @@ export default function DashboardClient({
   const [title, setTitle] = useState('');
   const [description, setDescription] = useState('');
   const [actionLoading, setActionLoading] = useState(false);
+  const [hostingQuizId, setHostingQuizId] = useState<string | null>(null);
 
   const plan = normalizeHostPlan(hostPlan);
   const quizCap = quizLibraryCap(plan);
@@ -190,15 +190,10 @@ export default function DashboardClient({
     }
   };
 
-  const handleHostGame = async (quizId: string) => {
-    const loadingToast = toast.loading('Opening live lobby…');
-    try {
-      const session = await createGameSession(quizId);
-      toast.success('Lobby ready.', { id: loadingToast });
-      router.push(`/host/${session.id}`);
-    } catch (err: unknown) {
-      toast.error(err instanceof Error ? err.message : 'Failed to start game.', { id: loadingToast });
-    }
+  const handleHostGame = (quizId: string) => {
+    if (hostingQuizId) return;
+    setHostingQuizId(quizId);
+    router.push(`/host/open/${quizId}`);
   };
 
   return (
@@ -301,9 +296,15 @@ export default function DashboardClient({
                     <div className="mt-5 flex flex-wrap items-center gap-2 border-t-2 border-arena-ink/10 pt-4">
                       <Button
                         onClick={() => handleHostGame(quiz.id)}
+                        disabled={Boolean(hostingQuizId)}
                         className="h-10 min-w-[5.5rem] flex-1 rounded-none bg-arena-ink font-display font-extrabold text-white hover:bg-arena-ink/90"
                       >
-                        <Play className="mr-1 h-3.5 w-3.5 fill-current" /> Host
+                        {hostingQuizId === quiz.id ? (
+                          <Loader2 className="mr-1 h-3.5 w-3.5 animate-spin" />
+                        ) : (
+                          <Play className="mr-1 h-3.5 w-3.5 fill-current" />
+                        )}
+                        Host
                       </Button>
                       <Button
                         variant="ghost"
@@ -380,9 +381,15 @@ export default function DashboardClient({
                       {session.quiz_id && (
                         <Button
                           className="h-10 rounded-none bg-arena-ink font-display font-extrabold text-white hover:bg-arena-ink/90"
+                          disabled={Boolean(hostingQuizId)}
                           onClick={() => handleHostGame(session.quiz_id!)}
                         >
-                          <Play className="mr-1 h-3.5 w-3.5 fill-current" /> Replay
+                          {hostingQuizId === session.quiz_id ? (
+                            <Loader2 className="mr-1 h-3.5 w-3.5 animate-spin" />
+                          ) : (
+                            <Play className="mr-1 h-3.5 w-3.5 fill-current" />
+                          )}
+                          Replay
                         </Button>
                       )}
                     </div>

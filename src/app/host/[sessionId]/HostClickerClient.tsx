@@ -44,6 +44,7 @@ import { LocaleToggle } from '@/components/brand/LocaleToggle';
 import { useLocale } from '@/lib/i18n/useLocale';
 import { setHostLocale } from '@/lib/host/hostApi';
 import type { Locale } from '@/lib/i18n/locale';
+import { useHostQuestionBank } from '@/hooks/useHostQuestionBank';
 
 interface HostClickerClientProps {
   initialSession: GameSessionRow;
@@ -69,12 +70,13 @@ function displayRemaining(session: GameSessionRow, question: Question | null, no
 export default function HostClickerClient({
   initialSession,
   quiz,
-  questions,
+  questions: initialQuestions,
   initialPlayers,
   initialLocale,
 }: HostClickerClientProps) {
   const router = useRouter();
   const supabase = createClient();
+  const { questions, questionsLoading } = useHostQuestionBank(quiz.id, initialQuestions, supabase);
   const { send: sendSessionEvent } = useSessionChannel(initialSession.id, {
     supabase,
     onEvents: {
@@ -147,7 +149,6 @@ export default function HostClickerClient({
   });
 
   useEffect(() => {
-    if (!orderKey) return;
     const ordered = questionsInPlayOrder(questions, session.question_order).map(prepareQuestionForPlay);
     setPlayQuestions(ordered);
   }, [questions, prepareQuestionForPlay, orderKey, session.question_order]);
@@ -239,7 +240,7 @@ export default function HostClickerClient({
 
   const handleStart = () =>
     run(async () => {
-      if (clashLockRef.current || clashRunning) return;
+      if (clashLockRef.current || clashRunning || questionsLoading) return;
       if (!questions.length) throw new Error(t('cannotStartNoQuestions'));
       if (players.length === 0) throw new Error(t('cannotStartNoPlayers'));
       clashLockRef.current = true;
@@ -422,7 +423,7 @@ export default function HostClickerClient({
           </Button>
           <Button
             type="button"
-            disabled={busy || clashRunning || players.length === 0 || questions.length === 0}
+            disabled={busy || clashRunning || players.length === 0 || questionsLoading || questions.length === 0}
             onClick={handleStart}
             className={`${bigBtn} bg-arena-acid text-arena-ink`}
           >

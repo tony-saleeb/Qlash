@@ -13,7 +13,6 @@ import {
   goToLeaderboard,
   goToNextQuestion,
   goToPodium,
-  createGameSession,
   endGameSession,
   setSessionMultiplier,
   startGameSession,
@@ -86,6 +85,7 @@ import {
 import { LocaleToggle } from '@/components/brand/LocaleToggle';
 import { useLocale } from '@/lib/i18n/useLocale';
 import type { Locale } from '@/lib/i18n/locale';
+import { useHostQuestionBank } from '@/hooks/useHostQuestionBank';
 
 const hostCtrl =
   'h-10 gap-1.5 rounded-none border-2 border-white/30 bg-white/10 px-3.5 font-display text-[11px] font-extrabold uppercase tracking-[0.14em] text-white shadow-none hover:border-arena-acid hover:bg-arena-acid hover:text-arena-ink aria-expanded:border-arena-acid aria-expanded:bg-arena-acid aria-expanded:text-arena-ink [&_svg]:text-current';
@@ -111,13 +111,14 @@ interface HostGameClientProps {
 export default function HostGameClient({
   initialSession,
   quiz,
-  questions,
+  questions: initialQuestions,
   initialPlayers,
   playerCap = MAX_PLAYERS_PER_SESSION,
   initialLocale,
 }: HostGameClientProps) {
   const router = useRouter();
   const supabase = createClient();
+  const { questions, questionsLoading } = useHostQuestionBank(quiz.id, initialQuestions, supabase);
   const sessionStatusRef = useRef(initialSession.status);
   const { send: sendSessionEvent } = useSessionChannel(initialSession.id, {
     supabase,
@@ -665,7 +666,6 @@ export default function HostGameClient({
   );
 
   useEffect(() => {
-    if (!orderKey) return;
     setPlayQuestions(
       questionsInPlayOrder(questions, session.question_order).map(prepareQuestionForPlay)
     );
@@ -700,8 +700,8 @@ export default function HostGameClient({
 
   const handleStartGame = async () => {
     void unlockGameAudio();
-    if (clashLockRef.current || clashRunning) return;
-    if (!questions || questions.length === 0) {
+    if (clashLockRef.current || clashRunning || questionsLoading) return;
+    if (!questions.length) {
       toast.error(t('cannotStartNoQuestions'));
       return;
     }
@@ -771,15 +771,8 @@ export default function HostGameClient({
     router.push(`/dashboard/sessions/${session.id}`);
   };
 
-  const handlePlayAgain = async () => {
-    const loading = toast.loading(t('openingNewLobby'));
-    try {
-      const next = await createGameSession(quiz.id);
-      toast.success(t('lobbyReady'), { id: loading });
-      router.push(`/host/${next.id}`);
-    } catch (err: unknown) {
-      toast.error(err instanceof Error ? err.message : t('failedNewRoom'), { id: loading });
-    }
+  const handlePlayAgain = () => {
+    router.push(`/host/open/${quiz.id}`);
   };
 
   // ==========================================
@@ -999,7 +992,11 @@ export default function HostGameClient({
               </span>
             </div>
 
-            {(!questions || questions.length === 0) && (
+            {questionsLoading ? (
+              <div className="mb-2 border border-white/15 bg-white/[0.04] p-4 text-xs font-semibold text-white/70">
+                {t('loadingQuestions')}
+              </div>
+            ) : !questions.length ? (
               <div className="mb-2 flex items-center gap-3 border border-arena-signal/50 bg-arena-signal/15 p-4 text-xs font-semibold text-rose-100">
                 <AlertCircle className="h-5 w-5 shrink-0 text-arena-signal" />
                 <div>
@@ -1007,7 +1004,7 @@ export default function HostGameClient({
                   <p className="mt-0.5 text-rose-100/70">{t('emptyQuizBody')}</p>
                 </div>
               </div>
-            )}
+            ) : null}
 
             {players.length === 0 ? (
               <div className="flex flex-1 flex-col items-center justify-center p-8 text-center">
@@ -1113,7 +1110,7 @@ export default function HostGameClient({
             </Button>
             <Button
               onClick={handleStartGame}
-              disabled={clashRunning || players.length === 0 || !questions || questions.length === 0}
+              disabled={clashRunning || players.length === 0 || questionsLoading || questions.length === 0}
               className="h-14 w-full rounded-none bg-arena-acid px-10 font-display text-lg font-extrabold text-arena-ink shadow-[6px_6px_0_rgba(200,245,66,0.25)] hover:brightness-105 sm:w-auto"
             >
               <Play className="mr-2 h-5 w-5 fill-current" /> {clashRunning ? t('starting') : t('startGame')}
