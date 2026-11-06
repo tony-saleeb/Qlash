@@ -97,5 +97,6 @@ describe('POST /api/player/me', () => {
     expect(result.status).toBe(200);
     expect(result.body.player).toMatchObject({ id: 'p1', nickname: 'Ada', connected: true });
     expect(result.body.sessionStatus).toBe('lobby');
+    expect(admin.lastUpdate('players')).toEqual({ connected: true });
   });
 });
