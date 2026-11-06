@@ -135,11 +135,8 @@ create policy "Hosts can manage own quiz questions" on public.questions
 -- Game Sessions
 create policy "Hosts can manage own game sessions" on public.game_sessions
   for all using (auth.uid() = host_id);
--- Anon: clock/status for Realtime (PIN withheld by column GRANT below).
-create policy "Anon can read live session clock" on public.game_sessions
-  for select to anon using (true);
 
--- Players: public read for lobby/leaderboard; writes via service role / host only
+-- Players: writes via service role / host only. Anonymous reads are closed.
 create policy "Hosts can manage players" on public.players
   for all using (
     exists (
@@ -147,8 +144,6 @@ create policy "Hosts can manage players" on public.players
       where game_sessions.id = players.session_id and game_sessions.host_id = auth.uid()
     )
   );
-create policy "Public can view players" on public.players
-  for select using (true);
 -- No public INSERT/UPDATE — join & connection updates go through Next.js APIs (service role)
 
 -- player_tokens: no policies → denied for anon/authenticated (service role bypasses RLS)
@@ -329,22 +324,9 @@ alter publication supabase_realtime add table public.answers_submitted;
 
 alter table public.players replica identity full;
 
--- Anon cannot SELECT pin. Authenticated hosts use “manage own” RLS (no cross-tenant PIN dump).
+-- P15: anonymous table reads are closed. Realtime policy helpers are security definer.
 revoke select on table public.game_sessions from anon;
-grant select (
-  id,
-  quiz_id,
-  host_id,
-  status,
-  current_question_index,
-  question_started_at,
-  active_multiplier,
-  scores_applied_question_id,
-  scored_question_ids,
-  question_order,
-  late_join_through_index,
-  created_at
-) on table public.game_sessions to anon;
+revoke select on table public.players from anon;
 
 grant select, insert, update, delete on table public.game_sessions to authenticated;
 

@@ -46,8 +46,9 @@ Run these in the Supabase SQL editor, in order, on a new project:
 16. `schema-p12-hardening.sql` — function grants, session ownership, PIN lifecycle, bucket limits. After p12, new functions get no automatic EXECUTE grant — grant it explicitly.
 17. `schema-p13-live-rpcs.sql` — one Postgres-clock update per start, advance, pause, resume, and add-time
 18. `schema-p14-realtime-auth.sql` — private realtime topics; Postgres broadcasts session state and kicks
+19. `schema-p15-anon-lockdown.sql` — revoke anonymous reads of players and game sessions
 
-Existing projects that already have the live loop: run **5–18** (re-run fast-submit, then p3, p4, media, p5, p6, p7, p8, p9, p10, p11, p12, p13, p14).
+Existing projects that already have the live loop: run **5–19** (re-run fast-submit, then p3, p4, media, p5, p6, p7, p8, p9, p10, p11, p12, p13, p14, p15).
 
 ## Production URL + Google login
 
