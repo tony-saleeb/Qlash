@@ -6,12 +6,18 @@ vi.mock('@/lib/supabase/admin', () => ({
   createAdminClient: vi.fn(),
 }));
 
+type RateLimitResult = { ok: boolean; retryAfterSec?: number };
+type RateLimitParams = { key: string; limit: number; windowMs: number };
+
 const { rateLimitMock } = vi.hoisted(() => ({
-  rateLimitMock: vi.fn(() => ({ ok: true as const })),
+  rateLimitMock: vi.fn((params: RateLimitParams): RateLimitResult => {
+    void params;
+    return { ok: true };
+  }),
 }));
 
 vi.mock('@/lib/rate-limit', () => ({
-  rateLimit: (...args: unknown[]) => rateLimitMock(...args),
+  rateLimit: (params: RateLimitParams) => rateLimitMock(params),
   clientIpFromRequest: () => 'test-ip',
 }));
 

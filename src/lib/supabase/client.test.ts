@@ -1,9 +1,13 @@
 import { beforeEach, describe, expect, it, vi } from 'vitest';
 
-const createBrowserClient = vi.fn(() => ({ stamp: Math.random() }));
+const createBrowserClient = vi.fn((url: string, key: string) => {
+  void url;
+  void key;
+  return { stamp: Math.random() };
+});
 
 vi.mock('@supabase/ssr', () => ({
-  createBrowserClient: (...args: unknown[]) => createBrowserClient(...args),
+  createBrowserClient: (url: string, key: string) => createBrowserClient(url, key),
 }));
 
 describe('createClient', () => {

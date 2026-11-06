@@ -1,13 +1,23 @@
 import { beforeEach, describe, expect, it, vi } from 'vitest';
 import { jsonRequest, readJson } from '@/test/supabaseMock';
+import type { HostRegisterAdmin, HostRegisterInput } from '@/lib/host/registerHost';
+
+type RateLimitResult = { ok: boolean; retryAfterSec?: number };
+type RateLimitParams = { key: string; limit: number; windowMs: number };
 
 const { rateLimitMock, createConfirmedHostMock } = vi.hoisted(() => ({
-  rateLimitMock: vi.fn(() => ({ ok: true as const })),
-  createConfirmedHostMock: vi.fn(async () => undefined),
+  rateLimitMock: vi.fn((params: RateLimitParams): RateLimitResult => {
+    void params;
+    return { ok: true };
+  }),
+  createConfirmedHostMock: vi.fn(async (admin: HostRegisterAdmin, input: HostRegisterInput) => {
+    void admin;
+    void input;
+  }),
 }));
 
 vi.mock('@/lib/rate-limit', () => ({
-  rateLimit: (...args: unknown[]) => rateLimitMock(...args),
+  rateLimit: (params: RateLimitParams) => rateLimitMock(params),
   clientIpFromRequest: (request: Request) => request.headers.get('x-forwarded-for') || 'test-ip',
 }));
 
@@ -19,7 +29,8 @@ vi.mock('@/lib/host/registerHost', async () => {
   const actual = await vi.importActual<typeof import('@/lib/host/registerHost')>('@/lib/host/registerHost');
   return {
     ...actual,
-    createConfirmedHost: (...args: unknown[]) => createConfirmedHostMock(...args),
+    createConfirmedHost: (admin: HostRegisterAdmin, input: HostRegisterInput) =>
+      createConfirmedHostMock(admin, input),
   };
 });
 

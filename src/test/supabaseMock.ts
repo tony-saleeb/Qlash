@@ -53,7 +53,20 @@ export function createQueryChain(getResult: () => QueryResult) {
   return chain;
 }
 
-export function createClientMock(user = { id: 'host-1', email: 'host@qlash.test' }) {
+type MockUser = { id: string; email?: string } | null;
+
+type AuthUserResult = {
+  data: { user: MockUser };
+  error: { message: string } | null;
+};
+
+type AuthSessionResult = {
+  data: { session: { user: { id: string; email?: string } } | null };
+};
+
+export function createClientMock(
+  user: MockUser = { id: 'host-1', email: 'host@qlash.test' }
+) {
   const tables: Record<string, TableQueue> = {};
   const indexes: Record<string, number> = {};
   const rpcMap: Record<string, QueryResult | ((args: unknown) => QueryResult)> = {};
@@ -104,10 +117,10 @@ export function createClientMock(user = { id: 'host-1', email: 'host@qlash.test'
     removeChannel: vi.fn(),
     fromCalls,
     auth: {
-      getSession: vi.fn(async () => ({
+      getSession: vi.fn(async (): Promise<AuthSessionResult> => ({
         data: { session: user ? { user } : null },
       })),
-      getUser: vi.fn(async () => ({
+      getUser: vi.fn(async (): Promise<AuthUserResult> => ({
         data: { user },
         error: user ? null : { message: 'Unauthorized' },
       })),

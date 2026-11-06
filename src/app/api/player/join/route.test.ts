@@ -2,16 +2,22 @@ import { beforeEach, describe, expect, it, vi } from 'vitest';
 import { createClientMock, jsonRequest, readJson } from '@/test/supabaseMock';
 import { createAdminClient } from '@/lib/supabase/admin';
 
+type RateLimitResult = { ok: boolean; retryAfterSec?: number };
+type RateLimitParams = { key: string; limit: number; windowMs: number };
+
 vi.mock('@/lib/supabase/admin', () => ({
   createAdminClient: vi.fn(),
 }));
 
 const { rateLimitMock } = vi.hoisted(() => ({
-  rateLimitMock: vi.fn(() => ({ ok: true as const })),
+  rateLimitMock: vi.fn((params: RateLimitParams): RateLimitResult => {
+    void params;
+    return { ok: true };
+  }),
 }));
 
 vi.mock('@/lib/rate-limit', () => ({
-  rateLimit: (...args: unknown[]) => rateLimitMock(...args),
+  rateLimit: (params: RateLimitParams) => rateLimitMock(params),
   clientIpFromRequest: (request: Request) => request.headers.get('x-forwarded-for') || 'test-ip',
 }));
 
