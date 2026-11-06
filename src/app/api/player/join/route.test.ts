@@ -50,6 +50,13 @@ describe('POST /api/player/join', () => {
     const { POST } = await import('@/app/api/player/join/route');
     const result = await readJson(await POST(jsonRequest({ pin: '123456', nickname: 'Ada' })));
     expect(result).toMatchObject({ status: 404, body: { error: 'Game room not found.' } });
+    const sessionCall = admin.fromCalls.find((entry) => entry.table === 'game_sessions');
+    const captured = (
+      sessionCall?.chain as { _captured?: { method: string; args: unknown[] }[] }
+    )._captured;
+    expect(captured).toEqual(
+      expect.arrayContaining([{ method: 'neq', args: ['status', 'finished'] }])
+    );
   });
 
   it('rejects a finished room', async () => {

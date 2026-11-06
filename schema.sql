@@ -49,7 +49,7 @@ create table public.game_sessions (
   id uuid primary key default gen_random_uuid(),
   quiz_id uuid references public.quizzes(id) on delete set null,
   host_id uuid references public.hosts(id) on delete cascade not null,
-  pin text unique not null,
+  pin text not null,
   status text default 'lobby' not null,
   current_question_index int default 0 not null,
   question_started_at timestamptz,
@@ -99,7 +99,7 @@ create table public.answers_submitted (
 create index players_session_id_idx on public.players(session_id);
 create unique index players_session_nickname_uidx on public.players (session_id, lower(nickname));
 create index answers_session_question_idx on public.answers_submitted(session_id, question_id);
-create index game_sessions_pin_idx on public.game_sessions(pin);
+create unique index game_sessions_pin_live_uidx on public.game_sessions (pin) where status <> 'finished';
 create unique index player_tokens_token_idx on public.player_tokens(client_token);
 
 -- Enable Row Level Security
@@ -303,7 +303,11 @@ grant execute on function public.apply_question_scores_and_reveal(uuid, uuid) to
 -- Triggers
 
 create or replace function public.handle_new_user()
-returns trigger as $$
+returns trigger
+language plpgsql
+security definer
+set search_path = ''
+as $$
 begin
   insert into public.hosts (id, display_name)
   values (
@@ -312,7 +316,7 @@ begin
   );
   return new;
 end;
-$$ language plpgsql security definer;
+$$;
 
 create trigger on_auth_user_created
   after insert on auth.users
@@ -499,3 +503,43 @@ $$;
 
 revoke all on function public.create_live_lobby(uuid) from public;
 grant execute on function public.create_live_lobby(uuid) to authenticated;
+
+-- P12: grants, ownership, host columns, PIN lifecycle. Migration: schema-p12-hardening.sql.
+-- submit_live_answer is created by schema-fast-submit.sql / schema-p10-late-grading.sql, so its
+-- EXECUTE revoke lives in schema-p12-hardening.sql, which runs after those files.
+
+create or replace function public.enforce_session_quiz_owner()
+returns trigger
+language plpgsql
+security definer
+set search_path = ''
+as $$
+begin
+  if new.quiz_id is null or (select auth.uid()) is null then
+    return new;
+  end if;
+  if not exists (
+    select 1 from public.quizzes q
+    where q.id = new.quiz_id and q.host_id = (select auth.uid())
+  ) then
+    raise exception 'QUIZ_NOT_OWNED' using errcode = '42501';
+  end if;
+  return new;
+end;
+$$;
+revoke all on function public.enforce_session_quiz_owner() from public, anon, authenticated;
+drop trigger if exists game_sessions_enforce_quiz_owner on public.game_sessions;
+create trigger game_sessions_enforce_quiz_owner
+  before insert or update of quiz_id on public.game_sessions
+  for each row execute function public.enforce_session_quiz_owner();
+
+revoke update on table public.hosts from anon, authenticated;
+grant update (display_name, ui_locale) on table public.hosts to authenticated;
+
+revoke execute on function public.apply_question_scores_and_reveal(uuid, uuid) from public, anon;
+revoke execute on function public.start_question_clock(uuid) from public, anon;
+revoke execute on function public.create_live_lobby(uuid) from public, anon;
+revoke execute on function public.handle_new_user() from public, anon, authenticated;
+revoke execute on function public.enforce_quiz_library_cap() from public, anon, authenticated;
+revoke execute on function public.enforce_session_player_cap() from public, anon, authenticated;
+alter default privileges for role postgres in schema public revoke execute on functions from public, anon, authenticated;

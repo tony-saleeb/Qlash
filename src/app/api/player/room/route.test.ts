@@ -40,6 +40,13 @@ describe('POST /api/player/room', () => {
     expect(result.status).toBe(200);
     expect(result.body).toEqual({ teamMode: true });
     expect(result.body.sessionId).toBeUndefined();
+    const sessionCall = admin.fromCalls.find((entry) => entry.table === 'game_sessions');
+    const captured = (
+      sessionCall?.chain as { _captured?: { method: string; args: unknown[] }[] }
+    )._captured;
+    expect(captured).toEqual(
+      expect.arrayContaining([{ method: 'neq', args: ['status', 'finished'] }])
+    );
   });
 
   it('returns teamMode false for an unknown PIN', async () => {

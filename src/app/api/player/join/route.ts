@@ -50,6 +50,7 @@ export async function POST(request: Request) {
         'id, status, quiz_id, current_question_index, late_join_through_index, quizzes(team_mode), hosts(plan)'
       )
       .eq('pin', pin)
+      .neq('status', 'finished')
       .maybeSingle();
 
     if (sessionError || !session) {
