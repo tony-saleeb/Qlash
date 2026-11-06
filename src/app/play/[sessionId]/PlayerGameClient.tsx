@@ -144,6 +144,8 @@ export default function PlayerGameClient({
   const lastStartSoundQidRef = React.useRef<string | null>(null);
   const hydrateInFlightRef = React.useRef(false);
   const hydrateAgainRef = React.useRef(false);
+  const sessionStateHandlerRef = React.useRef<((payload: Record<string, unknown>) => void) | null>(null);
+  const playerRemovedHandlerRef = React.useRef<((payload: Record<string, unknown>) => void) | null>(null);
   const serverClockOffsetMsRef = React.useRef<number | null>(null);
   liveRankRef.current = liveRank;
   sessionStatusRef.current = sessionStatus;
@@ -540,7 +542,7 @@ export default function PlayerGameClient({
     [sessionId, syncOfficialScore]
   );
 
-  const { send: sendSessionEvent } = useSessionChannel(sessionId, {
+  useSessionChannel(sessionId, {
     supabase,
     onEvents: {
       'clash:countdown': () => {
@@ -568,8 +570,14 @@ export default function PlayerGameClient({
         }
       },
       'host:announcement': (msg) => {
-        const message = msg.payload.message as string;
+        const message = String(msg.payload.message || '').slice(0, 140);
         if (message) toast.info(`${t('hostSaid')} ${message}`, { duration: 8000 });
+      },
+      'session:state': (msg) => {
+        sessionStateHandlerRef.current?.(msg.payload);
+      },
+      'player:removed': (msg) => {
+        playerRemovedHandlerRef.current?.(msg.payload);
       },
     },
   });
@@ -631,97 +639,81 @@ export default function PlayerGameClient({
     const playerId = player.id;
     let connectionTimer: ReturnType<typeof setTimeout> | null = null;
 
-    const liveChannel = supabase
-      .channel(`player_live_${playerId}`)
-      .on(
-        'postgres_changes',
-        {
-          event: 'DELETE',
-          schema: 'public',
-          table: 'players',
-          filter: `id=eq.${playerId}`,
-        },
-        (payload) => {
-          if (!isOwnRemoval(payload, playerId)) return;
-          localStorage.removeItem(`quizarena_token_${sessionId}`);
-          toast.error(t('kickedByHost'));
-          router.push('/play');
-        }
-      )
-      .on(
-        'postgres_changes',
-        {
-          event: 'UPDATE',
-          schema: 'public',
-          table: 'game_sessions',
-          filter: `id=eq.${sessionId}`,
-        },
-        (payload) => {
-          const newStatus = payload.new.status as string;
-          sessionStatusRef.current = newStatus;
-          setSessionStatus(newStatus);
+    playerRemovedHandlerRef.current = (payload) => {
+      if (!isOwnRemoval({ old: { id: payload.player_id } }, playerId)) return;
+      localStorage.removeItem(`quizarena_token_${sessionId}`);
+      toast.error(t('kickedByHost'));
+      router.push('/play');
+    };
 
-          if (typeof payload.new.active_multiplier === 'number') {
-            setActiveMultiplier(payload.new.active_multiplier);
-          }
+    sessionStateHandlerRef.current = (payload) => {
+      const row =
+        payload.new && typeof payload.new === 'object'
+          ? (payload.new as Record<string, unknown>)
+          : {};
+      const newStatus = row.status as string;
+      sessionStatusRef.current = newStatus;
+      setSessionStatus(newStatus);
 
-          const startedAt = payload.new.question_started_at as string | null;
-          const limit = activeQuestionRef.current?.time_limit_seconds;
-          const nextIndex = payload.new.current_question_index;
-          if (typeof nextIndex === 'number') {
-            const indexChanged =
-              questionIndexRef.current !== null && nextIndex !== questionIndexRef.current;
-            questionIndexRef.current = nextIndex;
-            if (
-              (newStatus === 'question_active' || newStatus === 'question_paused') &&
-              (indexChanged || !activeQuestionRef.current)
-            ) {
-              if (indexChanged) {
-                setRoundResult(null);
-                setSubmissionState('idle');
-                setActiveQuestion(null);
-                activeQuestionRef.current = null;
-              }
-              hydrateCurrentQuestion(playerId);
-              return;
-            }
-          }
+      if (typeof row.active_multiplier === 'number') {
+        setActiveMultiplier(row.active_multiplier);
+      }
 
-          if (newStatus === 'question_active' || newStatus === 'question_paused') {
-            if (!activeQuestionRef.current) {
-              hydrateCurrentQuestion(playerId);
-            } else if (startedAt && limit) {
-              if (newStatus === 'question_paused') {
-                setTimeLeft(remainingFromPausedElapsed(startedAt, limit));
-              } else if (shouldAcceptQuestionClock(clockStartedAtRef.current, startedAt)) {
-                setClockStartedAt(startedAt);
-                clockStartedAtRef.current = startedAt;
-                setTimeLeft(remainingSeconds(startedAt, limit, nowMs()));
-              }
-            }
-          } else if (newStatus === 'question_reveal') {
-            const q = activeQuestionRef.current;
-            if (!q || revealAppliedRef.current === q.id) return;
-            const submit = lastSubmitRef.current;
-            const inFlight = Boolean(
-              submit && submit.questionId === q.id && !submit.accepted && !submit.error
-            );
-            if (inFlight) return;
-            void revealFromServer(playerId, q.id);
-          } else if (newStatus === 'leaderboard') {
+      const startedAt = row.question_started_at as string | null;
+      const limit = activeQuestionRef.current?.time_limit_seconds;
+      const nextIndex = row.current_question_index;
+      if (typeof nextIndex === 'number') {
+        const indexChanged =
+          questionIndexRef.current !== null && nextIndex !== questionIndexRef.current;
+        questionIndexRef.current = nextIndex;
+        if (
+          (newStatus === 'question_active' || newStatus === 'question_paused') &&
+          (indexChanged || !activeQuestionRef.current)
+        ) {
+          if (indexChanged) {
             setRoundResult(null);
-          } else if (newStatus === 'finished') {
-            if (!activeQuestionRef.current) {
-              localStorage.removeItem(`quizarena_token_${sessionId}`);
-              toast.info(t('lobbyClosed'));
-              router.push('/play');
-              return;
-            }
-            void loadPodium(playerId);
+            setSubmissionState('idle');
+            setActiveQuestion(null);
+            activeQuestionRef.current = null;
+          }
+          hydrateCurrentQuestion(playerId);
+          return;
+        }
+      }
+
+      if (newStatus === 'question_active' || newStatus === 'question_paused') {
+        if (!activeQuestionRef.current) {
+          hydrateCurrentQuestion(playerId);
+        } else if (startedAt && limit) {
+          if (newStatus === 'question_paused') {
+            setTimeLeft(remainingFromPausedElapsed(startedAt, limit));
+          } else if (shouldAcceptQuestionClock(clockStartedAtRef.current, startedAt)) {
+            setClockStartedAt(startedAt);
+            clockStartedAtRef.current = startedAt;
+            setTimeLeft(remainingSeconds(startedAt, limit, nowMs()));
           }
         }
-      )
-      .subscribe();
+      } else if (newStatus === 'question_reveal') {
+        const q = activeQuestionRef.current;
+        if (!q || revealAppliedRef.current === q.id) return;
+        const submit = lastSubmitRef.current;
+        const inFlight = Boolean(
+          submit && submit.questionId === q.id && !submit.accepted && !submit.error
+        );
+        if (inFlight) return;
+        void revealFromServer(playerId, q.id);
+      } else if (newStatus === 'leaderboard') {
+        setRoundResult(null);
+      } else if (newStatus === 'finished') {
+        if (!activeQuestionRef.current) {
+          localStorage.removeItem(`quizarena_token_${sessionId}`);
+          toast.info(t('lobbyClosed'));
+          router.push('/play');
+          return;
+        }
+        void loadPodium(playerId);
+      }
+    };
 
     const syncConnection = (connected: boolean) => {
       void fetch('/api/player/connection', {
@@ -751,11 +743,12 @@ export default function PlayerGameClient({
 
     return () => {
       if (connectionTimer) clearTimeout(connectionTimer);
-      supabase.removeChannel(liveChannel);
+      sessionStateHandlerRef.current = null;
+      playerRemovedHandlerRef.current = null;
       document.removeEventListener('visibilitychange', handleVisibilityChange);
       window.removeEventListener('pagehide', handlePageHide);
     };
-  }, [supabase, player?.id, sessionId, router, hydrateCurrentQuestion, revealFromServer, loadPodium, t, nowMs]);
+  }, [player?.id, sessionId, router, hydrateCurrentQuestion, revealFromServer, loadPodium, t, nowMs]);
 
   /**
    * Last line of defence against a spinner: if the room is on a question and
@@ -860,10 +853,16 @@ export default function PlayerGameClient({
     if (!canSendReaction(lastReactionAtRef.current, now)) return;
     lastReactionAtRef.current = now;
     playHaptic(12);
-    void sendSessionEvent('lobby:react', {
-      mark,
-      nickname: player.nickname,
-      playerId: player.id,
+    void fetch('/api/player/react', {
+      method: 'POST',
+      keepalive: true,
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({
+        sessionId,
+        playerId: player.id,
+        token: localStorage.getItem(`quizarena_token_${sessionId}`) || '',
+        mark,
+      }),
     });
   };
 

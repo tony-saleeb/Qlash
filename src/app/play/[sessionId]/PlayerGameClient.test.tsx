@@ -6,7 +6,12 @@ import { createClientMock } from '@/test/supabaseMock';
 
 const router = { push: vi.fn(), prefetch: vi.fn() };
 const supabase = createClientMock();
-const { sendSessionEvent } = vi.hoisted(() => ({ sendSessionEvent: vi.fn() }));
+const { sendSessionEvent, sessionHandlers } = vi.hoisted(() => ({
+  sendSessionEvent: vi.fn(),
+  sessionHandlers: {
+    current: {} as Record<string, (msg: { payload: Record<string, unknown> }) => void>,
+  },
+}));
 
 vi.mock('next/navigation', () => ({
   useRouter: () => router,
@@ -17,7 +22,14 @@ vi.mock('@/lib/supabase/client', () => ({
 }));
 
 vi.mock('@/hooks/useSessionChannel', () => ({
-  useSessionChannel: () => ({ send: sendSessionEvent, ready: true }),
+  useSessionChannel: (
+    sessionId: string,
+    options?: { onEvents?: Record<string, (msg: { payload: Record<string, unknown> }) => void> }
+  ) => {
+    void sessionId;
+    sessionHandlers.current = options?.onEvents ?? {};
+    return { send: sendSessionEvent, ready: true };
+  },
 }));
 
 vi.mock('@/lib/sounds', () => ({
@@ -121,24 +133,25 @@ describe('PlayerGameClient', () => {
 
   it('cheers the projector with a Qlash mark', async () => {
     localStorage.setItem('quizarena_token_sess-1', 'tok');
-    vi.stubGlobal(
-      'fetch',
-      vi.fn(async (input: RequestInfo | URL) => {
-        const url = String(input);
-        if (url.includes('/api/player/me')) {
-          return jsonResponse({ player, sessionStatus: 'lobby' });
-        }
-        return jsonResponse({}, 404);
-      })
-    );
+    const fetchMock = vi.fn(async (input: RequestInfo | URL) => {
+      const url = String(input);
+      if (url.includes('/api/player/me')) {
+        return jsonResponse({ player, sessionStatus: 'lobby' });
+      }
+      return jsonResponse({}, 404);
+    });
+    vi.stubGlobal('fetch', fetchMock);
     const user = userEvent.setup();
     render(<PlayerGameClient sessionId="sess-1" initialSessionStatus="lobby" />);
     await user.click(await screen.findByRole('button', { name: 'slash' }));
-    expect(sendSessionEvent).toHaveBeenCalledWith('lobby:react', {
-      mark: 'slash',
-      nickname: 'Ada',
-      playerId: 'p1',
-    });
+    expect(fetchMock).toHaveBeenCalledWith(
+      '/api/player/react',
+      expect.objectContaining({
+        method: 'POST',
+        keepalive: true,
+        body: JSON.stringify({ sessionId: 'sess-1', playerId: 'p1', token: 'tok', mark: 'slash' }),
+      })
+    );
   });
 
   it('renders Qlash answer tiles for an active MCQ', async () => {
@@ -276,11 +289,13 @@ describe('PlayerGameClient', () => {
     expect(screen.getByRole('button', { name: 'slash' })).toBeInTheDocument();
     expect(screen.getByText(/tap a mark/i)).toBeInTheDocument();
     await user.click(screen.getByRole('button', { name: 'slash' }));
-    expect(sendSessionEvent).toHaveBeenCalledWith('lobby:react', {
-      mark: 'slash',
-      nickname: 'Ada',
-      playerId: 'p1',
-    });
+    expect(fetchMock).toHaveBeenCalledWith(
+      '/api/player/react',
+      expect.objectContaining({
+        method: 'POST',
+        body: JSON.stringify({ sessionId: 'sess-1', playerId: 'p1', token: 'tok', mark: 'slash' }),
+      })
+    );
   });
 
   it('lets a lobby player leave and clears their token', async () => {
@@ -309,27 +324,8 @@ describe('PlayerGameClient', () => {
     expect(router.push).toHaveBeenCalledWith('/play');
   });
 
-  function installSessionChannel() {
-    let onSessionUpdate: ((payload: { new: Record<string, unknown> }) => void) | undefined;
-    supabase.channel.mockImplementation(() => {
-      const ch = {
-        on: vi.fn((event: string, filter: { table?: string }, cb: (payload: { new: Record<string, unknown> }) => void) => {
-          if (event === 'postgres_changes' && filter.table === 'game_sessions') onSessionUpdate = cb;
-          return ch;
-        }),
-        subscribe: vi.fn((cb?: (status: string) => void) => {
-          cb?.('SUBSCRIBED');
-          return ch;
-        }),
-        send: vi.fn(async () => 'ok'),
-      };
-      return ch;
-    });
-    return {
-      reveal() {
-        onSessionUpdate?.({ new: { status: 'question_reveal' } });
-      },
-    };
+  function revealQuestion() {
+    sessionHandlers.current['session:state']?.({ payload: { new: { status: 'question_reveal' } } });
   }
 
   const questionPayload = {
@@ -352,7 +348,6 @@ describe('PlayerGameClient', () => {
 
   it('shows checking then the server result, and never the wrong-answer sound for a correct answer', async () => {
     localStorage.setItem('quizarena_token_sess-1', 'tok');
-    const room = installSessionChannel();
     let releaseResult: (() => void) | undefined;
     const gate = new Promise<void>((resolve) => {
       releaseResult = resolve;
@@ -388,7 +383,7 @@ describe('PlayerGameClient', () => {
     render(<PlayerGameClient sessionId="sess-1" initialSessionStatus="question_active" />);
     await user.click(await screen.findByRole('button', { name: /^4$/ }));
     expect(await screen.findByText(/answer locked/i)).toBeInTheDocument();
-    room.reveal();
+    revealQuestion();
     expect(await screen.findByRole('heading', { name: /checking your answer/i })).toBeInTheDocument();
     resultReleased = true;
     releaseResult?.();
@@ -398,7 +393,6 @@ describe('PlayerGameClient', () => {
 
   it('shows time is up when the player tapped but the server recorded no answer', async () => {
     localStorage.setItem('quizarena_token_sess-1', 'tok');
-    const room = installSessionChannel();
     const fetchMock = vi.fn(async (input: RequestInfo | URL) => {
       const url = String(input);
       if (url.includes('/api/player/me')) {
@@ -428,7 +422,46 @@ describe('PlayerGameClient', () => {
     render(<PlayerGameClient sessionId="sess-1" initialSessionStatus="question_active" />);
     await user.click(await screen.findByRole('button', { name: /^4$/ }));
     expect(await screen.findByText(/answer locked/i)).toBeInTheDocument();
-    room.reveal();
+    revealQuestion();
     expect(await screen.findByRole('heading', { name: /time.s up/i })).toBeInTheDocument();
+  });
+
+  it('stays in the room when a different player is removed', async () => {
+    localStorage.setItem('quizarena_token_sess-1', 'tok');
+    vi.stubGlobal(
+      'fetch',
+      vi.fn(async (input: RequestInfo | URL) => {
+        const url = String(input);
+        if (url.includes('/api/player/me')) {
+          return jsonResponse({ player, sessionStatus: 'lobby' });
+        }
+        return jsonResponse({}, 404);
+      })
+    );
+    render(<PlayerGameClient sessionId="sess-1" initialSessionStatus="lobby" />);
+    expect(await screen.findByText('Ada')).toBeInTheDocument();
+    sessionHandlers.current['player:removed']?.({ payload: { player_id: 'someone-else' } });
+    expect(screen.getByText('Ada')).toBeInTheDocument();
+    expect(localStorage.getItem('quizarena_token_sess-1')).toBe('tok');
+    expect(router.push).not.toHaveBeenCalled();
+  });
+
+  it('leaves and clears the token when this player is removed', async () => {
+    localStorage.setItem('quizarena_token_sess-1', 'tok');
+    vi.stubGlobal(
+      'fetch',
+      vi.fn(async (input: RequestInfo | URL) => {
+        const url = String(input);
+        if (url.includes('/api/player/me')) {
+          return jsonResponse({ player, sessionStatus: 'lobby' });
+        }
+        return jsonResponse({}, 404);
+      })
+    );
+    render(<PlayerGameClient sessionId="sess-1" initialSessionStatus="lobby" />);
+    expect(await screen.findByText('Ada')).toBeInTheDocument();
+    sessionHandlers.current['player:removed']?.({ payload: { player_id: 'p1' } });
+    expect(localStorage.getItem('quizarena_token_sess-1')).toBeNull();
+    expect(router.push).toHaveBeenCalledWith('/play');
   });
 });

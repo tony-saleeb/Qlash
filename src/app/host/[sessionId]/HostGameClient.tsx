@@ -123,22 +123,6 @@ export default function HostGameClient({
   const { send: sendSessionEvent } = useSessionChannel(initialSession.id, {
     supabase,
     onEvents: {
-      'lobby:react': (msg) => {
-        if (!canCheerOnProjector(sessionStatusRef.current)) return;
-        const mark = msg.payload.mark;
-        const nickname = String(msg.payload.nickname || '').trim().slice(0, 15);
-        if (!isLobbyReactionId(mark) || !nickname) return;
-        const item: FloatingReaction = {
-          id: `${Date.now()}-${Math.random().toString(36).slice(2, 7)}`,
-          mark,
-          nickname,
-          left: reactionLeftPercent(Math.floor(Math.random() * 84)),
-        };
-        setLobbyReactions((prev) => [...prev.slice(-(MAX_FLOATING_REACTIONS - 1)), item]);
-        window.setTimeout(() => {
-          setLobbyReactions((prev) => prev.filter((row) => row.id !== item.id));
-        }, REACTION_FLOAT_MS);
-      },
       'clash:countdown': () => {
         setClashRunning(true);
       },
@@ -325,22 +309,13 @@ export default function HostGameClient({
       setRevealData(results);
       setSession((prev) => ({ ...prev, status: 'question_reveal' }));
 
-      const correctOptionIds = activeQuestion.answers
-        .filter((ans) => ans.is_correct)
-        .map((ans) => ans.id);
-
-      void sendSessionEvent('question:reveal', {
-        correct_answer_ids: correctOptionIds,
-        option_counts: results.optionCounts,
-      });
-
       toast.success(t('resultsCalculated'), { id: loadingToast });
     } catch (err) {
       toast.error(err instanceof Error ? err.message : t('failedReveal'), { id: loadingToast });
     } finally {
       revealingRef.current = false;
     }
-  }, [session.id, activeQuestion, sendSessionEvent, t]);
+  }, [session.id, activeQuestion, t]);
 
   // One Realtime channel for players, session row, and submissions
   useEffect(() => {
@@ -368,7 +343,7 @@ export default function HostGameClient({
     };
 
     const channel = supabase
-      .channel(`host_live_${session.id}`)
+      .channel(`session:${session.id}:host`, { config: { private: true } })
       .on(
         'postgres_changes',
         {
@@ -476,6 +451,23 @@ export default function HostGameClient({
           }
         }
       )
+      .on('broadcast', { event: 'lobby:react' }, (msg) => {
+        if (!canCheerOnProjector(sessionStatusRef.current)) return;
+        const payload = (msg as { payload?: { mark?: unknown; nickname?: unknown } }).payload;
+        const mark = payload?.mark;
+        const nickname = String(payload?.nickname || '').trim().slice(0, 15);
+        if (!isLobbyReactionId(mark) || !nickname) return;
+        const item: FloatingReaction = {
+          id: `${Date.now()}-${Math.random().toString(36).slice(2, 7)}`,
+          mark,
+          nickname,
+          left: reactionLeftPercent(Math.floor(Math.random() * 84)),
+        };
+        setLobbyReactions((prev) => [...prev.slice(-(MAX_FLOATING_REACTIONS - 1)), item]);
+        window.setTimeout(() => {
+          setLobbyReactions((prev) => prev.filter((row) => row.id !== item.id));
+        }, REACTION_FLOAT_MS);
+      })
       .subscribe();
 
     return () => {
@@ -629,22 +621,10 @@ export default function HostGameClient({
     const isPaused = session.status === 'question_paused';
     try {
       if (isPaused) {
-        const { serverStartedAt } = await resumeGameSession(session.id);
-        void sendSessionEvent('timer:sync', {
-          status: 'question_active',
-          server_started_at: serverStartedAt,
-          remaining_seconds: activeQuestion
-            ? remainingSeconds(serverStartedAt, activeQuestion.time_limit_seconds)
-            : timeLeft,
-        });
+        await resumeGameSession(session.id);
         toast.success(t('gameResumed'));
       } else {
-        const remaining = timeLeft;
         await pauseGameSession(session.id);
-        void sendSessionEvent('timer:sync', {
-          status: 'question_paused',
-          remaining_seconds: remaining,
-        });
         toast.success(t('gamePausedToast'));
       }
     } catch (err) {
@@ -656,13 +636,7 @@ export default function HostGameClient({
     if (!session.question_started_at) return;
     try {
       const { serverStartedAt } = await addQuestionTime(session.id, 10);
-      const remaining = timeLeft + 10;
-      setTimeLeft(remaining);
-      void sendSessionEvent('timer:sync', {
-        status: session.status,
-        server_started_at: serverStartedAt,
-        remaining_seconds: remaining,
-      });
+      setSession((prev) => ({ ...prev, question_started_at: serverStartedAt }));
       toast.success(t('addedTenSeconds'));
     } catch (err) {
       toast.error(err instanceof Error ? err.message : t('failedAddTime'));
@@ -868,8 +842,6 @@ export default function HostGameClient({
     try {
       await setSessionMultiplier(session.id, newState ? 2 : 1);
       setIsMultiplierActive(newState);
-
-      await sendSessionEvent('multiplier:change', { multiplier: newState ? 2 : 1 });
 
       addActivityEntry('multiplier', newState ? t('activityDoubleOn') : t('activityDoubleOff'));
       toast.success(newState ? t('doublePointsActivated') : t('multiplierOffToast'));
