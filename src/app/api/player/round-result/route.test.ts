@@ -34,7 +34,8 @@ describe('POST /api/player/round-result', () => {
   it('hides results until reveal/leaderboard/finished', async () => {
     admin.setTables({
       player_tokens: { data: { client_token: 'tok' }, error: null },
-      game_sessions: { data: { status: 'question_active' }, error: null },
+      players: { data: { id: 'p', score: 0, streak: 0 }, error: null },
+      game_sessions: { data: { status: 'question_active', current_question_index: 0 }, error: null },
     });
     const { POST } = await import('@/app/api/player/round-result/route');
     const result = await readJson(
@@ -46,11 +47,21 @@ describe('POST /api/player/round-result', () => {
   it('returns the caller submission and live score, defaulting a miss when none exists', async () => {
     admin.setTables({
       player_tokens: { data: { client_token: 'tok' }, error: null },
-      game_sessions: { data: { status: 'question_reveal' }, error: null },
+      game_sessions: {
+        data: {
+          status: 'question_reveal',
+          quiz_id: 'quiz-1',
+          question_order: ['q'],
+          current_question_index: 0,
+        },
+        error: null,
+      },
       answers_submitted: { data: null, error: null },
-      players: { data: { score: 1200, streak: 0 }, error: null },
+      players: { data: { id: 'p', score: 1200, streak: 0 }, error: null },
       questions: {
         data: {
+          id: 'q',
+          order_index: 0,
           answers: [
             { id: 'a', is_correct: true },
             { id: 'b', is_correct: false },
@@ -66,8 +77,114 @@ describe('POST /api/player/round-result', () => {
     expect(result.status).toBe(200);
     expect(result.body.hadSubmission).toBe(false);
     expect(result.body.submitted).toBe(false);
-    expect(result.body.submission).toEqual({ points_awarded: 0, is_correct: false });
+    expect(result.body.submission).toEqual({ points_awarded: 0, is_correct: false, was_late: false });
     expect(result.body.player).toEqual({ score: 1200, streak: 0 });
     expect(result.body.correctAnswerIds).toEqual(['a']);
+  });
+
+  it('returns 404 when the player is not in this session and leaks no answer key', async () => {
+    admin.setTables({
+      player_tokens: { data: { client_token: 'tok' }, error: null },
+      players: { data: null, error: null },
+      game_sessions: {
+        data: { status: 'finished', quiz_id: 'quiz-1', question_order: ['q'], current_question_index: 0 },
+        error: null,
+      },
+    });
+    const { POST } = await import('@/app/api/player/round-result/route');
+    const result = await readJson(
+      await POST(jsonRequest({ sessionId: 'other', playerId: 'p', token: 'tok', questionId: 'q' }))
+    );
+    expect(result.status).toBe(404);
+    expect(result.body.correctAnswerIds).toBeUndefined();
+  });
+
+  it('refuses a question that has not been revealed yet', async () => {
+    admin.setTables({
+      player_tokens: { data: { client_token: 'tok' }, error: null },
+      players: { data: { id: 'p', score: 0, streak: 0 }, error: null },
+      game_sessions: {
+        data: {
+          status: 'question_reveal',
+          quiz_id: 'quiz-1',
+          question_order: ['q0', 'q1'],
+          current_question_index: 0,
+        },
+        error: null,
+      },
+      questions: { data: { id: 'q1', order_index: 1, answers: [{ id: 'a', is_correct: true }] }, error: null },
+    });
+    const { POST } = await import('@/app/api/player/round-result/route');
+    const result = await readJson(
+      await POST(jsonRequest({ sessionId: 's', playerId: 'p', token: 'tok', questionId: 'q1' }))
+    );
+    expect(result.status).toBe(403);
+  });
+
+  it('returns the answer key for the question currently in reveal', async () => {
+    admin.setTables({
+      player_tokens: { data: { client_token: 'tok' }, error: null },
+      players: { data: { id: 'p', score: 10, streak: 1 }, error: null },
+      game_sessions: {
+        data: {
+          status: 'question_reveal',
+          quiz_id: 'quiz-1',
+          question_order: ['q0', 'q1'],
+          current_question_index: 1,
+        },
+        error: null,
+      },
+      questions: { data: { id: 'q1', order_index: 1, answers: [{ id: 'a', is_correct: true }] }, error: null },
+      answers_submitted: { data: { points_awarded: 500, is_correct: true, was_late: false }, error: null },
+    });
+    const { POST } = await import('@/app/api/player/round-result/route');
+    const result = await readJson(
+      await POST(jsonRequest({ sessionId: 's', playerId: 'p', token: 'tok', questionId: 'q1' }))
+    );
+    expect(result.status).toBe(200);
+    expect(result.body.correctAnswerIds).toEqual(['a']);
+  });
+
+  it('passes was_late through on the submission', async () => {
+    admin.setTables({
+      player_tokens: { data: { client_token: 'tok' }, error: null },
+      players: { data: { id: 'p', score: 0, streak: 0 }, error: null },
+      game_sessions: {
+        data: { status: 'finished', quiz_id: 'quiz-1', question_order: ['q'], current_question_index: 0 },
+        error: null,
+      },
+      questions: { data: { id: 'q', order_index: 0, answers: [] }, error: null },
+      answers_submitted: { data: { points_awarded: 0, is_correct: true, was_late: true }, error: null },
+    });
+    const { POST } = await import('@/app/api/player/round-result/route');
+    const result = await readJson(
+      await POST(jsonRequest({ sessionId: 's', playerId: 'p', token: 'tok', questionId: 'q' }))
+    );
+    expect(result.status).toBe(200);
+    expect(result.body.submission.was_late).toBe(true);
+  });
+
+  it('scopes the player lookup to this session', async () => {
+    admin.setTables({
+      player_tokens: { data: { client_token: 'tok' }, error: null },
+      players: { data: { id: 'p', score: 1, streak: 0 }, error: null },
+      game_sessions: {
+        data: { status: 'finished', quiz_id: 'quiz-1', question_order: ['q'], current_question_index: 0 },
+        error: null,
+      },
+      questions: { data: { id: 'q', order_index: 0, answers: [] }, error: null },
+      answers_submitted: { data: null, error: null },
+    });
+    const { POST } = await import('@/app/api/player/round-result/route');
+    await POST(jsonRequest({ sessionId: 'sess-9', playerId: 'p', token: 'tok', questionId: 'q' }));
+    const playersCall = [...admin.fromCalls].reverse().find((entry) => entry.table === 'players');
+    const captured = (
+      playersCall?.chain as { _captured?: { method: string; args: unknown[] }[] }
+    )._captured;
+    const eqs = captured?.filter((item) => item.method === 'eq') ?? [];
+    expect(eqs).toEqual([
+      { method: 'eq', args: ['id', 'p'] },
+      { method: 'eq', args: ['session_id', 'sess-9'] },
+    ]);
   });
 });

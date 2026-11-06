@@ -52,7 +52,7 @@ export function publicQuestionFromStartPayload(
   const answers = payload.answers
     .map(asPublicAnswer)
     .filter((row): row is PublicAnswerOption => row !== null);
-  if (answers.length === 0) return null;
+  if (answers.length === 0 && payload.type !== 'type_answer') return null;
   return {
     id: payload.question_id,
     type: payload.type,

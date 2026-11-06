@@ -43,7 +43,6 @@ import { useSessionChannel } from '@/hooks/useSessionChannel';
 import { useAutoCloseEmptyLobby } from '@/hooks/useAutoCloseEmptyLobby';
 import {
   buildQuestionStartPayload,
-  sanitizeAnswers,
   type Player,
   type LeaderboardPlayer,
   type Question,
@@ -852,8 +851,7 @@ export default function HostGameClient({
       activeQuestion.answers = updatedAnswers;
 
       await sendSessionEvent('question:update', {
-        prompt: editPrompt,
-        answers: sanitizeAnswers(updatedAnswers),
+        question_id: activeQuestion.id,
       });
 
       setIsEditorOpen(false);

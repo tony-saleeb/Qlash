@@ -87,6 +87,12 @@ export function sanitizeAnswers(answers: AnswerOption[]): PublicAnswerOption[] {
   }));
 }
 
+/** Accepted text for type_answer stays on the server. Phones get no answer list. */
+export function toPublicAnswers(type: string, answers: AnswerOption[]): PublicAnswerOption[] {
+  if (type === 'type_answer') return [];
+  return sanitizeAnswers(answers);
+}
+
 export function correctAnswerIds(answers: { id: string; is_correct?: boolean }[]): string[] {
   return answers.filter((ans) => Boolean(ans.is_correct)).map((ans) => ans.id);
 }
@@ -99,7 +105,7 @@ export function toPublicQuestion(question: Question): PublicQuestionPayload {
     media_url: question.media_url,
     media_type: question.media_type,
     time_limit_seconds: question.time_limit_seconds,
-    answers: sanitizeAnswers(question.answers),
+    answers: toPublicAnswers(question.type, question.answers),
   };
 }
 
@@ -116,7 +122,7 @@ export function buildQuestionStartPayload(
     media_url: question.media_url,
     media_type: question.media_type,
     time_limit_seconds: question.time_limit_seconds,
-    answers: sanitizeAnswers(question.answers),
+    answers: toPublicAnswers(question.type, question.answers),
     server_started_at: serverStartedAt,
   };
 }

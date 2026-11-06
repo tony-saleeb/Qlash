@@ -75,6 +75,29 @@ describe('publicQuestionFromStartPayload', () => {
   it('rejects a malformed payload', () => {
     expect(publicQuestionFromStartPayload({ prompt: 'nope' })).toBeNull();
   });
+
+  it('parses a type_answer start with no answer text', () => {
+    const question = publicQuestionFromStartPayload({
+      question_id: 'q3',
+      type: 'type_answer',
+      prompt: 'Capital?',
+      time_limit_seconds: 20,
+      answers: [],
+    });
+    expect(question?.answers).toEqual([]);
+  });
+
+  it('rejects an mcq start with no answers', () => {
+    expect(
+      publicQuestionFromStartPayload({
+        question_id: 'q4',
+        type: 'mcq',
+        prompt: 'Capital?',
+        time_limit_seconds: 20,
+        answers: [],
+      })
+    ).toBeNull();
+  });
 });
 
 describe('isStaleHydrate', () => {
