@@ -105,7 +105,10 @@ export default function PlayerGameClient({
     correctAnswerIds: string[];
     optionCounts?: Record<string, number>;
     timedOut?: boolean;
+    late?: boolean;
   } | null>(null);
+  const [revealPending, setRevealPending] = useState(false);
+  const [resultUnavailable, setResultUnavailable] = useState(false);
   const [timeLeft, setTimeLeft] = useState<number>(0);
   const [clockStartedAt, setClockStartedAt] = useState<string | null>(null);
   const [finalRank, setFinalRank] = useState<number | null>(null);
@@ -121,11 +124,11 @@ export default function PlayerGameClient({
   const lastSubmitRef = React.useRef<{
     questionId: string;
     selected: string[];
-    isCorrect: boolean | null;
-    pointsAwarded: number;
+    accepted: boolean;
     error: string | null;
   } | null>(null);
   const revealAppliedRef = React.useRef<string | null>(null);
+  const revealGenRef = React.useRef(0);
   const lastTickSecondRef = React.useRef<number | null>(null);
   const displayedSecondRef = React.useRef<number | null>(null);
   const lobbyFanfarePlayedRef = React.useRef(false);
@@ -260,6 +263,8 @@ export default function PlayerGameClient({
       setTypeInputValue('');
       setSubmissionState('idle');
       setRoundResult(null);
+      setRevealPending(false);
+      setResultUnavailable(false);
       sawOpenQuestionRef.current =
         status !== 'question_reveal' && status !== 'leaderboard' && status !== 'finished';
       previousRankRef.current = liveRankRef.current;
@@ -453,94 +458,86 @@ export default function PlayerGameClient({
     [sessionId, fetchRoster]
   );
 
-  const applyRevealInstant = useCallback(
-    (correctAnswerIds: string[], optionCounts?: Record<string, number>) => {
-      const currentQ = activeQuestionRef.current;
-      const qid = currentQ?.id;
-      if (qid && revealAppliedRef.current === qid) {
-        if (correctAnswerIds.length) {
-          setRoundResult((prev) =>
-            prev
-              ? {
-                  ...prev,
-                  correctAnswerIds,
-                  optionCounts: optionCounts ?? prev.optionCounts,
-                }
-              : prev
-          );
-        }
-        return;
-      }
-      const submit = lastSubmitRef.current;
-      if (submit && submit.questionId === currentQ?.id && submit.isCorrect === null && !submit.error) {
-        setSessionStatus('question_reveal');
-        return;
-      }
-      if (qid) revealAppliedRef.current = qid;
-      const playedThisRound = Boolean(submit && submit.questionId === currentQ?.id);
-
-      if (!playedThisRound && !sawOpenQuestionRef.current) {
-        setRoundResult(null);
-        setSessionStatus('question_reveal');
-        setSubmissionState('idle');
-        return;
-      }
-
-      if (submit && submit.questionId === currentQ?.id && submit.error) {
-        setRoundResult({
-          isCorrect: false,
-          pointsAwarded: 0,
-          correctAnswerIds,
-          optionCounts,
-          timedOut: true,
-        });
-        setSessionStatus('question_reveal');
-        setSubmissionState('idle');
-        const playerId = playerRef.current?.id;
-        if (playerId && currentQ) {
-          void syncOfficialScore(playerId, currentQ.id);
-        }
-        return;
-      }
-
-      let isCorrect = false;
-      let pointsAwarded = 0;
-      if (submit && submit.questionId === currentQ?.id && submit.isCorrect !== null) {
-        isCorrect = submit.isCorrect;
-        pointsAwarded = submit.pointsAwarded;
-      }
-
-      const callout = roundCallout({
-        isCorrect,
-        isPoll: currentQ?.type === 'poll',
-        lockedRemaining: lockedRemainingRef.current,
-        timeLimit: currentQ?.time_limit_seconds ?? 0,
-        previousStreak: previousStreakRef.current,
-      });
-
-      if (isCorrect) {
-        playCorrectSound();
-        playHaptic(callout === 'clutch' ? [24, 40, 24] : callout === 'lightning' ? [16, 30, 16] : 24);
-      } else {
-        playIncorrectSound();
-        playHaptic(8);
-      }
-
-      setRoundResult({
-        isCorrect,
-        pointsAwarded,
-        correctAnswerIds,
-        optionCounts,
-      });
+  const revealFromServer = useCallback(
+    async (playerId: string, questionId: string) => {
+      if (revealAppliedRef.current === questionId) return;
+      const gen = revealGenRef.current + 1;
+      revealGenRef.current = gen;
+      revealAppliedRef.current = questionId;
+      sessionStatusRef.current = 'question_reveal';
       setSessionStatus('question_reveal');
-      setSubmissionState('idle');
+      setRoundResult(null);
+      setResultUnavailable(false);
+      setRevealPending(true);
 
-      const playerId = playerRef.current?.id;
-      if (playerId && currentQ) {
-        void syncOfficialScore(playerId, currentQ.id);
+      const token = localStorage.getItem(`quizarena_token_${sessionId}`) || '';
+      const retryDelays = [300, 700, 1500, 3000];
+      for (let attempt = 0; attempt <= retryDelays.length; attempt += 1) {
+        try {
+          const res = await fetch('/api/player/round-result', {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({ sessionId, playerId, token, questionId }),
+          });
+          if (res.ok) {
+            if (gen !== revealGenRef.current) return;
+            const data = await res.json();
+            const submission = data.submission ?? {
+              is_correct: false,
+              points_awarded: 0,
+              was_late: false,
+            };
+            const tapped = lastSubmitRef.current?.questionId === questionId;
+            const isCorrect = Boolean(submission.is_correct);
+            const late = Boolean(submission.was_late) && isCorrect;
+            const timedOut = tapped && data.submitted === false;
+            const currentQ = activeQuestionRef.current;
+            if (!timedOut) {
+              if (isCorrect) {
+                const callout = roundCallout({
+                  isCorrect,
+                  isPoll: currentQ?.type === 'poll',
+                  lockedRemaining: lockedRemainingRef.current,
+                  timeLimit: currentQ?.time_limit_seconds ?? 0,
+                  previousStreak: previousStreakRef.current,
+                });
+                playCorrectSound();
+                playHaptic(callout === 'clutch' ? [24, 40, 24] : callout === 'lightning' ? [16, 30, 16] : 24);
+              } else {
+                playIncorrectSound();
+                playHaptic(8);
+              }
+            }
+            setRoundResult({
+              isCorrect,
+              pointsAwarded: Number(submission.points_awarded) || 0,
+              correctAnswerIds: Array.isArray(data.correctAnswerIds) ? data.correctAnswerIds : [],
+              timedOut,
+              late,
+            });
+            if (gen !== revealGenRef.current) return;
+            setRevealPending(false);
+            setSubmissionState('idle');
+            void syncOfficialScore(playerId, questionId);
+            return;
+          }
+          if (gen !== revealGenRef.current) return;
+          if (attempt === retryDelays.length) break;
+          const retryAfter = Number(res.headers.get('Retry-After'));
+          const wait =
+            Number.isFinite(retryAfter) && retryAfter > 0 ? retryAfter * 1000 : retryDelays[attempt];
+          await new Promise((resolve) => setTimeout(resolve, wait));
+        } catch {
+          if (gen !== revealGenRef.current) return;
+          if (attempt === retryDelays.length) break;
+          await new Promise((resolve) => setTimeout(resolve, retryDelays[attempt]));
+        }
       }
+      if (gen !== revealGenRef.current) return;
+      setRevealPending(false);
+      setResultUnavailable(true);
     },
-    [syncOfficialScore]
+    [sessionId, syncOfficialScore]
   );
 
   const { send: sendSessionEvent } = useSessionChannel(sessionId, {
@@ -632,7 +629,6 @@ export default function PlayerGameClient({
 
     const token = localStorage.getItem(`quizarena_token_${sessionId}`) || '';
     const playerId = player.id;
-    let revealFallbackTimer: ReturnType<typeof setTimeout> | null = null;
     let connectionTimer: ReturnType<typeof setTimeout> | null = null;
 
     const liveChannel = supabase
@@ -662,12 +658,8 @@ export default function PlayerGameClient({
         },
         (payload) => {
           const newStatus = payload.new.status as string;
+          sessionStatusRef.current = newStatus;
           setSessionStatus(newStatus);
-
-          if (revealFallbackTimer) {
-            clearTimeout(revealFallbackTimer);
-            revealFallbackTimer = null;
-          }
 
           if (typeof payload.new.active_multiplier === 'number') {
             setActiveMultiplier(payload.new.active_multiplier);
@@ -709,18 +701,13 @@ export default function PlayerGameClient({
             }
           } else if (newStatus === 'question_reveal') {
             const q = activeQuestionRef.current;
-            const scheduleRevealFallback = (attempt: number) => {
-              revealFallbackTimer = setTimeout(() => {
-                if (!q || revealAppliedRef.current === q.id) return;
-                const submit = lastSubmitRef.current;
-                if (submit && submit.questionId === q.id && submit.isCorrect === null && !submit.error && attempt < 20) {
-                  scheduleRevealFallback(attempt + 1);
-                  return;
-                }
-                applyRevealInstant([]);
-              }, 250);
-            };
-            scheduleRevealFallback(0);
+            if (!q || revealAppliedRef.current === q.id) return;
+            const submit = lastSubmitRef.current;
+            const inFlight = Boolean(
+              submit && submit.questionId === q.id && !submit.accepted && !submit.error
+            );
+            if (inFlight) return;
+            void revealFromServer(playerId, q.id);
           } else if (newStatus === 'leaderboard') {
             setRoundResult(null);
           } else if (newStatus === 'finished') {
@@ -764,12 +751,11 @@ export default function PlayerGameClient({
 
     return () => {
       if (connectionTimer) clearTimeout(connectionTimer);
-      if (revealFallbackTimer) clearTimeout(revealFallbackTimer);
       supabase.removeChannel(liveChannel);
       document.removeEventListener('visibilitychange', handleVisibilityChange);
       window.removeEventListener('pagehide', handlePageHide);
     };
-  }, [supabase, player?.id, sessionId, router, hydrateCurrentQuestion, applyRevealInstant, loadPodium, t, nowMs]);
+  }, [supabase, player?.id, sessionId, router, hydrateCurrentQuestion, revealFromServer, loadPodium, t, nowMs]);
 
   /**
    * Last line of defence against a spinner: if the room is on a question and
@@ -895,8 +881,7 @@ export default function PlayerGameClient({
       lastSubmitRef.current = {
         questionId: activeQuestion.id,
         selected: answersToSubmit,
-        isCorrect: null,
-        pointsAwarded: 0,
+        accepted: false,
         error: 'timesUp',
       };
       return;
@@ -911,8 +896,7 @@ export default function PlayerGameClient({
     lastSubmitRef.current = {
       questionId: activeQuestion.id,
       selected: answersToSubmit,
-      isCorrect: null,
-      pointsAwarded: 0,
+      accepted: false,
       error: null,
     };
     lockedRemainingRef.current = timeLeft;
@@ -949,24 +933,24 @@ export default function PlayerGameClient({
         lastSubmitRef.current = {
           questionId: activeQuestion.id,
           selected: answersToSubmit,
-          isCorrect: null,
-          pointsAwarded: 0,
+          accepted: false,
           error: errKey,
         };
         toast.message(closed ? t('timesUp') : t('submitFailed'));
+        if (sessionStatusRef.current === 'question_reveal') {
+          void revealFromServer(player.id, activeQuestion.id);
+        }
         return;
       }
-      if (!data.duplicate || data.isCorrect === true || (typeof data.pointsAwarded === 'number' && data.pointsAwarded > 0)) {
-        lastSubmitRef.current = {
-          questionId: activeQuestion.id,
-          selected: answersToSubmit,
-          isCorrect: Boolean(data.isCorrect),
-          pointsAwarded: typeof data.pointsAwarded === 'number' ? data.pointsAwarded : 0,
-          error: null,
-        };
-        if (sessionStatusRef.current === 'question_reveal') {
-          applyRevealInstant([]);
-        }
+      lastSubmitRef.current = {
+        questionId: activeQuestion.id,
+        selected: answersToSubmit,
+        accepted: true,
+        error: null,
+      };
+      if (sessionStatusRef.current === 'question_reveal') {
+        revealAppliedRef.current = null;
+        void revealFromServer(player.id, activeQuestion.id);
       }
     } catch (err: unknown) {
       console.error(err);
@@ -974,11 +958,13 @@ export default function PlayerGameClient({
         lastSubmitRef.current = {
           questionId: activeQuestion.id,
           selected: answersToSubmit,
-          isCorrect: null,
-          pointsAwarded: 0,
+          accepted: false,
           error: err instanceof Error ? err.message : 'submitFailed',
         };
         toast.error(err instanceof Error ? err.message : t('submitFailed'));
+        if (sessionStatusRef.current === 'question_reveal') {
+          void revealFromServer(player.id, activeQuestion.id);
+        }
       }
     }
   };
@@ -1104,6 +1090,34 @@ export default function PlayerGameClient({
   }
 
 
+  if (
+    resultUnavailable &&
+    activeQuestion &&
+    (sessionStatus === 'question_reveal' || sessionStatus === 'leaderboard')
+  ) {
+    return (
+      <div className="flex min-h-dvh w-full flex-col items-center justify-center bg-arena-ink p-6 text-center text-white">
+        <p className="max-w-sm font-display text-2xl font-extrabold uppercase tracking-tight">
+          {t('resultUnavailable')}
+        </p>
+      </div>
+    );
+  }
+
+  if (
+    revealPending &&
+    !roundResult &&
+    activeQuestion &&
+    (sessionStatus === 'question_reveal' || sessionStatus === 'leaderboard')
+  ) {
+    return (
+      <div className="flex min-h-dvh w-full flex-col items-center justify-center bg-arena-ink p-6 text-center text-white">
+        <Loader2 className="mb-4 h-10 w-10 animate-spin text-arena-acid" />
+        <h1 className="font-display text-3xl font-extrabold uppercase tracking-tight">{t('checkingAnswer')}</h1>
+      </div>
+    );
+  }
+
   // ==========================================
   // RENDER: ROUND REVEAL RESULTS (CORRECT / INCORRECT STATE)
   // ==========================================
@@ -1143,7 +1157,15 @@ export default function PlayerGameClient({
             )}
           </div>
           <h1 className="font-display text-4xl font-extrabold uppercase tracking-tight sm:text-5xl">
-            {isPoll ? t('answerLocked') : timedOut ? t('timesUp') : isCorrect ? t('correct') : t('missed')}
+            {isPoll
+              ? t('answerLocked')
+              : timedOut
+                ? t('timesUp')
+                : roundResult.late
+                  ? t('correctLate')
+                  : isCorrect
+                    ? t('correct')
+                    : t('missed')}
           </h1>
           {!isPoll ? (
             <p className={`font-display text-xl font-bold ${winTone ? 'text-arena-ink/80' : 'text-white/85'}`}>

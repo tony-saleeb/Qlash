@@ -97,7 +97,7 @@ describe('POST /api/submit-answer', () => {
     expect(result.body.error).toMatch(/schema-fast-submit/);
   });
 
-  it('returns points and duplicate flag from a successful RPC', async () => {
+  it('returns only success, duplicate, and message from a successful RPC', async () => {
     admin.setRpc('submit_live_answer', {
       data: { success: true, duplicate: true, pointsAwarded: 750, isCorrect: true },
       error: null,
@@ -105,13 +105,13 @@ describe('POST /api/submit-answer', () => {
     const { POST } = await import('@/app/api/submit-answer/route');
     const result = await readJson(await POST(jsonRequest(validBody)));
     expect(result.status).toBe(200);
-    expect(result.body).toMatchObject({
+    expect(result.body).toEqual({
       success: true,
       duplicate: true,
-      pointsAwarded: 750,
-      isCorrect: true,
       message: 'Answer already recorded.',
     });
+    expect(result.body).not.toHaveProperty('isCorrect');
+    expect(result.body).not.toHaveProperty('pointsAwarded');
     expect(admin.rpc).toHaveBeenCalledWith('submit_live_answer', {
       p_player_id: 'p1',
       p_token: 'tok',

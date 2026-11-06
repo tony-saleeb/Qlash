@@ -45,6 +45,7 @@ vi.mock('sonner', () => ({
 }));
 
 import PlayerGameClient from '@/app/play/[sessionId]/PlayerGameClient';
+import { playIncorrectSound } from '@/lib/sounds';
 
 function jsonResponse(body: unknown, status = 200) {
   return new Response(JSON.stringify(body), {
@@ -69,10 +70,23 @@ describe('PlayerGameClient', () => {
     localStorage.clear();
     router.push.mockReset();
     sendSessionEvent.mockReset();
+    vi.mocked(playIncorrectSound).mockClear();
   });
 
   afterEach(() => {
     vi.unstubAllGlobals();
+    supabase.channel.mockReset();
+    supabase.channel.mockImplementation(() => {
+      const ch = {
+        on: vi.fn(() => ch),
+        subscribe: vi.fn((cb?: (status: string) => void) => {
+          cb?.('SUBSCRIBED');
+          return ch;
+        }),
+        send: vi.fn(async () => 'ok'),
+      };
+      return ch;
+    });
   });
 
   it('sends players without a token back to join', async () => {
@@ -249,7 +263,7 @@ describe('PlayerGameClient', () => {
           questionId: 'q1',
           selectedAnswerIds: ['b'],
         });
-        return jsonResponse({ success: true, isCorrect: true, pointsAwarded: 1000, duplicate: false });
+        return jsonResponse({ success: true, duplicate: false, message: 'Answer submitted successfully.' });
       }
       return jsonResponse({}, 404);
     });
@@ -293,5 +307,128 @@ describe('PlayerGameClient', () => {
     await user.click(await screen.findByRole('button', { name: /leave/i }));
     expect(localStorage.getItem('quizarena_token_sess-1')).toBeNull();
     expect(router.push).toHaveBeenCalledWith('/play');
+  });
+
+  function installSessionChannel() {
+    let onSessionUpdate: ((payload: { new: Record<string, unknown> }) => void) | undefined;
+    supabase.channel.mockImplementation(() => {
+      const ch = {
+        on: vi.fn((event: string, filter: { table?: string }, cb: (payload: { new: Record<string, unknown> }) => void) => {
+          if (event === 'postgres_changes' && filter.table === 'game_sessions') onSessionUpdate = cb;
+          return ch;
+        }),
+        subscribe: vi.fn((cb?: (status: string) => void) => {
+          cb?.('SUBSCRIBED');
+          return ch;
+        }),
+        send: vi.fn(async () => 'ok'),
+      };
+      return ch;
+    });
+    return {
+      reveal() {
+        onSessionUpdate?.({ new: { status: 'question_reveal' } });
+      },
+    };
+  }
+
+  const questionPayload = {
+    success: true,
+    status: 'question_active',
+    server_started_at: new Date().toISOString(),
+    question: {
+      id: 'q1',
+      type: 'mcq',
+      prompt: '2 + 2?',
+      media_url: null,
+      media_type: null,
+      time_limit_seconds: 30,
+      answers: [
+        { id: 'a', text: '3', color: '#e11d2e', shape: 'slash' },
+        { id: 'b', text: '4', color: '#4a2aff', shape: 'qring' },
+      ],
+    },
+  };
+
+  it('shows checking then the server result, and never the wrong-answer sound for a correct answer', async () => {
+    localStorage.setItem('quizarena_token_sess-1', 'tok');
+    const room = installSessionChannel();
+    let releaseResult: (() => void) | undefined;
+    const gate = new Promise<void>((resolve) => {
+      releaseResult = resolve;
+    });
+    let resultReleased = false;
+    const fetchMock = vi.fn(async (input: RequestInfo | URL) => {
+      const url = String(input);
+      if (url.includes('/api/player/me')) {
+        return jsonResponse({ player, sessionStatus: 'question_active' });
+      }
+      if (url.includes('/api/player/current-question')) {
+        return jsonResponse(questionPayload);
+      }
+      if (url.includes('/api/submit-answer')) {
+        return jsonResponse({ success: true, duplicate: false, message: 'Answer submitted successfully.' });
+      }
+      if (url.includes('/api/player/round-result')) {
+        if (!resultReleased) await gate;
+        return jsonResponse({
+          success: true,
+          submitted: true,
+          hadSubmission: true,
+          submission: { is_correct: true, points_awarded: 1000, was_late: false },
+          player: { score: 1000, streak: 1 },
+          correctAnswerIds: ['b'],
+        });
+      }
+      return jsonResponse({ players: [] });
+    });
+    vi.stubGlobal('fetch', fetchMock);
+
+    const user = userEvent.setup();
+    render(<PlayerGameClient sessionId="sess-1" initialSessionStatus="question_active" />);
+    await user.click(await screen.findByRole('button', { name: /^4$/ }));
+    expect(await screen.findByText(/answer locked/i)).toBeInTheDocument();
+    room.reveal();
+    expect(await screen.findByRole('heading', { name: /checking your answer/i })).toBeInTheDocument();
+    resultReleased = true;
+    releaseResult?.();
+    expect(await screen.findByRole('heading', { name: 'Correct' })).toBeInTheDocument();
+    expect(playIncorrectSound).not.toHaveBeenCalled();
+  });
+
+  it('shows time is up when the player tapped but the server recorded no answer', async () => {
+    localStorage.setItem('quizarena_token_sess-1', 'tok');
+    const room = installSessionChannel();
+    const fetchMock = vi.fn(async (input: RequestInfo | URL) => {
+      const url = String(input);
+      if (url.includes('/api/player/me')) {
+        return jsonResponse({ player, sessionStatus: 'question_active' });
+      }
+      if (url.includes('/api/player/current-question')) {
+        return jsonResponse(questionPayload);
+      }
+      if (url.includes('/api/submit-answer')) {
+        return jsonResponse({ success: true, duplicate: false, message: 'Answer submitted successfully.' });
+      }
+      if (url.includes('/api/player/round-result')) {
+        return jsonResponse({
+          success: true,
+          submitted: false,
+          hadSubmission: false,
+          submission: { is_correct: false, points_awarded: 0, was_late: false },
+          player: { score: 0, streak: 0 },
+          correctAnswerIds: ['b'],
+        });
+      }
+      return jsonResponse({ players: [] });
+    });
+    vi.stubGlobal('fetch', fetchMock);
+
+    const user = userEvent.setup();
+    render(<PlayerGameClient sessionId="sess-1" initialSessionStatus="question_active" />);
+    await user.click(await screen.findByRole('button', { name: /^4$/ }));
+    expect(await screen.findByText(/answer locked/i)).toBeInTheDocument();
+    room.reveal();
+    expect(await screen.findByRole('heading', { name: /time.s up/i })).toBeInTheDocument();
   });
 });
