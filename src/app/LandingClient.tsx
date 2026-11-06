@@ -11,7 +11,7 @@ import { Label } from '@/components/ui/label';
 import { toast } from 'sonner';
 import { User } from '@supabase/supabase-js';
 import { ArenaFloor, BrandMark } from '@/components/brand/BrandMark';
-import { authCallbackUrl } from '@/lib/siteUrl';
+import { authCallbackUrl, publicSiteUrl } from '@/lib/siteUrl';
 import { unlockGameAudio } from '@/lib/sounds';
 import { LocaleToggle } from '@/components/brand/LocaleToggle';
 import { useLocale } from '@/lib/i18n/useLocale';
@@ -135,21 +135,19 @@ export default function LandingClient({ initialLocale }: { initialLocale?: Local
           setAuthLoading(false);
           return;
         }
-        const registerRes = await fetch('/api/host/register', {
-          method: 'POST',
-          headers: { 'Content-Type': 'application/json' },
-          body: JSON.stringify({
-            email,
-            password,
-            displayName: displayName.trim(),
-          }),
+        const { data, error } = await supabase.auth.signUp({
+          email,
+          password,
+          options: {
+            data: { display_name: displayName.trim() },
+            emailRedirectTo: `${publicSiteUrl() || window.location.origin}/auth/confirm?next=/dashboard`,
+          },
         });
-        const registerBody = (await registerRes.json().catch(() => ({}))) as { error?: string };
-        if (!registerRes.ok) {
-          throw new Error(registerBody.error || 'Could not create account.');
-        }
-        const { error, data } = await supabase.auth.signInWithPassword({ email, password });
         if (error) throw error;
+        if (!data.session) {
+          toast.success(t('confirmEmailSent'));
+          return;
+        }
         enterHost(data.user, t('accountReady'));
       }
     } catch (error) {

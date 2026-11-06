@@ -45,7 +45,6 @@ export const RATE_LIMITS = {
   joinPerIp: { limit: 240, windowMs: 60_000 },
   submitPerIp: { limit: 900, windowMs: 60_000 },
   submitPerPlayer: { limit: 20, windowMs: 60_000 },
-  registerPerIp: { limit: 8, windowMs: 15 * 60_000 },
   pinLookupPerIp: { limit: 240, windowMs: 60_000 },
   playerHydratePerIp: { limit: 2000, windowMs: 60_000 },
   playerHydratePerPlayer: { limit: 40, windowMs: 60_000 },

@@ -32,8 +32,7 @@ describe('host game actions', () => {
   });
 
   it('refuses unauthenticated hosts', async () => {
-    host.auth.getSession.mockResolvedValue({ data: { session: null } });
-    host.auth.getUser.mockResolvedValue({ data: { user: null }, error: { message: 'no' } });
+    host.auth.getClaims.mockResolvedValue({ data: null, error: { message: 'no' } });
     const { endGameSession } = await import('@/app/actions/game');
     await expect(endGameSession('sess-1')).rejects.toThrow(/Unauthorized/);
   });

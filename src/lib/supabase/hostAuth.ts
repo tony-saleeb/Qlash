@@ -1,24 +1,24 @@
-import type { User } from '@supabase/supabase-js';
 import { createClient } from '@/lib/supabase/server';
 
 type HostClient = ReturnType<typeof createClient>;
 
+export type HostUser = { id: string; email: string | null };
+
 /**
- * Host identity from the cookie JWT when possible (no Auth HTTP).
- * Falls back to getUser() when the session is missing.
+ * Host identity from the verified JWT claims. The cookie session is not trusted.
  */
-export async function readHostAuth(): Promise<{ supabase: HostClient; user: User | null }> {
+export async function readHostAuth(): Promise<{ supabase: HostClient; user: HostUser | null }> {
   const supabase = createClient();
-  const {
-    data: { session },
-  } = await supabase.auth.getSession();
-  if (session?.user) {
-    return { supabase, user: session.user };
+  const { data, error } = await supabase.auth.getClaims();
+  const subject = data?.claims.sub;
+  if (error || !subject) {
+    return { supabase, user: null };
   }
-  const {
-    data: { user },
-  } = await supabase.auth.getUser();
-  return { supabase, user: user ?? null };
+  const email = data.claims.email;
+  return {
+    supabase,
+    user: { id: subject, email: typeof email === 'string' ? email : null },
+  };
 }
 
 export async function getHostAuth() {

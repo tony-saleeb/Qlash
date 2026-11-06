@@ -14,22 +14,19 @@ describe('readHostAuth', () => {
     vi.mocked(createClient).mockReturnValue(host as never);
   });
 
-  it('uses the cookie session and does not call Auth', async () => {
+  it('returns the subject from verified claims and does not read the cookie session', async () => {
     const { readHostAuth } = await import('@/lib/supabase/hostAuth');
     const result = await readHostAuth();
-    expect(result.user?.id).toBe('host-1');
+    expect(result.user).toEqual({ id: 'host-1', email: 'host@qlash.test' });
+    expect(host.auth.getClaims).toHaveBeenCalled();
+    expect(host.auth.getSession).not.toHaveBeenCalled();
     expect(host.auth.getUser).not.toHaveBeenCalled();
   });
 
-  it('falls back to getUser when the cookie is empty', async () => {
-    host.auth.getSession.mockResolvedValue({ data: { session: null } });
-    host.auth.getUser.mockResolvedValue({
-      data: { user: { id: 'host-2' } },
-      error: null,
-    });
+  it('returns null when the token has no subject', async () => {
+    host.auth.getClaims.mockResolvedValue({ data: null, error: { message: 'no' } });
     const { readHostAuth } = await import('@/lib/supabase/hostAuth');
     const result = await readHostAuth();
-    expect(result.user?.id).toBe('host-2');
-    expect(host.auth.getUser).toHaveBeenCalled();
+    expect(result.user).toBeNull();
   });
 });

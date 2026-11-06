@@ -2,7 +2,6 @@
 
 import React, { useState } from 'react';
 import { useRouter } from 'next/navigation';
-import { User } from '@supabase/supabase-js';
 import { createClient } from '@/lib/supabase/client';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
@@ -53,7 +52,7 @@ export interface RecentSession {
 interface DashboardClientProps {
   initialQuizzes: Quiz[];
   recentSessions: RecentSession[];
-  user: User;
+  user: { email: string | null };
   hostPlan?: string | null;
   initialLocale?: Locale;
 }

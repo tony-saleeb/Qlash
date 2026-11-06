@@ -55,6 +55,18 @@ export function createQueryChain(getResult: () => QueryResult) {
 
 type MockUser = { id: string; email?: string } | null;
 
+function claimsResult(user: MockUser) {
+  if (!user) return { data: null, error: { message: 'Unauthorized' } };
+  return {
+    data: {
+      claims: { sub: user.id, email: user.email ?? null },
+      header: { alg: 'ES256' },
+      signature: new Uint8Array(),
+    },
+    error: null,
+  };
+}
+
 type AuthUserResult = {
   data: { user: MockUser };
   error: { message: string } | null;
@@ -120,6 +132,7 @@ export function createClientMock(
       getSession: vi.fn(async (): Promise<AuthSessionResult> => ({
         data: { session: user ? { user } : null },
       })),
+      getClaims: vi.fn(async () => claimsResult(user)),
       getUser: vi.fn(async (): Promise<AuthUserResult> => ({
         data: { user },
         error: user ? null : { message: 'Unauthorized' },
@@ -169,6 +182,8 @@ export function createClientMock(
       this.auth.getSession.mockResolvedValue({
         data: { session: user ? { user } : null },
       });
+      this.auth.getClaims.mockReset();
+      this.auth.getClaims.mockResolvedValue(claimsResult(user));
     },
   };
 }
