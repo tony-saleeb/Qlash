@@ -52,6 +52,7 @@ import {
 } from '@/lib/game/hydrateRetry';
 import { rankMove, rankOfPlayer } from '@/lib/game/rankMove';
 import { roundCallout } from '@/lib/game/roundCallout';
+import { isOwnRemoval } from '@/lib/game/playerRemoval';
 import { LocaleToggle } from '@/components/brand/LocaleToggle';
 import { useLocale } from '@/lib/i18n/useLocale';
 import type { MessageKey } from '@/lib/i18n/messages';
@@ -644,7 +645,8 @@ export default function PlayerGameClient({
           table: 'players',
           filter: `id=eq.${playerId}`,
         },
-        () => {
+        (payload) => {
+          if (!isOwnRemoval(payload, playerId)) return;
           localStorage.removeItem(`quizarena_token_${sessionId}`);
           toast.error(t('kickedByHost'));
           router.push('/play');
