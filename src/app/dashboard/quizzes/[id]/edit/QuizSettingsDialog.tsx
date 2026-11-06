@@ -87,7 +87,7 @@ export default function QuizSettingsDialog({
             <div className="flex items-center justify-between">
               <div className="flex flex-col gap-0.5">
                 <span className="text-xs font-semibold text-arena-ink">Randomize Question Order</span>
-                <span className="text-[10px] text-arena-ink/45">Shuffles questions each play session.</span>
+                <span className="text-[10px] text-arena-ink/60">Shuffles questions each play session.</span>
               </div>
               <Switch
                 checked={randomizeQs}
@@ -98,7 +98,7 @@ export default function QuizSettingsDialog({
             <div className="flex items-center justify-between">
               <div className="flex flex-col gap-0.5">
                 <span className="text-xs font-semibold text-arena-ink">Randomize Answer Order</span>
-                <span className="text-[10px] text-arena-ink/45">Shuffles choices for players.</span>
+                <span className="text-[10px] text-arena-ink/60">Shuffles choices for players.</span>
               </div>
               <Switch
                 checked={randomizeAs}
@@ -109,7 +109,7 @@ export default function QuizSettingsDialog({
             <div className="flex items-center justify-between">
               <div className="flex flex-col gap-0.5">
                 <span className="text-xs font-semibold text-arena-ink">Team Mode Activation</span>
-                <span className="text-[10px] text-arena-ink/45">Players join and score as teams.</span>
+                <span className="text-[10px] text-arena-ink/60">Players join and score as teams.</span>
               </div>
               <Switch
                 checked={teamMode}

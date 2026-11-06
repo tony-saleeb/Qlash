@@ -52,7 +52,7 @@ export default async function SharedQuizPage({ params }: PageProps) {
     <div dir={dir} className="arena-noise relative flex min-h-dvh flex-col bg-arena-canvas text-arena-ink">
       <header className="flex items-center justify-between border-b-2 border-arena-ink bg-white px-4 py-3 sm:px-6">
         <BrandMark size="sm" />
-        <Link href="/" className="text-xs font-bold uppercase tracking-wider text-arena-ink/50">
+        <Link href="/" className="text-xs font-bold uppercase tracking-wider text-arena-ink/60">
           {t(locale, 'backHome')}
         </Link>
       </header>
@@ -66,7 +66,7 @@ export default async function SharedQuizPage({ params }: PageProps) {
             {preview.description}
           </p>
         ) : null}
-        <p className="mt-4 text-sm font-semibold text-arena-ink/50">
+        <p className="mt-4 text-sm font-semibold text-arena-ink/60">
           {preview.questionCount} {t(locale, 'questionsWord')}
           {preview.teamMode ? ` · ${t(locale, 'teamMode')}` : ''}
         </p>

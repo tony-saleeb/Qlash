@@ -54,7 +54,7 @@ export default function CsvImportDialog({
 أسوان`}</code>
             <span className="font-bold text-arena-ink/80 mt-2 block">CSV still works</span>
             <code>Prompt, Type, TimeLimit, Points, CorrectKey, Choice1, Choice2, Choice3, Choice4</code>
-            <ul className="list-disc list-inside space-y-0.5 mt-1 text-arena-ink/45">
+            <ul className="list-disc list-inside space-y-0.5 mt-1 text-arena-ink/60">
               <li><b>Type:</b> <code>mcq</code> | <code>true_false</code> | <code>multi_select</code> | <code>type_answer</code> | <code>poll</code></li>
               <li><b>CorrectKey:</b> MCQ/Poll: 1-based index (e.g. <code>1</code> or <code>1;3</code> for multi-select). True/False: <code>true</code> or <code>false</code>. TypeAnswer: exact text matching answers.</li>
               <li><b>Choices:</b> Choices separated by commas (supports up to 6).</li>

@@ -45,7 +45,7 @@ export default async function PodiumSharePage({ params }: PageProps) {
     <div dir={dir} className="arena-stage flex min-h-dvh flex-col text-white">
       <header className="flex items-center justify-between px-4 py-4 sm:px-6">
         <BrandMark tone="light" size="sm" />
-        <Link href="/" className="text-xs font-bold uppercase tracking-wider text-white/45">
+        <Link href="/" className="text-xs font-bold uppercase tracking-wider text-white/50">
           {t(locale, 'backHome')}
         </Link>
       </header>

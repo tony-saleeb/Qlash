@@ -174,7 +174,7 @@ export default function SessionReportClient({
           </h2>
           <div className="overflow-x-auto">
             <table className="w-full min-w-[32rem] text-left text-sm">
-              <thead className="bg-arena-mist text-[11px] font-bold uppercase tracking-wider text-arena-ink/50">
+              <thead className="bg-arena-mist text-[11px] font-bold uppercase tracking-wider text-arena-ink/60">
                 <tr>
                   <th className="px-4 py-2">#</th>
                   <th className="px-4 py-2">Player</th>
@@ -187,7 +187,7 @@ export default function SessionReportClient({
               <tbody>
                 {report.players.length === 0 ? (
                   <tr>
-                    <td colSpan={6} className="px-4 py-8 text-center text-arena-ink/45">
+                    <td colSpan={6} className="px-4 py-8 text-center text-arena-ink/60">
                       No players in this room.
                     </td>
                   </tr>
@@ -217,11 +217,11 @@ export default function SessionReportClient({
         <section className="no-print space-y-4">
           <h2 className="font-display text-2xl font-extrabold">Who missed what</h2>
           {report.questions.length === 0 ? (
-            <p className="text-sm text-arena-ink/50">Question breakdown is unavailable for this room.</p>
+            <p className="text-sm text-arena-ink/60">Question breakdown is unavailable for this room.</p>
           ) : null}
           {report.questions.map((question, index) => (
             <article key={question.id} className="arena-panel p-5">
-              <p className="text-[11px] font-bold uppercase tracking-wider text-arena-ink/40">
+              <p className="text-[11px] font-bold uppercase tracking-wider text-arena-ink/60">
                 Question {index + 1}
                 {question.type === 'poll' ? ' · poll' : question.accuracy !== null ? ` · ${question.accuracy}% correct` : ''}
               </p>
@@ -232,7 +232,7 @@ export default function SessionReportClient({
                 </p>
               )}
               {question.type === 'poll' ? (
-                <p className="mt-3 text-sm text-arena-ink/50">{question.answered} responses — no right answer.</p>
+                <p className="mt-3 text-sm text-arena-ink/60">{question.answered} responses — no right answer.</p>
               ) : question.missedBy.length === 0 ? (
                 <p className="mt-3 text-sm text-arena-court">Everyone got this one.</p>
               ) : (
@@ -256,7 +256,7 @@ export default function SessionReportClient({
 function Stat({ label, value }: { label: string; value: string }) {
   return (
     <div className="arena-panel px-4 py-4">
-      <p className="text-[11px] font-bold uppercase tracking-wider text-arena-ink/40">{label}</p>
+      <p className="text-[11px] font-bold uppercase tracking-wider text-arena-ink/60">{label}</p>
       <p className="mt-1 font-display text-3xl font-extrabold">{value}</p>
     </div>
   );
@@ -273,9 +273,9 @@ function CompareList({
 }) {
   return (
     <div>
-      <h3 className="text-[11px] font-extrabold uppercase tracking-wider text-arena-ink/45">{title}</h3>
+      <h3 className="text-[11px] font-extrabold uppercase tracking-wider text-arena-ink/60">{title}</h3>
       {rows.length === 0 ? (
-        <p className="mt-2 text-sm text-arena-ink/45">{empty}</p>
+        <p className="mt-2 text-sm text-arena-ink/60">{empty}</p>
       ) : (
         <ul className="mt-2 space-y-2">
           {rows.map((row) => (

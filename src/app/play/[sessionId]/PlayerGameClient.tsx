@@ -1051,7 +1051,7 @@ export default function PlayerGameClient({
               </span>
             </div>
 
-            <p className="text-[11px] font-bold uppercase tracking-[0.22em] text-arena-ink/40">{t('youAreIn')}</p>
+            <p className="text-[11px] font-bold uppercase tracking-[0.22em] text-arena-ink/60">{t('youAreIn')}</p>
             <h1 dir="auto" className="mt-1 font-display text-4xl font-extrabold leading-none text-arena-ink sm:text-5xl">{player.nickname}</h1>
             {player.team_name && (
               <p className="mt-2 inline-flex items-center gap-1 bg-arena-mist px-2.5 py-1 text-xs font-bold text-arena-court">
@@ -1061,11 +1061,11 @@ export default function PlayerGameClient({
 
             <div className="mt-6 border-t-2 border-arena-ink/10 pt-5">
               <LobbyWaitMarks className="mb-3" onPick={sendLobbyReaction} />
-              <p className="text-[10px] font-bold uppercase tracking-[0.16em] text-arena-ink/35">{t('tapToCheer')}</p>
+              <p className="text-[10px] font-bold uppercase tracking-[0.16em] text-arena-ink/60">{t('tapToCheer')}</p>
               <p className="mt-3 font-display text-sm font-bold text-arena-ink">{t('waitingForHost')}</p>
               <p
                 key={LOBBY_WAIT_TIPS[lobbyTipIndex]}
-                className="mt-1 min-h-[2.6rem] text-xs leading-relaxed text-arena-ink/50 animate-fade-in"
+                className="mt-1 min-h-[2.6rem] text-xs leading-relaxed text-arena-ink/60 animate-fade-in"
               >
                 {t(LOBBY_WAIT_TIPS[lobbyTipIndex])}
               </p>
@@ -1073,7 +1073,7 @@ export default function PlayerGameClient({
                 type="button"
                 variant="ghost"
                 onClick={() => void handleLeaveLobby()}
-                className="mt-4 h-10 w-full rounded-none text-xs font-bold uppercase tracking-wider text-arena-ink/45 hover:bg-arena-ink hover:text-white"
+                className="mt-4 h-10 w-full rounded-none text-xs font-bold uppercase tracking-wider text-arena-ink/60 hover:bg-arena-ink hover:text-white"
               >
                 <LogOut className="mr-1.5 h-3.5 w-3.5" /> {t('leaveLobby')}
               </Button>
@@ -1081,7 +1081,7 @@ export default function PlayerGameClient({
           </div>
         </main>
 
-        <footer className="py-3 text-center font-display text-[10px] font-bold uppercase tracking-[0.22em] text-white/40">
+        <footer className="py-3 text-center font-display text-[10px] font-bold uppercase tracking-[0.22em] text-white/50">
           Qlash
         </footer>
       </GameShell>
@@ -1257,13 +1257,13 @@ export default function PlayerGameClient({
           winTone ? 'border-arena-ink/20 bg-black/10' : 'border-white/20 bg-black/25'
         }`}>
           <h3 className={`border-b pb-2 text-xs font-extrabold uppercase tracking-wider ${
-            winTone ? 'border-arena-ink/15 text-arena-ink/50' : 'border-white/10 text-white/50'
+            winTone ? 'border-arena-ink/15 text-arena-ink/60' : 'border-white/10 text-white/50'
           }`}>
             {t('roundSummary')}
           </h3>
           
           <div className="space-y-1">
-            <span className={`block text-[10px] font-black uppercase tracking-widest ${winTone ? 'text-arena-ink/40' : 'text-white/40'}`}>
+            <span className={`block text-[10px] font-black uppercase tracking-widest ${winTone ? 'text-arena-ink/60' : 'text-white/50'}`}>
               {t('yourChoice')}
             </span>
             {selectedAnswerIds.length > 0 ? (
@@ -1297,7 +1297,7 @@ export default function PlayerGameClient({
 
           {!isPoll ? (
           <div className="space-y-1 pt-1">
-            <span className={`block text-[10px] font-black uppercase tracking-widest ${winTone ? 'text-arena-ink/40' : 'text-white/40'}`}>
+            <span className={`block text-[10px] font-black uppercase tracking-widest ${winTone ? 'text-arena-ink/60' : 'text-white/50'}`}>
               {t('correctAnswer')}
             </span>
             <div className="mt-1 flex flex-wrap gap-2">
@@ -1328,7 +1328,7 @@ export default function PlayerGameClient({
         <div className={`mb-8 w-full max-w-xs border-2 p-4 ${
           winTone ? 'border-arena-ink/25 bg-white/40' : 'border-white/20 bg-black/20'
         }`}>
-          <span className={`block text-[10px] font-bold uppercase tracking-widest ${winTone ? 'text-arena-ink/50' : 'text-white/50'}`}>
+          <span className={`block text-[10px] font-bold uppercase tracking-widest ${winTone ? 'text-arena-ink/60' : 'text-white/50'}`}>
             {t('totalScore')}
           </span>
           <span className="mt-0.5 block font-display text-2xl font-black tabular-nums">
@@ -1568,7 +1568,7 @@ export default function PlayerGameClient({
                   ) : (
                     <span className="block h-1.5 w-10 animate-pulse bg-arena-signal" />
                   )}
-                  <span className="text-[9px] font-bold uppercase tracking-wider text-white/45">{t('seconds')}</span>
+                  <span className="text-[9px] font-bold uppercase tracking-wider text-white/50">{t('seconds')}</span>
                 </div>
               </div>
             <p className="mt-6 max-w-xs text-sm text-white/55">
@@ -1576,13 +1576,13 @@ export default function PlayerGameClient({
             </p>
             <p
               key={LOCK_WAIT_TIPS[lockTipIndex]}
-              className="mt-2 min-h-[2.4rem] max-w-xs text-xs leading-relaxed text-white/40 animate-fade-in"
+              className="mt-2 min-h-[2.4rem] max-w-xs text-xs leading-relaxed text-white/50 animate-fade-in"
             >
               {t(LOCK_WAIT_TIPS[lockTipIndex])}
             </p>
             <div className="mt-6 w-full max-w-xs border border-white/15 bg-white/[0.06] p-4">
               <LobbyWaitMarks className="mb-2" onPick={sendLobbyReaction} />
-              <p className="text-[10px] font-bold uppercase tracking-[0.16em] text-white/40">{t('tapToCheer')}</p>
+              <p className="text-[10px] font-bold uppercase tracking-[0.16em] text-white/50">{t('tapToCheer')}</p>
             </div>
           </div>
         </GameShell>
@@ -1647,7 +1647,7 @@ export default function PlayerGameClient({
                   ) : (
                     <span className="block h-1.5 w-10 animate-pulse bg-arena-signal" />
                   )}
-                  <span className="text-[9px] font-bold uppercase tracking-wider text-white/45">{t('secAbbrev')}</span>
+                  <span className="text-[9px] font-bold uppercase tracking-wider text-white/50">{t('secAbbrev')}</span>
                 </div>
               </div>
 

@@ -206,7 +206,7 @@ export default function DashboardClient({
           </button>
           <div className="flex items-center gap-3">
             <div className="hidden text-right sm:block">
-              <p className="text-[10px] font-bold uppercase tracking-[0.18em] text-arena-ink/40">
+              <p className="text-[10px] font-bold uppercase tracking-[0.18em] text-arena-ink/60">
                 {planLabel} · {playerCap} live
               </p>
               <p className="max-w-[180px] truncate text-sm font-semibold text-arena-ink">{user.email}</p>
@@ -279,7 +279,7 @@ export default function DashboardClient({
                 >
                   <div className={`h-2.5 w-full ${stripe}`} />
                   <div className="flex flex-1 flex-col p-5">
-                    <p className="text-[11px] font-bold uppercase tracking-[0.16em] text-arena-ink/40">
+                    <p className="text-[11px] font-bold uppercase tracking-[0.16em] text-arena-ink/60">
                       {questionCount} {questionCount === 1 ? 'question' : 'questions'}
                     </p>
                     <h2 dir="auto" className="mt-1 line-clamp-1 font-display text-xl font-extrabold tracking-tight text-arena-ink">
@@ -288,7 +288,7 @@ export default function DashboardClient({
                     <p dir="auto" className="mt-1 min-h-[2.5rem] text-sm text-arena-ink/55 line-clamp-2">
                       {quiz.description || 'No description'}
                     </p>
-                    <p className="mt-3 text-xs text-arena-ink/35">
+                    <p className="mt-3 text-xs text-arena-ink/60">
                       {new Date(quiz.created_at).toLocaleDateString()}
                     </p>
 
@@ -364,7 +364,7 @@ export default function DashboardClient({
                   <li key={session.id} className="flex flex-col gap-3 px-4 py-4 sm:flex-row sm:items-center sm:justify-between">
                     <div>
                       <p dir="auto" className="font-display text-lg font-bold">{quizTitleFromSession(session)}</p>
-                      <p className="text-xs text-arena-ink/45">
+                      <p className="text-xs text-arena-ink/60">
                         PIN <bdi>{session.pin}</bdi> · {playerCount} {playerCount === 1 ? 'player' : 'players'} ·{' '}
                         {new Date(session.created_at).toLocaleString()}
                       </p>
@@ -419,7 +419,7 @@ export default function DashboardClient({
                 >
                   <span dir="auto" className="font-display text-lg font-extrabold">{pack.title}</span>
                   <span dir="auto" className="mt-0.5 text-sm text-arena-ink/60">{pack.description}</span>
-                  <span className="mt-1 text-[11px] font-bold uppercase tracking-wider text-arena-ink/40">
+                  <span className="mt-1 text-[11px] font-bold uppercase tracking-wider text-arena-ink/60">
                     {pack.blurbEn} · {pack.questions.length} questions
                   </span>
                 </button>
@@ -440,7 +440,7 @@ export default function DashboardClient({
             </DialogHeader>
             <div className="my-5 space-y-3">
               <div>
-                <Label htmlFor="quizTitle" className="text-[11px] font-bold uppercase tracking-wider text-arena-ink/50">
+                <Label htmlFor="quizTitle" className="text-[11px] font-bold uppercase tracking-wider text-arena-ink/60">
                   Title
                 </Label>
                 <Input
@@ -454,7 +454,7 @@ export default function DashboardClient({
                 />
               </div>
               <div>
-                <Label htmlFor="quizDesc" className="text-[11px] font-bold uppercase tracking-wider text-arena-ink/50">
+                <Label htmlFor="quizDesc" className="text-[11px] font-bold uppercase tracking-wider text-arena-ink/60">
                   Description
                 </Label>
                 <Input

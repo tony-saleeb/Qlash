@@ -471,7 +471,7 @@ export default function HostClickerClient({
 
       {(session.status === 'question_active' || session.status === 'question_paused') && activeQuestion && (
         <div className="mt-5 flex flex-1 flex-col gap-4">
-          <p className="text-[11px] font-bold uppercase tracking-[0.2em] text-white/45">
+          <p className="text-[11px] font-bold uppercase tracking-[0.2em] text-white/50">
             {t('questionLabel')} {session.current_question_index + 1} {t('ofWord')}{' '}
             {sessionQuestionCount(session.question_order, playQuestions.length)}
             {session.status === 'question_paused' ? ` · ${t('paused')}` : ''}
@@ -497,7 +497,7 @@ export default function HostClickerClient({
               waiting.map((player) => (
                 <li key={player.id} dir="auto" className="truncate text-sm font-bold">
                   {player.nickname}
-                  {!isPlayerConnected(player) ? <span className="ml-2 text-xs font-medium text-white/35">{t('offline')}</span> : null}
+                  {!isPlayerConnected(player) ? <span className="ml-2 text-xs font-medium text-white/50">{t('offline')}</span> : null}
                 </li>
               ))
             )}

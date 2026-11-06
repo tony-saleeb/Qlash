@@ -41,7 +41,7 @@ export default function QuizEditorHeader({
           <h2 dir="auto" className="line-clamp-1 font-display text-base font-extrabold leading-tight text-arena-ink sm:text-lg">
             {title}
           </h2>
-          <p className="mt-0.5 text-xs text-arena-ink/45">
+          <p className="mt-0.5 text-xs text-arena-ink/60">
             {questionCount} {questionCount === 1 ? 'question' : 'questions'}
           </p>
         </div>

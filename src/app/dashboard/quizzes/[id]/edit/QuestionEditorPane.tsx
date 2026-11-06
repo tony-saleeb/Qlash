@@ -49,7 +49,7 @@ export default function QuestionEditorPane({
       <div className="grid grid-cols-1 sm:grid-cols-4 gap-4 bg-arena-mist/40 p-4 border border-arena-line rounded-2xl items-center">
         {/* Question Type */}
         <div className="space-y-1.5">
-          <Label className="text-arena-ink/45 text-[10px] uppercase font-bold tracking-wider">
+          <Label className="text-arena-ink/60 text-[10px] uppercase font-bold tracking-wider">
             Question Type
           </Label>
           <Select value={activeQuestion.type} onValueChange={(val) => { if (val) onTypeChange(val); }}>
@@ -68,14 +68,14 @@ export default function QuestionEditorPane({
 
         {/* Time Limit */}
         <div className="space-y-1.5">
-          <Label className="text-arena-ink/45 text-[10px] uppercase font-bold tracking-wider flex items-center justify-between pr-2">
+          <Label className="text-arena-ink/60 text-[10px] uppercase font-bold tracking-wider flex items-center justify-between pr-2">
             <span>Time Limit</span>
             <span className="font-mono text-arena-court font-bold">
               {activeQuestion.time_limit_seconds}s
             </span>
           </Label>
           <div className="flex items-center gap-3">
-            <Clock className="w-4 h-4 text-arena-ink/45 shrink-0" />
+            <Clock className="w-4 h-4 text-arena-ink/60 shrink-0" />
             <Slider
               min={5}
               max={120}
@@ -92,14 +92,14 @@ export default function QuestionEditorPane({
 
         {/* Points Value */}
         <div className="space-y-1.5">
-          <Label className="text-arena-ink/45 text-[10px] uppercase font-bold tracking-wider flex items-center justify-between pr-2">
+          <Label className="text-arena-ink/60 text-[10px] uppercase font-bold tracking-wider flex items-center justify-between pr-2">
             <span>Base Points</span>
             <span className="font-mono text-arena-court font-bold">
               {activeQuestion.points_base}
             </span>
           </Label>
           <div className="flex items-center gap-3">
-            <Award className="w-4 h-4 text-arena-ink/45 shrink-0" />
+            <Award className="w-4 h-4 text-arena-ink/60 shrink-0" />
             <Slider
               min={0}
               max={2000}
@@ -117,7 +117,7 @@ export default function QuestionEditorPane({
 
         {/* Scoring Decay Type */}
         <div className="space-y-1.5">
-          <Label className="text-arena-ink/45 text-[10px] uppercase font-bold tracking-wider">
+          <Label className="text-arena-ink/60 text-[10px] uppercase font-bold tracking-wider">
             Scoring Curve
           </Label>
           <Select
@@ -196,7 +196,7 @@ export default function QuestionEditorPane({
             <Label htmlFor="correctText" className="text-arena-ink/80 text-xs font-bold">
               Correct Text Options (Fuzzy-matched, case-insensitive)
             </Label>
-            <p className="text-arena-ink/45 text-xs leading-normal">
+            <p className="text-arena-ink/60 text-xs leading-normal">
               Type the exact expected word/words. Separate alternative acceptable answers with semicolons (e.g. <code>Washington; George Washington; George</code>).
             </p>
             <Input
@@ -259,7 +259,7 @@ export default function QuestionEditorPane({
                         <button
                           type="button"
                           onClick={() => onRemoveAnswer(ansIdx)}
-                          className="text-arena-ink/45 hover:text-rose-400 transition-colors"
+                          className="text-arena-ink/60 hover:text-rose-400 transition-colors"
                           title="Remove option"
                           aria-label="Remove option"
                         >
