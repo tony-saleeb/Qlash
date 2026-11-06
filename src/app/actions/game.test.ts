@@ -28,7 +28,7 @@ describe('host game actions', () => {
     host.auth.getSession.mockResolvedValue({
       data: { session: { user: { id: 'host-1', email: 'host@qlash.test' } } },
     });
-    host.setRpc('start_question_clock', { data: 'pg-now', error: null });
+    host.setRpc('advance_question', { data: 'pg-now', error: null });
   });
 
   it('refuses unauthenticated hosts', async () => {
@@ -108,120 +108,72 @@ describe('host game actions', () => {
     const { startGameSession } = await import('@/app/actions/game');
     await expect(startGameSession('sess-1', [])).rejects.toThrow(/Question order is required/);
 
-    host.setTable('game_sessions', { data: null, error: { message: 'not lobby' } });
+    host.setRpc('start_game', { data: null, error: { message: 'Unable to start game. Ensure the session is in lobby and you are the host.' } });
     await expect(startGameSession('sess-1', ['q1'])).rejects.toThrow(/Ensure the session is in lobby/);
   });
 
   it('starts the first question and persists play order', async () => {
-    host.setTable('game_sessions', {
-      data: { id: 'sess-1', status: 'question_active', question_started_at: '2026-08-13T20:00:00.000Z' },
-      error: null,
-    });
+    host.setRpc('start_game', { data: '2026-08-13T20:00:00.000Z', error: null });
     const { startGameSession } = await import('@/app/actions/game');
     const result = await startGameSession('sess-1', ['q1', 'q2']);
-    expect(result.success).toBe(true);
-    expect(host.lastUpdate('game_sessions')).toMatchObject({
-      status: 'question_active',
-      current_question_index: 0,
-      question_order: ['q1', 'q2'],
-      active_multiplier: 1,
-      scores_applied_question_id: null,
+    expect(result).toEqual({ success: true, serverStartedAt: '2026-08-13T20:00:00.000Z' });
+    expect(host.rpc).toHaveBeenCalledWith('start_game', {
+      p_session_id: 'sess-1',
+      p_question_order: ['q1', 'q2'],
     });
   });
 
-  it('encodes pause as elapsed milliseconds on question_started_at', async () => {
-    vi.useFakeTimers();
-    vi.setSystemTime(new Date('2026-08-13T20:00:10.000Z'));
-    host.setTables({
-      game_sessions: [
-        {
-          data: {
-            id: 'sess-1',
-            status: 'question_active',
-            question_started_at: '2026-08-13T20:00:00.000Z',
-          },
-          error: null,
-        },
-        { data: {}, error: null },
-      ],
-    });
+  it('pauses through pause_question', async () => {
+    host.setRpc('pause_question', { data: '1970-01-01T00:00:10.000Z', error: null });
     const { pauseGameSession } = await import('@/app/actions/game');
     await expect(pauseGameSession('sess-1')).resolves.toEqual({ success: true });
-    expect(host.lastUpdate('game_sessions')).toEqual({
-      status: 'question_paused',
-      question_started_at: new Date(10_000).toISOString(),
-    });
-    vi.useRealTimers();
+    expect(host.rpc).toHaveBeenCalledWith('pause_question', { p_session_id: 'sess-1' });
   });
 
   it('refuses pause when the round is not active', async () => {
-    host.setTable('game_sessions', {
-      data: { id: 'sess-1', status: 'lobby', question_started_at: null },
-      error: null,
+    host.setRpc('pause_question', {
+      data: null,
+      error: { message: 'Game is not in an active question state.' },
     });
     const { pauseGameSession } = await import('@/app/actions/game');
     await expect(pauseGameSession('sess-1')).rejects.toThrow(/not in an active question state/);
   });
 
-  it('resumes by subtracting encoded elapsed from now', async () => {
-    vi.useFakeTimers();
-    vi.setSystemTime(new Date('2026-08-13T20:01:00.000Z'));
-    host.setTables({
-      game_sessions: [
-        {
-          data: {
-            id: 'sess-1',
-            status: 'question_paused',
-            question_started_at: new Date(5000).toISOString(),
-          },
-          error: null,
-        },
-        { data: {}, error: null },
-      ],
-    });
+  it('resumes through resume_question', async () => {
+    host.setRpc('resume_question', { data: '2026-08-13T20:00:55.000Z', error: null });
     const { resumeGameSession } = await import('@/app/actions/game');
-    const result = await resumeGameSession('sess-1');
-    expect(new Date(result.serverStartedAt).getTime()).toBe(Date.parse('2026-08-13T20:01:00.000Z') - 5000);
-    vi.useRealTimers();
+    await expect(resumeGameSession('sess-1')).resolves.toEqual({
+      success: true,
+      serverStartedAt: '2026-08-13T20:00:55.000Z',
+    });
+    expect(host.rpc).toHaveBeenCalledWith('resume_question', { p_session_id: 'sess-1' });
   });
 
-  it('adds time on an active clock by shifting startedAt forward', async () => {
-    host.setTables({
-      game_sessions: [
-        {
-          data: {
-            id: 'sess-1',
-            status: 'question_active',
-            question_started_at: '2026-08-13T20:00:00.000Z',
-          },
-          error: null,
-        },
-        { data: {}, error: null },
-      ],
-    });
+  it('adds time through add_question_time', async () => {
+    host.setRpc('add_question_time', { data: '2026-08-13T20:00:10.000Z', error: null });
     const { addQuestionTime } = await import('@/app/actions/game');
     const result = await addQuestionTime('sess-1', 10);
-    expect(result.addedSeconds).toBe(10);
-    expect(result.serverStartedAt).toBe('2026-08-13T20:00:10.000Z');
+    expect(result).toEqual({
+      success: true,
+      serverStartedAt: '2026-08-13T20:00:10.000Z',
+      addedSeconds: 10,
+    });
+    expect(host.rpc).toHaveBeenCalledWith('add_question_time', {
+      p_session_id: 'sess-1',
+      p_seconds: 10,
+    });
   });
 
-  it('adds time on a paused clock by reducing encoded elapsed', async () => {
-    host.setTables({
-      game_sessions: [
-        {
-          data: {
-            id: 'sess-1',
-            status: 'question_paused',
-            question_started_at: new Date(8000).toISOString(),
-          },
-          error: null,
-        },
-        { data: {}, error: null },
-      ],
-    });
+  it('adds time on a paused clock through the same RPC', async () => {
+    host.setRpc('add_question_time', { data: '1970-01-01T00:00:05.000Z', error: null });
     const { addQuestionTime } = await import('@/app/actions/game');
     const result = await addQuestionTime('sess-1', 3);
-    expect(new Date(result.serverStartedAt).getTime()).toBe(5000);
+    expect(result.addedSeconds).toBe(3);
+    expect(result.serverStartedAt).toBe('1970-01-01T00:00:05.000Z');
+    expect(host.rpc).toHaveBeenCalledWith('add_question_time', {
+      p_session_id: 'sess-1',
+      p_seconds: 3,
+    });
   });
 
   it('kicks only after confirming the caller owns the session', async () => {
@@ -318,7 +270,7 @@ describe('host game actions', () => {
       success: true,
       serverStartedAt: 'pg-now',
     });
-    expect(host.rpc).toHaveBeenCalledWith('start_question_clock', { p_session_id: 'sess-1' });
+    expect(host.rpc).toHaveBeenCalledWith('advance_question', { p_session_id: 'sess-1', p_index: 1 });
     expect(
       host.rpc.mock.calls.every((call) => call[0] !== 'apply_question_scores_and_reveal')
     ).toBe(true);
@@ -332,11 +284,7 @@ describe('host game actions', () => {
       success: true,
       serverStartedAt: 'pg-now',
     });
-    expect(host.lastUpdate('game_sessions')).toMatchObject({
-      status: 'question_active',
-      current_question_index: 2,
-      active_multiplier: 1,
-    });
+    expect(host.rpc).toHaveBeenCalledWith('advance_question', { p_session_id: 'sess-1', p_index: 2 });
     await expect(actions.goToPodium('sess-1')).resolves.toEqual({ success: true });
     await expect(actions.endGameSession('sess-1')).resolves.toEqual({ success: true });
   });
