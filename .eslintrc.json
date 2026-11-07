@@ -1,5 +1,5 @@
 {
-  "ignorePatterns": [".next", "node_modules", "coverage"],
+  "ignorePatterns": [".next", "node_modules", "coverage", "next-env.d.ts"],
   "extends": ["next/core-web-vitals", "next/typescript"],
   "overrides": [
     {
