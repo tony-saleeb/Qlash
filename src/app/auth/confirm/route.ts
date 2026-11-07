@@ -33,7 +33,7 @@ function escapeHtml(value: string): string {
 }
 
 /** A clicked email link is a GET. Signing in has to be a same-origin POST. */
-export function confirmPostAllowed(request: Request): boolean {
+function confirmPostAllowed(request: Request): boolean {
   const site = (request.headers.get('sec-fetch-site') ?? '').toLowerCase();
   if (site === 'cross-site') return false;
   const origin = request.headers.get('origin');

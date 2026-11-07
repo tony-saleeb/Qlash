@@ -25,6 +25,7 @@ declare
   v_points int;
   v_correct boolean;
   v_streak int;
+  v_token text;
   v_slack int;
   v_ok boolean;
   v_pass int := 0;
@@ -151,8 +152,9 @@ begin
     values (v_session, 'probe', c.prev_streak)
     returning id into v_player;
 
+    v_token := 'probe-' || gen_random_uuid()::text;
     insert into public.player_tokens (player_id, client_token)
-    values (v_player, 'probe-token');
+    values (v_player, v_token);
 
     -- Start the clock last so the elapsed time is as close to the case as possible.
     update public.game_sessions
@@ -160,7 +162,7 @@ begin
     where id = v_session;
 
     v_result := public.submit_live_answer(
-      v_player, 'probe-token', v_session, v_question, c.selected
+      v_player, v_token, v_session, v_question, c.selected
     );
 
     v_correct := (v_result->>'isCorrect')::boolean;
