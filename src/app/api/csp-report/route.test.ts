@@ -2,7 +2,7 @@ import { beforeEach, describe, expect, it, vi } from 'vitest';
 import { jsonRequest } from '@/test/supabaseMock';
 
 const { rateLimitMock } = vi.hoisted(() => ({
-  rateLimitMock: vi.fn(() => ({ ok: true as const })),
+  rateLimitMock: vi.fn((..._args: unknown[]): { ok: boolean; retryAfterSec?: number } => ({ ok: true })),
 }));
 
 vi.mock('@/lib/rate-limit', () => ({
@@ -10,7 +10,7 @@ vi.mock('@/lib/rate-limit', () => ({
   clientIpFromRequest: () => 'test-ip',
 }));
 
-const forward = vi.fn(async () => undefined);
+const forward = vi.fn(async (..._args: unknown[]) => undefined);
 
 vi.mock('@/lib/security/csp', () => ({
   forwardCspReport: (...args: unknown[]) => forward(...args),

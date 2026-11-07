@@ -45,9 +45,7 @@ export const viewport: Viewport = {
 
 export const metadata: Metadata = {
   metadataBase: metadataBaseUrl(),
-  title: {
-    default: SITE_TITLE,
-  },
+  title: SITE_TITLE,
   description: SITE_DESCRIPTION,
   applicationName: SITE_NAME,
   keywords: SITE_KEYWORDS,

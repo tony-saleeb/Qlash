@@ -6,7 +6,11 @@ import { createDefaultQuestion } from '@/app/dashboard/quizzes/[id]/edit/quizEdi
 import type { Question } from '@/app/dashboard/quizzes/[id]/edit/quizEditorModel';
 
 const saveQuizData = vi.hoisted(() =>
-  vi.fn(async () => ({ success: true as const, updatedAt: '2026-08-13T20:00:00.000Z', questionIds: ['q1', 'q2'] }))
+  vi.fn(async (..._args: unknown[]) => ({
+    success: true as const,
+    updatedAt: '2026-08-13T20:00:00.000Z',
+    questionIds: ['q1', 'q2'],
+  }))
 );
 
 vi.mock('next/navigation', () => ({

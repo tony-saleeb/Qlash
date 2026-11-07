@@ -415,10 +415,9 @@ export default function PlayerGameClient({
                   timedOut: true,
                 });
               } else if ((round.submitted ?? round.hadSubmission) && round.submission) {
+                const lastSubmit = lastSubmitRef.current;
                 const storedChoice = choiceIdsForReveal(
-                  lastSubmitRef.current?.questionId === data.question.id
-                    ? lastSubmitRef.current.selected
-                    : [],
+                  lastSubmit && lastSubmit.questionId === data.question.id ? lastSubmit.selected : [],
                   round.submission.selected_answer_ids
                 );
                 if (storedChoice.length > 0) setSelectedAnswerIds(storedChoice);

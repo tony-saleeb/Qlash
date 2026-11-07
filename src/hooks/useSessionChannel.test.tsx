@@ -27,6 +27,7 @@ describe('useSessionChannel', () => {
     const channel = supabase.channel.mock.results[0].value as {
       send: ReturnType<typeof vi.fn>;
       on: ReturnType<typeof vi.fn>;
+      subscribe: ReturnType<typeof vi.fn>;
     };
     expect(channel.on).toHaveBeenCalledWith('broadcast', { event: 'question:start' }, expect.any(Function));
     expect(channel.send).toHaveBeenCalledWith({

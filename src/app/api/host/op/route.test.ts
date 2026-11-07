@@ -78,7 +78,15 @@ describe('POST /api/host/op', () => {
       supabase: {} as never,
       user: { id: 'host-1', email: 'host@qlash.test' },
     });
-    vi.mocked(createGameSession).mockResolvedValue({ id: 'sess-1', pin: '123456' });
+    vi.mocked(createGameSession).mockResolvedValue({
+      id: 'sess-1',
+      pin: '123456',
+      status: 'lobby',
+      current_question_index: 0,
+      question_started_at: null,
+      quiz_id: 'quiz-1',
+      host_id: 'host-1',
+    });
   });
 
   it('rejects a missing operation', async () => {
@@ -93,7 +101,9 @@ describe('POST /api/host/op', () => {
       await POST(hostRequest({ op: 'createGameSession', args: { quizId: 'quiz-1' } }))
     );
     expect(result.status).toBe(200);
-    expect(result.body).toEqual({ data: { id: 'sess-1', pin: '123456' } });
+    expect(result.body).toEqual({
+      data: expect.objectContaining({ id: 'sess-1', pin: '123456' }),
+    });
     const keys = rateLimitMock.mock.calls.map((call) => call[0].key);
     expect(keys).toEqual(['host-op:ip:test-ip', 'host-op:host-1']);
   });

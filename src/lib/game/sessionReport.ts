@@ -16,6 +16,7 @@ export interface ReportPlayerRow {
   team_name?: string | null;
   score: number;
   streak: number;
+  joined_at?: string | null;
 }
 
 export interface ReportQuestionRow {
@@ -34,9 +35,9 @@ export interface SessionReportInput {
     created_at: string;
     quiz_id: string | null;
     question_order?: unknown;
-  };
     current_question_index?: number | null;
     scored_question_ids?: unknown;
+  };
   quizTitle: string | null;
   teamMode: boolean;
   players: ReportPlayerRow[];
@@ -123,6 +124,10 @@ function orderQuestions(questions: ReportQuestionRow[], questionOrder: unknown):
 }
 
 function pct(correct: number, total: number): number | null {
+  if (total <= 0) return null;
+  return Math.round((correct / total) * 100);
+}
+
 function timeMs(value: string | null | undefined): number | null {
   if (!value) return null;
   const parsed = Date.parse(value);
@@ -197,17 +202,13 @@ function presentPlayerIds(
   return present;
 }
 
-  if (total <= 0) return null;
-  return Math.round((correct / total) * 100);
-}
-
 export function buildSessionReport(input: SessionReportInput): SessionReport {
-  const questions = orderQuestions(input.questions, input.session.question_order);
   const ordered = orderQuestions(input.questions, input.session.question_order);
   const playedIds = playedQuestionIds(input.session);
   const questions =
     playedIds === null ? ordered : ordered.filter((question) => playedIds.includes(question.id));
   const playedOrder = playedIds ?? questions.map((question) => question.id);
+  const scoredQuestions = questions.filter((question) => question.type !== 'poll');
   const answersByPlayer = new Map<string, ReportAnswerRow[]>();
   const answersByQuestion = new Map<string, ReportAnswerRow[]>();
 
@@ -229,7 +230,6 @@ export function buildSessionReport(input: SessionReportInput): SessionReport {
         return q && q.type !== 'poll';
       });
       const correct = scored.filter((row) => row.is_correct).length;
-      return {
       const asked = scoredQuestions.filter((question) =>
         presentPlayerIds(input.players, question.id, playedOrder, answersByQuestion).has(player.id)
       ).length;
@@ -243,6 +243,7 @@ export function buildSessionReport(input: SessionReportInput): SessionReport {
         answered: scored.length,
         asked,
         accuracy: pct(correct, asked),
+      };
     });
 
   const questionReports: QuestionReport[] = questions.map((question) => {
@@ -250,7 +251,6 @@ export function buildSessionReport(input: SessionReportInput): SessionReport {
     const isPoll = question.type === 'poll';
     const correct = rows.filter((row) => row.is_correct).length;
     const playerById = new Map(input.players.map((p) => [p.id, p]));
-    const missedBy = isPoll
     const present = presentPlayerIds(input.players, question.id, playedOrder, answersByQuestion);
     const missedBy = isPoll
       ? []
@@ -263,6 +263,7 @@ export function buildSessionReport(input: SessionReportInput): SessionReport {
             })),
           ...input.players
             .filter((player) => present.has(player.id) && !rows.some((row) => row.player_id === player.id))
+            .map((player) => ({ nickname: player.nickname, answer: 'No answer' })),
         ];
 
     return {
@@ -272,8 +273,8 @@ export function buildSessionReport(input: SessionReportInput): SessionReport {
       correctLabels: correctLabels(question),
       answered: rows.length,
       correct,
-      accuracy: isPoll ? null : pct(correct, input.players.length),
       accuracy: isPoll ? null : pct(correct, present.size),
+      missedBy,
     };
   });
 
@@ -302,13 +303,13 @@ export function buildSessionReport(input: SessionReportInput): SessionReport {
   };
 }
 
-function csvCell(value: string | number | null | undefined): string {
 const CSV_FORMULA_START = /^[=+\-@\t\r]/;
 
 function csvCell(value: string | number | null | undefined): string {
   let text = value === null || value === undefined ? '' : String(value);
   if (CSV_FORMULA_START.test(text)) text = `'${text}`;
   if (/[",\n\r]/.test(text)) return `"${text.replace(/"/g, '""')}"`;
+  return text;
 }
 
 export function sessionReportToCsv(report: SessionReport): string {
@@ -343,8 +344,8 @@ export function sessionReportToCsv(report: SessionReport): string {
         .join(',')
     ),
   ];
-  return lines.join('\n');
   return `\uFEFF${lines.join('\n')}`;
+}
 
 export interface QuestionDelta {
   id: string;
