@@ -16,6 +16,7 @@ export default async function DashboardPage() {
       .from('quizzes')
       .select('id, title, description, created_at, share_code, questions(count)')
       .eq('host_id', user.id)
+      .is('deleted_at', null)
       .order('created_at', { ascending: false }),
     supabase
       .from('game_sessions')

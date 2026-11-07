@@ -1,3 +1,5 @@
+import { normalizeAnswerText } from '@/lib/game/answerText';
+
 /**
  * Test-only mirror of submit_live_answer in schema-fast-submit.sql.
  * Live grading is the SQL RPC. Do not import this from submit or the live clients.
@@ -6,6 +8,7 @@
  * this file on every run, scripts/verify-scoring.sql checks the RPC. Change a
  * formula here only together with the SQL and the fixture.
  */
+
 export type ScoringType = 'linear' | 'flat' | 'none' | string;
 
 export interface AnswerOptionLike {
@@ -40,11 +43,12 @@ export function gradeAnswer(params: {
   }
 
   if (type === 'type_answer') {
-    const submittedText = (selectedAnswerIds[0] || '').trim().toLowerCase();
+    const submittedText = normalizeAnswerText(selectedAnswerIds[0] || '');
     const correctAlternatives = (correctOptions[0]?.text || '')
       .split(';')
-      .map((t) => t.trim().toLowerCase());
-    return correctAlternatives.includes(submittedText);
+      .map((text) => normalizeAnswerText(text))
+      .filter((text) => text.length > 0);
+    return submittedText.length > 0 && correctAlternatives.includes(submittedText);
   }
 
   return false;
@@ -103,18 +107,17 @@ export function resolveMultiplier(
   activeMultiplier: number | null | undefined,
   doublePointsRounds: unknown,
   questionId: string,
-  currentIndex: number
+  libraryOrderIndex: number
 ): number {
   if (activeMultiplier === 2) return 2;
 
   const doubleRounds = Array.isArray(doublePointsRounds)
-    ? (doublePointsRounds as string[])
+    ? doublePointsRounds.map((round) => String(round))
     : [];
 
-  if (
-    doubleRounds.includes(questionId) ||
-    doubleRounds.includes(String(currentIndex))
-  ) {
+  // A numeric token is the question's saved library position. The shuffled
+  // play slot is a different number and must not select the 2x question.
+  if (doubleRounds.includes(questionId) || doubleRounds.includes(String(libraryOrderIndex))) {
     return 2;
   }
 

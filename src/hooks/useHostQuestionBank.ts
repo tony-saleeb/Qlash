@@ -3,6 +3,7 @@
 import { useEffect, useRef, useState } from 'react';
 import type { SupabaseClient } from '@supabase/supabase-js';
 import type { Question } from '@/lib/game/types';
+import { keepStoredQuestion } from '@/lib/game/questionArchive';
 import { HOST_QUESTION_SELECT } from '@/lib/host/hostRoomFields';
 
 export function useHostQuestionBank(
@@ -32,7 +33,11 @@ export function useHostQuestionBank(
       .then(({ data, error }) => {
         if (cancelled) return;
         if (!error && Array.isArray(data)) {
-          setQuestions(data as Question[]);
+          setQuestions(
+            (data as (Question & { archived_at?: string | null })[]).filter((row) =>
+              keepStoredQuestion(row, [])
+            )
+          );
         }
         setQuestionsLoading(false);
       });
@@ -42,5 +47,5 @@ export function useHostQuestionBank(
     };
   }, [quizId, initialQuestions]);
 
-  return { questions, questionsLoading };
+  return { questions, questionsLoading, setQuestions };
 }

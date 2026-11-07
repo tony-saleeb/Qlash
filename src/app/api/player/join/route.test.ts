@@ -45,6 +45,33 @@ describe('POST /api/player/join', () => {
     expect(admin.from).not.toHaveBeenCalled();
   });
 
+  it('rejects a numeric pin, an over-long pin, and a non-string nickname', async () => {
+    const { POST } = await import('@/app/api/player/join/route');
+    expect((await readJson(await POST(jsonRequest({ pin: 123456, nickname: 'Ada' })))).status).toBe(400);
+    expect((await readJson(await POST(jsonRequest({ pin: '1234567', nickname: 'Ada' })))).status).toBe(400);
+    expect((await readJson(await POST(jsonRequest({ pin: '123456', nickname: 12 })))).status).toBe(400);
+    expect((await readJson(await POST(jsonRequest({ pin: '123456', nickname: ['Ada'] })))).status).toBe(400);
+    const broken = await POST(
+      new Request('http://localhost/api', {
+        method: 'POST',
+        body: 'not-json',
+        headers: { 'content-type': 'application/json' },
+      })
+    );
+    expect(broken.status).toBe(400);
+    expect(admin.from).not.toHaveBeenCalled();
+  });
+
+  it('returns 400 when the body is not JSON', async () => {
+    const { POST } = await import('@/app/api/player/join/route');
+    const response = await POST(
+      new Request('http://localhost/api', { method: 'POST', body: '{', headers: { 'content-type': 'application/json' } })
+    );
+    expect(response.status).toBe(400);
+    expect((await readJson(response)).body.error).toBe('The request body must be JSON.');
+    expect(admin.from).not.toHaveBeenCalled();
+  });
+
   it('returns 404 when the room does not exist', async () => {
     admin.setTable('game_sessions', { data: null, error: null });
     const { POST } = await import('@/app/api/player/join/route');
@@ -67,7 +94,7 @@ describe('POST /api/player/join', () => {
     expect(result.body.error).toMatch(/finished/);
   });
 
-  it('lets a first-time player in mid-question even when the old cutoff was lobby-only', async () => {
+  it('refuses a first-time player once the game has started and late join is off', async () => {
     const player = {
       id: 'p-late',
       session_id: 'sess-1',
@@ -96,9 +123,41 @@ describe('POST /api/player/join', () => {
     });
     const { POST } = await import('@/app/api/player/join/route');
     const result = await readJson(await POST(jsonRequest({ pin: '123456', nickname: 'Ada' })));
-    expect(result.status).toBe(200);
-    expect(result.body.success).toBe(true);
-    expect(result.body.player.id).toBe('p-late');
+    expect(result.status).toBe(403);
+    expect(result.body.code).toBe('GAME_STARTED');
+    expect(admin.fromCalls.some((entry) => entry.table === 'players')).toBe(false);
+  });
+
+  it('refuses a join when the host has locked the room', async () => {
+    admin.setTable('game_sessions', { data: { ...lobbySession, join_locked: true }, error: null });
+    const { POST } = await import('@/app/api/player/join/route');
+    const result = await readJson(await POST(jsonRequest({ pin: '123456', nickname: 'Ada' })));
+    expect(result.status).toBe(403);
+    expect(result.body.code).toBe('JOIN_LOCKED');
+  });
+
+  it('refuses a kicked nickname and a kicked device token', async () => {
+    admin.setTables({
+      game_sessions: { data: lobbySession, error: null },
+      session_kicks: { data: { nickname: 'Ada' }, error: null },
+    });
+    const { POST } = await import('@/app/api/player/join/route');
+    const byName = await readJson(await POST(jsonRequest({ pin: '123456', nickname: 'Ada' })));
+    expect(byName.status).toBe(403);
+    expect(byName.body.code).toBe('KICKED');
+
+    admin.setTables({
+      game_sessions: { data: lobbySession, error: null },
+      session_kicks: [
+        { data: null, error: null },
+        { data: [{ client_token: 'old-token' }], error: null },
+      ],
+    });
+    const byToken = await readJson(
+      await POST(jsonRequest({ pin: '123456', nickname: 'Bea', priorTokens: ['old-token'] }))
+    );
+    expect(byToken.status).toBe(403);
+    expect(byToken.body.code).toBe('KICKED');
   });
 
   it('allows a first-time join on a later question when late join is on', async () => {
@@ -135,6 +194,18 @@ describe('POST /api/player/join', () => {
     expect(result.body.player.id).toBe('p-late');
   });
 
+  it('refuses a room that has been open for more than 12 hours', async () => {
+    admin.setTable('game_sessions', {
+      data: { ...lobbySession, created_at: '2020-01-01T00:00:00.000Z' },
+      error: null,
+    });
+    const { POST } = await import('@/app/api/player/join/route');
+    const result = await readJson(await POST(jsonRequest({ pin: '123456', nickname: 'Ada' })));
+    expect(result.status).toBe(403);
+    expect(result.body.code).toBe('ROOM_EXPIRED');
+    expect(admin.fromCalls.some((entry) => entry.table === 'players')).toBe(false);
+  });
+
   it('returns NICKNAME_TAKEN in lobby so the client can reconnect', async () => {
     admin.setTables({
       game_sessions: { data: lobbySession, error: null },
@@ -145,7 +216,7 @@ describe('POST /api/player/join', () => {
     expect(result.status).toBe(409);
     expect(result.body.code).toBe('NICKNAME_TAKEN');
     expect(result.body.playerId).toBeUndefined();
-    expect(result.body.sessionId).toBeUndefined();
+    expect(result.body.sessionId).toBe('sess-1');
   });
 
   it('requires a team name on team quizzes', async () => {
@@ -234,6 +305,47 @@ describe('POST /api/player/join', () => {
     });
   });
 
+  it('stores a nickname with its invisible characters removed', async () => {
+    const player = {
+      id: 'p1',
+      session_id: 'sess-1',
+      nickname: 'Ada',
+      team_name: null,
+      score: 0,
+      streak: 0,
+      connected: true,
+    };
+    admin.setTables({
+      game_sessions: { data: lobbySession, error: null },
+      players: [
+        { data: null, error: null },
+        { data: null, error: null, count: 1 },
+        { data: player, error: null },
+      ],
+      player_tokens: { data: {}, error: null },
+    });
+    const { POST } = await import('@/app/api/player/join/route');
+    const result = await readJson(
+      await POST(jsonRequest({ pin: '123456', nickname: `\u202EAda${'\u200B'}` }))
+    );
+    expect(result.status).toBe(200);
+    expect(admin.lastInsert('players')).toMatchObject({ nickname: 'Ada' });
+  });
+
+  it('rejects a team name that is not text', async () => {
+    admin.setTable('game_sessions', {
+      data: { ...lobbySession, quizzes: { team_mode: true } },
+      error: null,
+    });
+    const { POST } = await import('@/app/api/player/join/route');
+    const result = await readJson(
+      await POST(jsonRequest({ pin: '123456', nickname: 'Ada', teamName: 12 }))
+    );
+    expect(result.status).toBe(400);
+    expect(result.body.error).toMatch(/Team name/);
+    expect(admin.fromCalls.some((entry) => entry.table === 'players')).toBe(false);
+  });
+
   it('maps a capacity trigger to ROOM_FULL', async () => {
     admin.setTables({
       game_sessions: { data: lobbySession, error: null },
@@ -262,7 +374,19 @@ describe('POST /api/player/join', () => {
     const result = await readJson(await POST(jsonRequest({ pin: '123456', nickname: 'Ada' })));
     expect(result.status).toBe(409);
     expect(result.body.code).toBe('NICKNAME_TAKEN');
-    expect(result.body.sessionId).toBeUndefined();
+    expect(result.body.sessionId).toBe('sess-1');
+  });
+
+  it('returns 429 when this room is taking joins too fast', async () => {
+    admin.setTable('game_sessions', { data: lobbySession, error: null });
+    rateLimitMock.mockReturnValueOnce({ ok: true }).mockReturnValueOnce({ ok: false, retryAfterSec: 4 });
+    const { POST } = await import('@/app/api/player/join/route');
+    const result = await readJson(await POST(jsonRequest({ pin: '123456', nickname: 'Ada' })));
+    expect(result.status).toBe(429);
+    expect(result.headers.get('Retry-After')).toBe('4');
+    const keys = rateLimitMock.mock.calls.slice(-2).map((call) => call[0].key);
+    expect(keys).toEqual(['join:test-ip', 'join:session:sess-1']);
+    expect(admin.fromCalls.some((entry) => entry.table === 'players')).toBe(false);
   });
 
   it('returns 429 when the IP join bucket is exhausted', async () => {

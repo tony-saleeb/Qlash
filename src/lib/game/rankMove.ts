@@ -1,6 +1,11 @@
-export function rankOfPlayer(rows: { id: string; score: number }[], playerId: string): number | null {
-  const sorted = [...rows].sort((a, b) => b.score - a.score || a.id.localeCompare(b.id));
-  const index = sorted.findIndex((row) => row.id === playerId);
+export function rankOfPlayer(
+  rows: { id?: string; score: number; isMe?: boolean }[],
+  playerId: string
+): number | null {
+  const sorted = [...rows].sort(
+    (a, b) => b.score - a.score || (a.id ?? '').localeCompare(b.id ?? '')
+  );
+  const index = sorted.findIndex((row) => row.isMe || (row.id != null && row.id === playerId));
   return index >= 0 ? index + 1 : null;
 }
 

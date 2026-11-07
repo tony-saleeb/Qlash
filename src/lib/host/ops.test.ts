@@ -5,6 +5,8 @@ describe('host ops', () => {
   it('accepts every dispatched host operation and rejects unknown names', () => {
     expect(HOST_OPS).toContain('saveQuizData');
     expect(isHostOp('createGameSession')).toBe(true);
+    expect(isHostOp('rotateQuizShare')).toBe(true);
+    expect(isHostOp('stopQuizShare')).toBe(true);
     expect(isHostOp('not-an-op')).toBe(false);
   });
 });

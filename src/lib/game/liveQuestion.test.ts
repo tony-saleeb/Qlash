@@ -1,11 +1,13 @@
 import { describe, expect, it } from 'vitest';
 import {
   isStaleHydrate,
+  keepAnswerLayout,
+  hostQuestionSession,
   mergeLiveSession,
   publicQuestionFromStartPayload,
   shouldAcceptQuestionClock,
 } from '@/lib/game/liveQuestion';
-import type { GameSessionRow } from '@/lib/game/types';
+import type { GameSessionRow, PublicQuestionPayload } from '@/lib/game/types';
 
 const base: GameSessionRow = {
   id: 'sess-1',
@@ -30,6 +32,17 @@ describe('mergeLiveSession', () => {
     expect(mergeLiveSession(base, incoming)).toBe(base);
   });
 
+  it('keeps the pause stamp even though it is earlier than the wall clock', () => {
+    const incoming: GameSessionRow = {
+      ...base,
+      status: 'question_paused',
+      question_started_at: '1970-01-01T00:00:03.000Z',
+    };
+    const merged = mergeLiveSession(base, incoming);
+    expect(merged.status).toBe('question_paused');
+    expect(merged.question_started_at).toBe('1970-01-01T00:00:03.000Z');
+  });
+
   it('accepts a later question', () => {
     const incoming: GameSessionRow = {
       ...base,
@@ -37,6 +50,15 @@ describe('mergeLiveSession', () => {
       question_started_at: '2026-09-14T12:00:40.000Z',
     };
     expect(mergeLiveSession(base, incoming)).toEqual(incoming);
+  });
+});
+
+describe('hostQuestionSession', () => {
+  it('paints a jump backward onto the projector', () => {
+    const jumped = hostQuestionSession(base, 0, '2026-09-14T12:01:00.000Z');
+    expect(jumped.current_question_index).toBe(0);
+    expect(jumped.status).toBe('question_active');
+    expect(jumped.question_started_at).toBe('2026-09-14T12:01:00.000Z');
   });
 });
 
@@ -97,6 +119,55 @@ describe('publicQuestionFromStartPayload', () => {
         answers: [],
       })
     ).toBeNull();
+  });
+});
+
+describe('keepAnswerLayout', () => {
+  const shown: PublicQuestionPayload = {
+    id: 'q2',
+    type: 'mcq',
+    prompt: 'Capital of France?',
+    media_url: null,
+    media_type: null,
+    time_limit_seconds: 20,
+    answers: [
+      { id: 'c', text: 'Nice', color: '#c8f542', shape: 'bolt' },
+      { id: 'a', text: 'Paris', color: '#e11d2e', shape: 'slash' },
+      { id: 'b', text: 'Lyon', color: '#4a2aff', shape: 'qring' },
+    ],
+  };
+
+  it('keeps the on-screen order when the same question arrives in another order', () => {
+    const incoming = { ...shown, answers: [shown.answers[1], shown.answers[2], shown.answers[0]] };
+    expect(keepAnswerLayout(shown, incoming).answers.map((a) => a.id)).toEqual(['c', 'a', 'b']);
+  });
+
+  it('takes edited text without moving the button', () => {
+    const incoming = {
+      ...shown,
+      prompt: 'Capital of France? (edited)',
+      answers: [
+        { id: 'a', text: 'Paris!', color: '#e11d2e', shape: 'slash' },
+        { id: 'b', text: 'Lyon', color: '#4a2aff', shape: 'qring' },
+        { id: 'c', text: 'Nice', color: '#c8f542', shape: 'bolt' },
+      ],
+    };
+    const next = keepAnswerLayout(shown, incoming);
+    expect(next.prompt).toBe('Capital of France? (edited)');
+    expect(next.answers.map((a) => a.text)).toEqual(['Nice', 'Paris!', 'Lyon']);
+  });
+
+  it('uses the incoming payload for a different question or a different answer set', () => {
+    const otherQuestion = { ...shown, id: 'q3' };
+    expect(keepAnswerLayout(shown, otherQuestion)).toBe(otherQuestion);
+    const changedSet = {
+      ...shown,
+      answers: [...shown.answers.slice(0, 2), { id: 'd', text: 'Lille', color: '#0a6b5c', shape: 'chevron' }],
+    };
+    expect(keepAnswerLayout(shown, changedSet)).toBe(changedSet);
+    const shorter = { ...shown, answers: shown.answers.slice(0, 2) };
+    expect(keepAnswerLayout(shown, shorter)).toBe(shorter);
+    expect(keepAnswerLayout(null, shown)).toBe(shown);
   });
 });
 

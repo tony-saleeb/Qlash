@@ -1,8 +1,12 @@
 // node scripts/security/realtime-probe.mjs <sessionId>
 // env: SUPABASE_URL, SUPABASE_ANON_KEY
 import { createClient } from '@supabase/supabase-js';
+import { realtimeProbeFailures } from './realtimeProbeResult.mjs';
 const [sessionId] = process.argv.slice(2);
 if (!sessionId) throw new Error('usage: realtime-probe.mjs <sessionId>');
+if (!process.env.SUPABASE_URL || !process.env.SUPABASE_ANON_KEY) {
+  throw new Error('SUPABASE_URL and SUPABASE_ANON_KEY are required');
+}
 const mk = () => createClient(process.env.SUPABASE_URL, process.env.SUPABASE_ANON_KEY, { auth: { persistSession: false } });
 const join = (topic, isPrivate) => new Promise((resolve) => {
   const ch = mk().channel(topic, { config: { private: isPrivate, broadcast: { ack: true } } });
@@ -28,4 +32,14 @@ console.log('5 spoofed question:start received  :', listener.got.filter((e) => e
 console.log('6 click Next on the host within 60 s ...');
 await new Promise((r) => setTimeout(r, 60000));
 console.log('7 events received by listener      :', listener.got.join(', ') || '(none)');
+const failures = realtimeProbeFailures({
+  hostStatus: hostTopic.status,
+  legacyStatus: legacy.status,
+  sendStatus: sent,
+  spoofedStarts: listener.got.filter((event) => event === 'question:start').length,
+});
+if (failures.length) {
+  console.error(failures.map((failure) => `FAIL  ${failure}`).join('\n'));
+  process.exit(1);
+}
 process.exit(0);

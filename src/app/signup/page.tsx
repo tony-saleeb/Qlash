@@ -1,5 +1,5 @@
 import { redirect } from 'next/navigation';
 
 export default function SignupPage() {
-  redirect('/?host=1');
+  redirect('/?host=1&mode=signup');
 }

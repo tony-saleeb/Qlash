@@ -1,5 +1,12 @@
 import { describe, expect, it, vi } from 'vitest';
-import { maybeSeededShuffle, maybeShuffle, questionsInPlayOrder, seededShuffle, shuffle } from '@/lib/game/shuffle';
+import {
+  answersInPlayOrder,
+  maybeSeededShuffle,
+  maybeShuffle,
+  questionsInPlayOrder,
+  seededShuffle,
+  shuffle,
+} from '@/lib/game/shuffle';
 
 describe('shuffle', () => {
   it('preserves elements and returns a new array', () => {
@@ -43,6 +50,36 @@ describe('seededShuffle', () => {
     expect(first).toEqual(second);
     expect([...first].sort()).toEqual([...input].sort());
     expect(maybeSeededShuffle(input, false, 'sess-1:q1')).toEqual(input);
+  });
+});
+
+describe('answersInPlayOrder', () => {
+  const answers = [{ id: '1' }, { id: '2' }, { id: '3' }, { id: '4' }];
+  const seeds = Array.from({ length: 50 }, (_, i) => `sess-${i}:q-${i * 7}`);
+
+  it('gives the same layout when laid out twice, as the host does on Next', () => {
+    for (const seed of seeds) {
+      const once = answersInPlayOrder(answers, true, seed);
+      expect(answersInPlayOrder(once, true, seed)).toEqual(once);
+    }
+  });
+
+  it('ignores stored order, so a live edit that saves the shuffled list changes nothing', () => {
+    for (const seed of seeds) {
+      expect(answersInPlayOrder([...answers].reverse(), true, seed)).toEqual(
+        answersInPlayOrder(answers, true, seed)
+      );
+    }
+  });
+
+  it('keeps stored order when shuffling is off', () => {
+    const stored = [{ id: '3' }, { id: '1' }, { id: '2' }];
+    expect(answersInPlayOrder(stored, false, 'sess-1:q1')).toEqual(stored);
+  });
+
+  it('still shuffles: some seeds move the first answer', () => {
+    const firsts = new Set(seeds.map((seed) => answersInPlayOrder(answers, true, seed)[0].id));
+    expect(firsts.size).toBeGreaterThan(1);
   });
 });
 

@@ -65,6 +65,9 @@ revoke all on function public.consume_rate_limit(text, int, int) from public, an
 grant execute on function public.consume_rate_limit(text, int, int) to service_role;
 grant all on table public.rate_limit_buckets to service_role;
 
+-- schema-p25-rate-limit-keys.sql replaces consume_rate_limit:
+-- keys are hashed, and expired rows are deleted.
+
 create or replace function public.enforce_session_player_cap()
 returns trigger
 language plpgsql

@@ -35,6 +35,8 @@ export default async function HostSessionPage({ params, searchParams }: HostSess
   }
 
   const hostRow = hostResult.data;
+  const clock = await supabase.rpc('server_now');
+  const initialServerNow = !clock.error && typeof clock.data === 'string' ? clock.data : null;
 
   const clicker = isHostClickerView(query.view);
   const initialLocale = normalizeLocale(hostRow?.ui_locale);
@@ -55,6 +57,7 @@ export default async function HostSessionPage({ params, searchParams }: HostSess
       initialPlayers={room.players}
       playerCap={livePlayerCap(hostRow?.plan)}
       initialLocale={initialLocale}
+      initialServerNow={initialServerNow}
     />
   );
 }

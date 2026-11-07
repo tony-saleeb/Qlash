@@ -4,6 +4,7 @@ import { createAdminClient } from '@/lib/supabase/admin';
 import {
   RATE_LIMIT_SHARDS,
   clientIpFromRequest,
+  boundRateLimitKey,
   rateLimit,
   rateLimitMemory,
   rateLimitSharded,
@@ -11,6 +12,8 @@ import {
   shardedRateLimitBudget,
   shardedRateLimitKey,
 } from '@/lib/rate-limit';
+import { scopedRateLimitKey } from '@/lib/api/ids';
+import { createHash } from 'crypto';
 
 vi.mock('@/lib/supabase/admin', () => ({
   createAdminClient: vi.fn(),
@@ -77,6 +80,34 @@ describe('rateLimit remote', () => {
     });
   });
 
+  it('honors a remote denial without touching the memory bucket', async () => {
+    admin.setRpc('consume_rate_limit', { data: { ok: false, retryAfterSec: 4 }, error: null });
+    const denied = await rateLimit({ key: 'join:10.0.0.9', limit: 10, windowMs: 1000 });
+    expect(denied).toEqual({ ok: false, retryAfterSec: 4 });
+  });
+
+  it('keeps calling Postgres when the error is not a missing function', async () => {
+    admin.setRpc('consume_rate_limit', {
+      data: null,
+      error: { code: '54000', message: 'index row size exceeds maximum' },
+    });
+    await rateLimit({ key: 'join:1', limit: 10, windowMs: 1000 });
+    await rateLimit({ key: 'join:2', limit: 10, windowMs: 1000 });
+    expect(admin.rpc).toHaveBeenCalledTimes(2);
+  });
+
+  it('hashes a key that is too long to store', async () => {
+    admin.setRpc('consume_rate_limit', { data: { ok: true }, error: null });
+    const huge = `join:${'a'.repeat(3000)}`;
+    await rateLimit({ key: huge, limit: 10, windowMs: 1000 });
+    expect(admin.rpc).toHaveBeenCalledWith('consume_rate_limit', {
+      p_key: createHash('sha256').update(huge).digest('hex'),
+      p_limit: 10,
+      p_window_ms: 1000,
+    });
+    expect(boundRateLimitKey(huge)).toHaveLength(64);
+  });
+
   it('falls back to memory when the RPC is missing', async () => {
     admin.setRpc('consume_rate_limit', { data: null, error: { message: 'function does not exist' } });
     const key = `fallback-${Math.random()}`;
@@ -101,6 +132,17 @@ describe('sharded buckets', () => {
     );
     expect(shards.size).toBeGreaterThan(1);
     expect(shards.size).toBeLessThanOrEqual(RATE_LIMIT_SHARDS);
+    const longSeed = `player-${'x'.repeat(500)}`;
+    expect(shardedRateLimitKey('submit:1.2.3.4', longSeed)).toBe(
+      shardedRateLimitKey('submit:1.2.3.4', longSeed.slice(0, 128))
+    );
+  });
+
+  it('keeps a real player id and folds every other id into one bucket', () => {
+    const player = '22222222-2222-4222-8222-222222222222';
+    expect(scopedRateLimitKey('react:player', player)).toBe(`react:player:${player}`);
+    expect(scopedRateLimitKey('react:player', 'p1')).toBe('react:player:invalid');
+    expect(scopedRateLimitKey('react:room', 'x'.repeat(4000))).toBe('react:room:invalid');
   });
 
   it('divides the budget so the total stays put', () => {

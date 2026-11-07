@@ -119,6 +119,56 @@ describe('sessionReportToCsv', () => {
     expect(csv).toContain('"Ada, A."');
     expect(csv).toContain('"1. Capital, France?"');
   });
+
+  it('starts with a UTF-8 BOM so Excel keeps Arabic', () => {
+    const report = buildSessionReport({
+      session: {
+        id: 's1',
+        pin: '111111',
+        status: 'finished',
+        created_at: '2026-08-18T12:00:00.000Z',
+        quiz_id: 'quiz-1',
+      },
+      quizTitle: 'جغرافيا',
+      teamMode: false,
+      players: [{ id: 'p1', nickname: 'أحمد', score: 10, streak: 0 }],
+      questions: [{ ...capital, prompt: 'ما عاصمة فرنسا؟' }],
+      answers: [],
+    });
+    const csv = sessionReportToCsv(report);
+    expect(csv.startsWith('\uFEFF')).toBe(true);
+    expect(csv).toContain('أحمد');
+    expect(csv).toContain('ما عاصمة فرنسا؟');
+  });
+
+  it('keeps formula-like nicknames as text', () => {
+    const report = buildSessionReport({
+      session: {
+        id: 's1',
+        pin: '111111',
+        status: 'finished',
+        created_at: '2026-08-18T12:00:00.000Z',
+        quiz_id: 'quiz-1',
+      },
+      quizTitle: 'Geo',
+      teamMode: true,
+      players: [
+        { id: 'p1', nickname: '=HYPERLINK("http://evil")', team_name: '@red', score: 10, streak: 0 },
+        { id: 'p2', nickname: '+Ada', team_name: '-blue', score: 0, streak: 0 },
+        { id: 'p3', nickname: '\tAda', team_name: '\rblue', score: 0, streak: 0 },
+      ],
+      questions: [{ ...capital, prompt: 'Line\rbreak' }],
+      answers: [],
+    });
+    const csv = sessionReportToCsv(report);
+    expect(csv).toContain(`"'=HYPERLINK(""http://evil"")"`);
+    expect(csv).toContain("'@red");
+    expect(csv).toContain("'+Ada");
+    expect(csv).toContain("'-blue");
+    expect(csv).toContain("'\tAda");
+    expect(csv).toContain('"\'\rblue"');
+    expect(csv).toContain('"1. Line\rbreak"');
+  });
 });
 
 describe('compareSessionReports', () => {
@@ -192,6 +242,140 @@ describe('compareSessionReports', () => {
     expect(compare.avgDelta).toBe(100);
     expect(compare.improved[0]).toMatchObject({ id: 'q1', before: 0, after: 100, delta: 100 });
     expect(compare.stillHard).toEqual([]);
+  });
+});
+
+const river = {
+  id: 'q3',
+  prompt: 'Longest river?',
+  type: 'mcq',
+  order_index: 2,
+  answers: [
+    { id: 'nile', text: 'Nile', color: '#e11d2e', shape: 'slash', is_correct: true },
+    { id: 'seine', text: 'Seine', color: '#4a2aff', shape: 'qring', is_correct: false },
+  ],
+};
+
+describe('played questions', () => {
+  const ten = [capital, poll, river];
+
+  it('stops at the questions the room actually reached', () => {
+    const report = buildSessionReport({
+      session: {
+        id: 's1',
+        pin: '847291',
+        status: 'finished',
+        created_at: '2026-08-18T12:00:00.000Z',
+        quiz_id: 'quiz-1',
+        question_order: ['q1', 'q2', 'q3'],
+        current_question_index: 0,
+        scored_question_ids: ['q1'],
+      },
+      quizTitle: 'Geo',
+      teamMode: false,
+      players: [{ id: 'p1', nickname: 'Ada', score: 0, streak: 0, joined_at: '2026-08-18T12:00:00.000Z' }],
+      questions: ten,
+      answers: [
+        {
+          player_id: 'p1',
+          question_id: 'q1',
+          selected_answer_ids: ['b'],
+          points_awarded: 0,
+          is_correct: false,
+          time_taken_ms: 1000,
+          answered_at: '2026-08-18T12:01:00.000Z',
+        },
+      ],
+    });
+    expect(report.questions.map((q) => q.id)).toEqual(['q1']);
+    expect(report.questionCount).toBe(1);
+    expect(recapQuestionIds(report)).toEqual(['q1']);
+    expect(report.questions.some((q) => q.id === 'q3')).toBe(false);
+  });
+
+  it('leaves out a question the host jumped over', () => {
+    const report = buildSessionReport({
+      session: {
+        id: 's1',
+        pin: '847291',
+        status: 'finished',
+        created_at: '2026-08-18T12:00:00.000Z',
+        quiz_id: 'quiz-1',
+        question_order: ['q1', 'q2', 'q3'],
+        current_question_index: 2,
+        scored_question_ids: ['q1', 'q3'],
+      },
+      quizTitle: 'Geo',
+      teamMode: false,
+      players: [{ id: 'p1', nickname: 'Ada', score: 0, streak: 0 }],
+      questions: ten,
+      answers: [],
+    });
+    expect(report.questions.map((q) => q.id)).toEqual(['q1', 'q3']);
+  });
+
+  it('does not count a late joiner as missing questions asked before they arrived', () => {
+    const report = buildSessionReport({
+      session: {
+        id: 's1',
+        pin: '847291',
+        status: 'finished',
+        created_at: '2026-08-18T12:00:00.000Z',
+        quiz_id: 'quiz-1',
+        question_order: ['q1', 'q3'],
+        current_question_index: 1,
+        scored_question_ids: ['q1', 'q3'],
+      },
+      quizTitle: 'Geo',
+      teamMode: false,
+      players: [
+        { id: 'p1', nickname: 'Ada', score: 1000, streak: 1, joined_at: '2026-08-18T12:00:00.000Z' },
+        { id: 'p2', nickname: 'Late', score: 1000, streak: 1, joined_at: '2026-08-18T12:05:00.000Z' },
+      ],
+      questions: [capital, river],
+      answers: [
+        {
+          player_id: 'p1',
+          question_id: 'q1',
+          selected_answer_ids: ['a'],
+          points_awarded: 1000,
+          is_correct: true,
+          time_taken_ms: 1000,
+          answered_at: '2026-08-18T12:01:00.000Z',
+        },
+        {
+          player_id: 'p1',
+          question_id: 'q3',
+          selected_answer_ids: ['seine'],
+          points_awarded: 0,
+          is_correct: false,
+          time_taken_ms: 1000,
+          answered_at: '2026-08-18T12:06:00.000Z',
+        },
+        {
+          player_id: 'p2',
+          question_id: 'q3',
+          selected_answer_ids: ['nile'],
+          points_awarded: 1000,
+          is_correct: true,
+          time_taken_ms: 800,
+          answered_at: '2026-08-18T12:06:10.000Z',
+        },
+      ],
+    });
+    expect(report.questions[0].accuracy).toBe(100);
+    expect(report.questions[0].missedBy).toEqual([]);
+    expect(report.questions[1].accuracy).toBe(50);
+    expect(report.players.find((p) => p.nickname === 'Late')).toMatchObject({
+      correct: 1,
+      asked: 1,
+      accuracy: 100,
+    });
+    expect(report.players.find((p) => p.nickname === 'Ada')).toMatchObject({
+      correct: 1,
+      asked: 2,
+      accuracy: 50,
+    });
   });
 });
 

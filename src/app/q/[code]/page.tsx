@@ -3,6 +3,7 @@ import type { Metadata } from 'next';
 import { notFound } from 'next/navigation';
 import { BrandMark } from '@/components/brand/BrandMark';
 import { createClient } from '@/lib/supabase/server';
+import { importQuizPath } from '@/lib/content/shareCode';
 import {
   getSharedQuizPreview,
   quizPreviewUrl,

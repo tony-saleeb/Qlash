@@ -1,13 +1,16 @@
 import { describe, expect, it } from 'vitest';
 import sitemap from '@/app/sitemap';
 import robots from '@/app/robots';
-import { PLAY_TITLE, SITE_DESCRIPTION, SITE_TITLE } from '@/lib/siteMeta';
+import { pageTitle, PLAY_TITLE, SITE_DESCRIPTION, SITE_TITLE } from '@/lib/siteMeta';
 
 describe('public site metadata', () => {
   it('keeps the browser title in English', () => {
     expect(SITE_TITLE).toBe('Qlash — live classroom quiz');
     expect(SITE_TITLE).not.toMatch(/[\u0600-\u06FF]/);
     expect(PLAY_TITLE).toBe('Join a Qlash room');
+    expect(pageTitle('Geo · Podium')).toBe('Geo · Podium · Qlash');
+    expect(pageTitle('Advent | Qlash')).toBe('Advent | Qlash');
+    expect(pageTitle(PLAY_TITLE)).toBe(PLAY_TITLE);
     expect(PLAY_TITLE).not.toMatch(/[\u0600-\u06FF]/);
     expect(SITE_DESCRIPTION).toContain('كويز حي');
   });
@@ -23,7 +26,7 @@ describe('public site metadata', () => {
   it('hides host and API paths from crawlers', () => {
     const rules = robots().rules;
     const rule = Array.isArray(rules) ? rules[0] : rules;
-    expect(rule?.disallow).toEqual(expect.arrayContaining(['/dashboard', '/host/', '/api/', '/auth/']));
+    expect(rule?.disallow).toEqual(expect.arrayContaining(['/dashboard', '/host/', '/p/', '/api/', '/auth/']));
     expect(robots().sitemap).toMatch(/sitemap\.xml$/);
   });
 });

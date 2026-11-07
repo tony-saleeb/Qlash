@@ -12,6 +12,7 @@ import {
   isHostAuthPrefetch,
   sessionNeedsRefresh,
 } from '@/lib/supabase/hostSession';
+import { contentSecurityPolicy, cspNonce } from '@/lib/security/csp';
 
 function resolveRequestLocale(request: NextRequest): Locale {
   const existing = request.cookies.get(LOCALE_COOKIE_KEY)?.value;
@@ -31,17 +32,29 @@ function applyLocale(request: NextRequest, response: NextResponse, locale: Local
   return response;
 }
 
-function nextWithLocale(request: NextRequest, locale: Locale) {
+function secureRequest(request: NextRequest, locale: Locale) {
+  const nonce = cspNonce();
+  const csp = contentSecurityPolicy(nonce, process.env.NODE_ENV === 'development');
   const requestHeaders = new Headers(request.headers);
   requestHeaders.set(LOCALE_HEADER, locale);
-  return applyLocale(
-    request,
+  requestHeaders.set('x-nonce', nonce);
+  requestHeaders.set('Content-Security-Policy', csp);
+  const stamp = (response: NextResponse) => {
+    response.headers.set('Content-Security-Policy', csp);
+    response.headers.set('Reporting-Endpoints', 'csp-endpoint="/api/csp-report"');
+    return applyLocale(request, response, locale);
+  };
+  return { requestHeaders, stamp };
+}
+
+function nextWithLocale(request: NextRequest, locale: Locale) {
+  const { requestHeaders, stamp } = secureRequest(request, locale);
+  return stamp(
     NextResponse.next({
       request: {
         headers: requestHeaders,
       },
-    }),
-    locale
+    })
   );
 }
 
@@ -72,13 +85,14 @@ export async function middleware(request: NextRequest) {
     return nextWithLocale(request, locale);
   }
 
-  const requestHeaders = new Headers(request.headers);
-  requestHeaders.set(LOCALE_HEADER, locale);
-  let response = NextResponse.next({
-    request: {
-      headers: requestHeaders,
-    },
-  });
+  const { requestHeaders, stamp } = secureRequest(request, locale);
+  let response = stamp(
+    NextResponse.next({
+      request: {
+        headers: requestHeaders,
+      },
+    })
+  );
 
   const supabase = createServerClient(
     process.env.NEXT_PUBLIC_SUPABASE_URL!,
@@ -90,9 +104,13 @@ export async function middleware(request: NextRequest) {
         },
         setAll(cookiesToSet) {
           cookiesToSet.forEach(({ name, value }) => request.cookies.set(name, value));
-          response = NextResponse.next({
-            request,
-          });
+          response = stamp(
+            NextResponse.next({
+              request: {
+                headers: requestHeaders,
+              },
+            })
+          );
           cookiesToSet.forEach(({ name, value, options }) =>
             response.cookies.set(name, value, options)
           );

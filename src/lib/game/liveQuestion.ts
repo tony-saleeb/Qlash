@@ -5,7 +5,7 @@ export function mergeLiveSession(prev: GameSessionRow, incoming: GameSessionRow)
   const prevIndex = prev.current_question_index;
   if (incomingIndex < prevIndex) return prev;
 
-  if (incomingIndex === prevIndex) {
+  if (incomingIndex === prevIndex && incoming.status !== 'question_paused') {
     const prevStart = prev.question_started_at ? Date.parse(prev.question_started_at) : NaN;
     const nextStart = incoming.question_started_at ? Date.parse(incoming.question_started_at) : NaN;
     if (Number.isFinite(prevStart) && (!Number.isFinite(nextStart) || nextStart < prevStart)) {
@@ -14,6 +14,21 @@ export function mergeLiveSession(prev: GameSessionRow, incoming: GameSessionRow)
   }
 
   return incoming;
+}
+
+/** The host's own Start / Next / Jump. Realtime merges must not rewind this. */
+export function hostQuestionSession(
+  prev: GameSessionRow,
+  nextIndex: number,
+  serverStartedAt: string | null
+): GameSessionRow {
+  return {
+    ...prev,
+    status: 'question_active',
+    current_question_index: nextIndex,
+    question_started_at: serverStartedAt,
+    active_multiplier: 1,
+  };
 }
 
 /** Never rewind the live clock to an earlier stamp for the same question. */
@@ -62,6 +77,27 @@ export function publicQuestionFromStartPayload(
     time_limit_seconds: payload.time_limit_seconds,
     answers,
   };
+}
+
+/**
+ * A repeat payload for the question already on screen keeps the buttons where
+ * the player sees them; only text and marks update. A different answer set is
+ * a real change and comes through as sent.
+ */
+export function keepAnswerLayout(
+  current: PublicQuestionPayload | null,
+  incoming: PublicQuestionPayload
+): PublicQuestionPayload {
+  if (!current || current.id !== incoming.id) return incoming;
+  if (current.answers.length !== incoming.answers.length) return incoming;
+  const byId = new Map(incoming.answers.map((answer) => [answer.id, answer]));
+  const answers: PublicAnswerOption[] = [];
+  for (const shown of current.answers) {
+    const next = byId.get(shown.id);
+    if (!next) return incoming;
+    answers.push(next);
+  }
+  return { ...incoming, answers };
 }
 
 export function isStaleHydrate(params: {

@@ -1,6 +1,10 @@
 import { NextResponse } from 'next/server';
 import { createAdminClient } from '@/lib/supabase/admin';
 import { limitPlayerHydrate, tooManyIfPlayerHydrateLimited, tooManyRequests } from '@/lib/api/playerLimit';
+import { isUuid } from '@/lib/api/ids';
+import { readJsonObject } from '@/lib/api/readJsonBody';
+import { NICKNAME_MAX_LEN } from '@/lib/game/constants';
+import { cleanPlayerName } from '@/lib/game/playerName';
 
 export const dynamic = 'force-dynamic';
 
@@ -10,10 +14,21 @@ export async function POST(request: Request) {
     const limited = await limitPlayerHydrate(request, 'me');
     if (!limited.ok) return tooManyRequests(limited.retryAfterSec);
 
-    const { sessionId, token, nickname } = await request.json();
+    const body = await readJsonObject(request);
+    if (!body) {
+      return NextResponse.json({ error: 'The request body must be JSON.' }, { status: 400 });
+    }
+    const { sessionId, token, nickname } = body;
 
-    if (!sessionId || !token) {
+    if (!isUuid(sessionId) || !isUuid(token)) {
       return NextResponse.json({ error: 'Missing parameters' }, { status: 400 });
+    }
+    let claimedName: string | null = null;
+    if (nickname !== undefined && nickname !== null) {
+      claimedName = cleanPlayerName(nickname, NICKNAME_MAX_LEN);
+      if (!claimedName) {
+        return NextResponse.json({ error: 'Nickname is required.' }, { status: 400 });
+      }
     }
 
     const admin = createAdminClient();
@@ -45,7 +60,7 @@ export async function POST(request: Request) {
     const perPlayer = await tooManyIfPlayerHydrateLimited(player.id, 'me');
     if (perPlayer) return perPlayer;
 
-    if (nickname && player.nickname !== nickname.trim()) {
+    if (claimedName && cleanPlayerName(player.nickname, NICKNAME_MAX_LEN) !== claimedName) {
       return NextResponse.json({ error: 'Nickname does not match this device session.' }, { status: 403 });
     }
 

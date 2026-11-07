@@ -2,6 +2,14 @@
  * Join lobby or reconnect an existing device session.
  * Handles NICKNAME_TAKEN / mid-game reconnect via /api/player/me.
  */
+function storedPlayerTokens(): string[] {
+  return Object.keys(localStorage)
+    .filter((key) => key.startsWith('quizarena_token_'))
+    .map((key) => localStorage.getItem(key) || '')
+    .filter((token) => token.length > 0)
+    .slice(0, 8);
+}
+
 export async function joinOrReconnect(params: {
   pin: string;
   nickname: string;
@@ -14,6 +22,7 @@ export async function joinOrReconnect(params: {
       pin: params.pin,
       nickname: params.nickname,
       teamName: params.teamName,
+      priorTokens: storedPlayerTokens(),
     }),
   });
   const joinData = await joinRes.json();
@@ -49,10 +58,10 @@ export async function joinOrReconnect(params: {
   };
 
   if (joinRes.status === 409 && joinData.code === 'NICKNAME_TAKEN') {
-    const sessionId = await reconnectFromLocalTokens(
-      typeof joinData.sessionId === 'string' ? joinData.sessionId : ''
-    );
-    if (sessionId) return { sessionId, reconnected: true };
+    const sessionId = typeof joinData.sessionId === 'string' ? joinData.sessionId : '';
+    if (sessionId && (await tryReconnect(sessionId))) {
+      return { sessionId, reconnected: true };
+    }
     throw new Error('Nickname already taken in this room.');
   }
 

@@ -47,8 +47,19 @@ Run these in the Supabase SQL editor, in order, on a new project:
 17. `schema-p13-live-rpcs.sql` — one Postgres-clock update per start, advance, pause, resume, and add-time
 18. `schema-p14-realtime-auth.sql` — private realtime topics; Postgres broadcasts session state and kicks
 19. `schema-p15-anon-lockdown.sql` — revoke anonymous reads of players and game sessions
+20. `schema-p16-keep-history.sql` — deleting a quiz keeps past answers
+21. `schema-p17-clock-and-reveal.sql` — projector clock and stale reveal
+22. `schema-p18-double-points.sql` — double points follow the question id
+23. `schema-p19-question-rules.sql` — gradable question checks
+24. `schema-p20-answer-selection.sql` — one poll vote, answers must belong to the question
+25. `schema-p21-pause-submit.sql` — a tap during pause stays open
+26. `schema-p22-projector-clock.sql` — session `updated_at` uses the database clock
+27. `schema-p23-room-lock.sql` — lock joins and remember kicks
+28. `schema-p24-import-once.sql` — one import per share code
+29. `schema-p25-rate-limit-keys.sql` — hashed rate-limit keys and pruning
+30. `schema-p26-stale-rooms.sql` — close quiet rooms and refuse joins after 12 hours
 
-Existing projects that already have the live loop: run **5–19** (re-run fast-submit, then p3, p4, media, p5, p6, p7, p8, p9, p10, p11, p12, p13, p14, p15).
+Existing projects that already have the live loop: run **5–30** in that order.
 
 ## Security
 

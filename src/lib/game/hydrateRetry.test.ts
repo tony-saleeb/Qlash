@@ -2,8 +2,10 @@ import { describe, expect, it } from 'vitest';
 import {
   HYDRATE_MAX_ATTEMPTS,
   HYDRATE_WATCHDOG_MS,
+  LIVE_RESYNC_MS,
   hydrateRetryDelayMs,
   hydrateShouldRetry,
+  needsLiveResync,
   needsQuestionHydrate,
 } from '@/lib/game/hydrateRetry';
 
@@ -40,6 +42,17 @@ describe('hydrate retry', () => {
     expect(needsQuestionHydrate({ status: 'question_active', hasQuestion: true })).toBe(false);
     expect(needsQuestionHydrate({ status: 'lobby', hasQuestion: false })).toBe(false);
     expect(needsQuestionHydrate({ status: 'finished', hasQuestion: false })).toBe(false);
+  });
+
+  it('keeps polling a phone that already has a question on screen', () => {
+    expect(needsLiveResync('question_active')).toBe(true);
+    expect(needsLiveResync('question_paused')).toBe(true);
+    expect(needsLiveResync('question_reveal')).toBe(true);
+    expect(needsLiveResync('leaderboard')).toBe(true);
+    expect(needsLiveResync('lobby')).toBe(false);
+    expect(needsLiveResync('finished')).toBe(false);
+    expect(LIVE_RESYNC_MS).toBe(15_000);
+    expect(60_000 / HYDRATE_WATCHDOG_MS + 60_000 / LIVE_RESYNC_MS).toBeLessThan(40);
   });
 
   it('polls slower than the per-player hydrate budget', () => {

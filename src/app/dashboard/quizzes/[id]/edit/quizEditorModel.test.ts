@@ -4,8 +4,17 @@ import {
   clampPointsBase,
   clampTimeLimit,
   createDefaultQuestion,
+  hasDuplicateAnswerIds,
   importQuestionsFromText,
+  nextAnswerOption,
   parseCsvQuestions,
+  allowEditorLeave,
+  patchQuestionById,
+  questionAfterTypeChange,
+  questionsFailedToLoad,
+  questionsWithInsert,
+  questionsWithoutIndex,
+  withSavedQuestionIds,
 } from '@/app/dashboard/quizzes/[id]/edit/quizEditorModel';
 
 describe('createDefaultQuestion', () => {
@@ -24,16 +33,62 @@ describe('createDefaultQuestion', () => {
     expect(question.answers.every((a) => a.is_correct === false)).toBe(true);
   });
 
+  it('defaults true/false labels to صح and خطأ for an Arabic host', () => {
+    const question = createDefaultQuestion('true_false', 'ar');
+    expect(question.answers.map((answer) => answer.text)).toEqual(['صح', 'خطأ']);
+    const switched = questionAfterTypeChange(createDefaultQuestion('mcq'), 'true_false', 'ar');
+    expect(switched.answers.map((answer) => answer.text)).toEqual(['صح', 'خطأ']);
+  });
+
   it('builds type_answer as a single correct placeholder', () => {
     const question = createDefaultQuestion('type_answer');
     expect(question.answers).toHaveLength(1);
     expect(question.answers[0].is_correct).toBe(true);
   });
 
+  it('stamps a fresh id so a second save updates the row', () => {
+    const first = createDefaultQuestion('mcq');
+    const second = createDefaultQuestion('mcq');
+    expect(first.id).toMatch(/^[0-9a-f-]{36}$/i);
+    expect(second.id).not.toBe(first.id);
+  });
+
+  it('copies saved ids back onto the editor list in order', () => {
+    const local = [createDefaultQuestion('mcq'), createDefaultQuestion('mcq')];
+    const saved = withSavedQuestionIds(local, ['db-1', 'db-2']);
+    expect(saved.map((question) => question.id)).toEqual(['db-1', 'db-2']);
+    expect(saved[0].prompt).toBe(local[0].prompt);
+  });
+
+  it('refuses to open the editor when the questions query failed', () => {
+    expect(questionsFailedToLoad({ message: 'timeout' }, null)).toBe(true);
+    expect(questionsFailedToLoad(null, null)).toBe(true);
+    expect(questionsFailedToLoad(null, [])).toBe(false);
+  });
+
   it('uses none scoring for polls', () => {
     const question = createDefaultQuestion('poll');
     expect(question.scoring_type).toBe('none');
     expect(question.answers.every((a) => a.is_correct === false)).toBe(true);
+  });
+});
+
+describe('nextAnswerOption', () => {
+  it('does not reuse an id after an option was removed', () => {
+    const question = createDefaultQuestion('mcq');
+    const withoutSecond = question.answers.filter((answer) => answer.id !== '2');
+    const added = nextAnswerOption(withoutSecond);
+    expect(added?.id).toBe('5');
+    expect(hasDuplicateAnswerIds([...(added ? [added] : []), ...withoutSecond])).toBe(false);
+  });
+
+  it('stops at six options', () => {
+    const six = createDefaultQuestion('mcq').answers.concat([
+      nextAnswerOption(createDefaultQuestion('mcq').answers)!,
+      { id: '6', text: '', is_correct: false, color: '#000', shape: 'bars' },
+    ]);
+    expect(six).toHaveLength(6);
+    expect(nextAnswerOption(six)).toBeNull();
   });
 });
 
@@ -114,6 +169,27 @@ describe('parseCsvQuestions', () => {
     expect(parseCsvQuestions('\n\n')).toEqual([]);
     expect(() => parseCsvQuestions('only,three,cells')).toThrow(/enough columns/);
   });
+
+  it('reads a semicolon file, a quoted line break, and صح/خطأ', () => {
+    const csv = [
+      'Prompt;Type;Time;Points;Correct;A;B',
+      'Capital?;mcq;15;800;2;Paris;Lyon',
+      '"Line\nbreak?";true_false;10;500;صح',
+      'Flat?;true_false;10;500;خطأ',
+    ].join('\n');
+    const questions = parseCsvQuestions(csv);
+    expect(questions[0].answers.map((answer) => answer.text)).toEqual(['Paris', 'Lyon']);
+    expect(questions[0].answers[1].is_correct).toBe(true);
+    expect(questions[1].prompt).toContain('Line');
+    expect(questions[1].prompt).toContain('break?');
+    expect(questions[1].answers[0].is_correct).toBe(true);
+    expect(questions[2].answers[1].is_correct).toBe(true);
+  });
+
+  it('names the row when the type or the answer key is unknown', () => {
+    expect(() => parseCsvQuestions('Prompt,Type,Time,Points,Correct\nWhat?,essay,20,1000,1')).toThrow(/Row 2: unknown question type "essay"/);
+    expect(() => parseCsvQuestions('What?,true_false,20,1000,maybe')).toThrow(/Row 1: unknown true\/false key "maybe"/);
+  });
 });
 
 describe('importQuestionsFromText', () => {
@@ -132,5 +208,49 @@ describe('importQuestionsFromText', () => {
 
   it('throws when the paste has no questions', () => {
     expect(() => importQuestionsFromText('hello from the group chat')).toThrow(/No questions found/);
+  });
+});
+
+describe('editor work that used to disappear', () => {
+  it('keeps option text when MCQ becomes multi-select', () => {
+    const question = createDefaultQuestion('mcq');
+    question.answers = question.answers.map((answer, index) => ({
+      ...answer,
+      text: ['Cairo', 'Giza', 'Aswan', 'Luxor'][index] ?? '',
+      is_correct: index === 0,
+    }));
+    const next = questionAfterTypeChange(question, 'multi_select');
+    expect(next.type).toBe('multi_select');
+    expect(next.answers.map((answer) => answer.text)).toEqual(['Cairo', 'Giza', 'Aswan', 'Luxor']);
+    expect(next.answers[0].is_correct).toBe(true);
+    expect(next.id).toBe(question.id);
+  });
+
+  it('writes an upload onto the question that started it', () => {
+    const first = createDefaultQuestion('mcq');
+    const second = { ...createDefaultQuestion('mcq'), prompt: 'typed while the image uploaded' };
+    const next = patchQuestionById([first, second], first.id!, {
+      media_url: 'https://cdn.example/q.png',
+      media_type: 'image',
+    });
+    expect(next[0].media_url).toBe('https://cdn.example/q.png');
+    expect(next[1].prompt).toBe('typed while the image uploaded');
+  });
+
+  it('puts a deleted question back on undo', () => {
+    const questions = [createDefaultQuestion('mcq'), createDefaultQuestion('poll')];
+    questions[1].prompt = 'Keep me';
+    const removed = questions[1];
+    const without = questionsWithoutIndex(questions, 1);
+    expect(without.map((question) => question.prompt)).toEqual([questions[0].prompt]);
+    const restored = questionsWithInsert(without, 1, removed);
+    expect(restored[1].prompt).toBe('Keep me');
+  });
+
+  it('asks before leaving a dirty editor and leaves a clean one', () => {
+    const ask = () => false;
+    expect(allowEditorLeave(false, ask)).toBe(true);
+    expect(allowEditorLeave(true, ask)).toBe(false);
+    expect(allowEditorLeave(true, () => true)).toBe(true);
   });
 });

@@ -110,4 +110,51 @@ describe('POST /api/player/react', () => {
       p_nickname: 'FromDb',
     });
   });
+
+  it('rejects an unknown mark and a body that is not JSON', async () => {
+    const { POST } = await import('@/app/api/player/react/route');
+    expect((await POST(jsonRequest({ ...valid, mark: 'star' }))).status).toBe(400);
+    expect((await POST(jsonRequest({ ...valid, mark: 'Slash' }))).status).toBe(400);
+    const broken = await POST(
+      new Request('http://localhost/api', { method: 'POST', body: '{', headers: { 'content-type': 'application/json' } })
+    );
+    expect(broken.status).toBe(400);
+    expect(admin.rpc).not.toHaveBeenCalled();
+  });
+
+  it('returns 429 before reading the room when the hydrate bucket is full', async () => {
+    shardedMock.mockReturnValue({ ok: false, retryAfterSec: 3 });
+    const { POST } = await import('@/app/api/player/react/route');
+    const response = await POST(jsonRequest(valid));
+    expect(response.status).toBe(429);
+    expect(response.headers.get('retry-after')).toBe('3');
+    expect(admin.from).not.toHaveBeenCalled();
+  });
+
+  it('drops the reaction when only the room bucket is full', async () => {
+    rateLimitMock.mockImplementation((params: RateLimitParams) =>
+      params.key.startsWith('react:room:') ? { ok: false, retryAfterSec: 1 } : { ok: true }
+    );
+    admin.setTables({
+      player_tokens: { data: { client_token: 'tok' }, error: null },
+      players: { data: { id: 'p1', nickname: 'Ada' }, error: null },
+      game_sessions: { data: { status: 'lobby' }, error: null },
+    });
+    const { POST } = await import('@/app/api/player/react/route');
+    const response = await POST(jsonRequest(valid));
+    expect(response.status).toBe(204);
+    expect(admin.rpc).not.toHaveBeenCalled();
+  });
+
+  it('returns 500 when the reaction RPC fails', async () => {
+    admin.setTables({
+      player_tokens: { data: { client_token: 'tok' }, error: null },
+      players: { data: { id: 'p1', nickname: 'Ada' }, error: null },
+      game_sessions: { data: { status: 'question_paused' }, error: null },
+    });
+    admin.setRpc('send_lobby_reaction', { data: null, error: { message: 'boom' } });
+    const { POST } = await import('@/app/api/player/react/route');
+    const response = await POST(jsonRequest(valid));
+    expect(response.status).toBe(500);
+  });
 });

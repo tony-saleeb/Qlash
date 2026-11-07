@@ -2,6 +2,7 @@ import { describe, expect, it } from 'vitest';
 import { cn } from '@/lib/utils';
 import { DEFAULT_QUIZ_THEME, QLASH_CONFETTI } from '@/lib/game/theme';
 import {
+  MAX_OPEN_LOBBIES,
   MAX_PLAYERS_PER_SESSION,
   NICKNAME_MAX_LEN,
   NICKNAME_MIN_LEN,
@@ -29,12 +30,17 @@ describe('theme + capacity constants', () => {
 
   it('caps a live room at 80 players with classroom-scale rate limits', () => {
     expect(MAX_PLAYERS_PER_SESSION).toBe(80);
+    expect(MAX_OPEN_LOBBIES).toBe(8);
+    expect(RATE_LIMITS.hostOpPerHost.limit).toBe(300);
+    expect(RATE_LIMITS.hostOpPerIp.limit).toBe(600);
     expect(NICKNAME_MIN_LEN).toBe(1);
     expect(NICKNAME_MAX_LEN).toBe(20);
     expect(SERVER_LATE_CUTOFF_MS).toBe(1500);
     expect(HOST_REVEAL_DELAY_MS).toBe(2700);
     expect(HOST_REVEAL_DELAY_MS).toBeGreaterThan(SERVER_LATE_CUTOFF_MS);
     expect(RATE_LIMITS.joinPerIp.limit).toBe(240);
+    expect(RATE_LIMITS.joinPerSession.limit).toBe(30);
+    expect(RATE_LIMITS.joinPerSession.windowMs).toBe(10_000);
     expect(RATE_LIMITS.submitPerIp.limit).toBe(900);
     expect(RATE_LIMITS.submitPerPlayer.limit).toBe(20);
     expect(RATE_LIMITS.pinLookupPerIp.limit).toBe(240);

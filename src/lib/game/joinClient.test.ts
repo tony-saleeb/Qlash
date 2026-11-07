@@ -36,23 +36,25 @@ describe('joinOrReconnect', () => {
       '/api/player/join',
       expect.objectContaining({
         method: 'POST',
-        body: JSON.stringify({ pin: '123456', nickname: 'Ada', teamName: undefined }),
+        body: JSON.stringify({ pin: '123456', nickname: 'Ada', teamName: undefined, priorTokens: [] }),
       })
     );
   });
 
-  it('reconnects on 409 when this device already has a token', async () => {
+  it('reconnects on 409 only for the session the server names', async () => {
+    localStorage.setItem('quizarena_token_finished', 'stale-token');
     localStorage.setItem('quizarena_token_sess-1', 'old-token');
     const fetchMock = vi
       .fn()
       .mockResolvedValueOnce(
-        jsonResponse({ error: 'taken', code: 'NICKNAME_TAKEN' }, 409)
+        jsonResponse({ error: 'taken', code: 'NICKNAME_TAKEN', sessionId: 'sess-1' }, 409)
       )
       .mockResolvedValueOnce(jsonResponse({ success: true, player: { id: 'p1' } }, 200));
     vi.stubGlobal('fetch', fetchMock);
 
     const result = await joinOrReconnect({ pin: '123456', nickname: 'Ada' });
     expect(result).toEqual({ sessionId: 'sess-1', reconnected: true });
+    expect(fetchMock).toHaveBeenCalledTimes(2);
     expect(fetchMock).toHaveBeenNthCalledWith(
       2,
       '/api/player/me',
@@ -60,6 +62,19 @@ describe('joinOrReconnect', () => {
         body: JSON.stringify({ sessionId: 'sess-1', token: 'old-token', nickname: 'Ada' }),
       })
     );
+  });
+
+  it('does not reconnect a nickname clash to an older room', async () => {
+    localStorage.setItem('quizarena_token_old-room', 'old-token');
+    const fetchMock = vi.fn().mockResolvedValueOnce(
+      jsonResponse({ error: 'taken', code: 'NICKNAME_TAKEN', sessionId: 'sess-1' }, 409)
+    );
+    vi.stubGlobal('fetch', fetchMock);
+
+    await expect(joinOrReconnect({ pin: '123456', nickname: 'Ada' })).rejects.toThrow(
+      'Nickname already taken in this room.'
+    );
+    expect(fetchMock).toHaveBeenCalledTimes(1);
   });
 
   it('throws when nickname is taken and this device has no token', async () => {

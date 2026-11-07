@@ -70,6 +70,23 @@ describe('POST /api/player/current-question', () => {
     expect(admin.from).not.toHaveBeenCalledWith('questions');
   });
 
+  it('tells a reloaded phone which answer is already stored', async () => {
+    admin.setTables({
+      player_tokens: { data: { client_token: 'tok' }, error: null },
+      players: { data: { id: 'p1' }, error: null },
+      game_sessions: { data: liveSession, error: null },
+      questions: { data: dbQuestion, error: null },
+      answers_submitted: { data: { selected_answer_ids: ['b'] }, error: null },
+    });
+    const { POST } = await import('@/app/api/player/current-question/route');
+    const result = await readJson(
+      await POST(jsonRequest({ sessionId: 'sess-1', playerId: 'p1', token: 'tok' }))
+    );
+    expect(result.status).toBe(200);
+    expect(result.body.submitted_answer_ids).toEqual(['b']);
+    expect(result.body.question.answers[0]).not.toHaveProperty('is_correct');
+  });
+
   it('hydrates the public question during reveal so late joiners can recover', async () => {
     admin.setTables({
       player_tokens: { data: { client_token: 'tok' }, error: null },
@@ -130,5 +147,44 @@ describe('POST /api/player/current-question', () => {
       second.body.question.answers.map((a: { id: string }) => a.id)
     );
     expect(first.body.question.answers[0]).not.toHaveProperty('is_correct');
+  });
+
+  it('hands phones the same randomized layout the host broadcasts and projects', async () => {
+    const answers = [
+      { id: '1', text: 'Cairo', color: '#e11d2e', shape: 'slash', is_correct: false },
+      { id: '2', text: 'Giza', color: '#4a2aff', shape: 'qring', is_correct: true },
+      { id: '3', text: 'Luxor', color: '#c8f542', shape: 'bolt', is_correct: false },
+      { id: '4', text: 'Aswan', color: '#0a6b5c', shape: 'chevron', is_correct: false },
+    ];
+    const { answersInPlayOrder } = await import('@/lib/game/shuffle');
+    const { buildQuestionStartPayload } = await import('@/lib/game/types');
+    const { POST } = await import('@/app/api/player/current-question/route');
+
+    for (const qid of ['q1', 'q-7', '5fc45a26-abb2-4891-9772-a4dd6752781a']) {
+      admin.setTables({
+        player_tokens: { data: { client_token: 'tok' }, error: null },
+        players: { data: { id: 'p1' }, error: null },
+        game_sessions: { data: { ...liveSession, question_order: ['q0', qid] }, error: null },
+        questions: {
+          data: { ...dbQuestion, id: qid, answers, quizzes: { randomize_answers: true } },
+          error: null,
+        },
+      });
+      const seed = `sess-1:${qid}`;
+      const projected = answersInPlayOrder(answersInPlayOrder(answers, true, seed), true, seed);
+      const broadcast = buildQuestionStartPayload(
+        { ...dbQuestion, id: qid, points_base: 1000, scoring_type: 'linear', answers: projected },
+        1,
+        liveSession.question_started_at
+      );
+
+      const hydrated = await readJson(
+        await POST(jsonRequest({ sessionId: 'sess-1', playerId: 'p1', token: 'tok' }))
+      );
+      expect(hydrated.status).toBe(200);
+      const phoneIds = hydrated.body.question.answers.map((a: { id: string }) => a.id);
+      expect(phoneIds).toEqual(broadcast.answers.map((a) => a.id));
+      expect(phoneIds).toEqual(projected.map((a) => a.id));
+    }
   });
 });

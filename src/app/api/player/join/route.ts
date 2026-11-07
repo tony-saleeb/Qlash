@@ -9,7 +9,9 @@ import {
   livePlayerCap,
   roomIsFull,
 } from '@/lib/game/constants';
-import { canInsertNewPlayer } from '@/lib/game/lateJoin';
+import { canInsertNewPlayer, priorJoinTokens, roomOpenedTooLongAgo } from '@/lib/game/lateJoin';
+import { TEAM_NAME_MAX_LEN, cleanPlayerName } from '@/lib/game/playerName';
+import { readJsonObject } from '@/lib/api/readJsonBody';
 
 export const dynamic = 'force-dynamic';
 
@@ -28,17 +30,17 @@ export async function POST(request: Request) {
       );
     }
 
-    const { pin, nickname, teamName } = await request.json();
+    const body = await readJsonObject(request);
+    if (!body) {
+      return NextResponse.json({ error: 'The request body must be JSON.' }, { status: 400 });
+    }
+    const { pin, nickname, teamName, priorTokens } = body;
 
     if (!pin || typeof pin !== 'string' || pin.length !== 6) {
       return NextResponse.json({ error: 'Invalid PIN.' }, { status: 400 });
     }
-    if (!nickname || typeof nickname !== 'string') {
-      return NextResponse.json({ error: 'Nickname is required.' }, { status: 400 });
-    }
-
-    const trimmedNickname = nickname.trim().slice(0, NICKNAME_MAX_LEN);
-    if (trimmedNickname.length < NICKNAME_MIN_LEN) {
+    const trimmedNickname = cleanPlayerName(nickname, NICKNAME_MAX_LEN);
+    if (!trimmedNickname || trimmedNickname.length < NICKNAME_MIN_LEN) {
       return NextResponse.json({ error: 'Nickname is required.' }, { status: 400 });
     }
 
@@ -47,7 +49,7 @@ export async function POST(request: Request) {
     const { data: session, error: sessionError } = await admin
       .from('game_sessions')
       .select(
-        'id, status, quiz_id, current_question_index, late_join_through_index, quizzes(team_mode), hosts(plan)'
+        'id, status, created_at, quiz_id, current_question_index, late_join_through_index, join_locked, quizzes(team_mode), hosts(plan)'
       )
       .eq('pin', pin)
       .neq('status', 'finished')
@@ -57,15 +59,51 @@ export async function POST(request: Request) {
       return NextResponse.json({ error: 'Game room not found.' }, { status: 404 });
     }
 
+    if (roomOpenedTooLongAgo((session as { created_at?: string | null }).created_at)) {
+      return NextResponse.json(
+        { error: 'This room has expired.', code: 'ROOM_EXPIRED' },
+        { status: 403 }
+      );
+    }
+
     const sessionWithQuiz = session as unknown as {
       id: string;
       status: string;
+      created_at?: string | null;
+      late_join_through_index?: number | null;
+      join_locked?: boolean | null;
       quizzes: { team_mode: boolean } | { team_mode: boolean }[] | null;
       hosts: { plan: string } | { plan: string }[] | null;
     };
 
+    const sessionLimited = await rateLimit({
+      key: `join:session:${session.id}`,
+      limit: RATE_LIMITS.joinPerSession.limit,
+      windowMs: RATE_LIMITS.joinPerSession.windowMs,
+    });
+    if (!sessionLimited.ok) {
+      return NextResponse.json(
+        { error: 'Too many people are joining this room. Please wait and try again.' },
+        { status: 429, headers: { 'Retry-After': String(sessionLimited.retryAfterSec) } }
+      );
+    }
+
+    if (sessionWithQuiz.join_locked) {
+      return NextResponse.json(
+        { error: 'The host has locked this room.', code: 'JOIN_LOCKED' },
+        { status: 403 }
+      );
+    }
+
     if (!canInsertNewPlayer(sessionWithQuiz)) {
-      return NextResponse.json({ error: 'This game has already finished.' }, { status: 403 });
+      const finished = sessionWithQuiz.status === 'finished';
+      return NextResponse.json(
+        {
+          error: finished ? 'This game has already finished.' : 'This game has already started.',
+          code: finished ? undefined : 'GAME_STARTED',
+        },
+        { status: 403 }
+      );
     }
 
     const quizMeta = Array.isArray(sessionWithQuiz.quizzes)
@@ -77,8 +115,34 @@ export async function POST(request: Request) {
     const isTeamQuiz = Boolean(quizMeta?.team_mode);
     const playerCap = livePlayerCap(hostMeta?.plan);
 
-    if (isTeamQuiz && (!teamName || !String(teamName).trim())) {
+    const trimmedTeam = cleanPlayerName(teamName, TEAM_NAME_MAX_LEN);
+    if (isTeamQuiz && !trimmedTeam) {
       return NextResponse.json({ error: 'Team name is required.' }, { status: 400 });
+    }
+
+    const deviceTokens = priorJoinTokens(priorTokens);
+    const [{ data: kickedName }, tokenKick] = await Promise.all([
+      admin
+        .from('session_kicks')
+        .select('nickname')
+        .eq('session_id', session.id)
+        .eq('nickname', trimmedNickname)
+        .maybeSingle(),
+      deviceTokens.length
+        ? admin
+            .from('session_kicks')
+            .select('client_token')
+            .eq('session_id', session.id)
+            .in('client_token', deviceTokens)
+            .limit(1)
+        : Promise.resolve({ data: [] as { client_token: string }[] }),
+    ]);
+    const kickedToken = Array.isArray(tokenKick.data) ? tokenKick.data.length > 0 : Boolean(tokenKick.data);
+    if (kickedName || kickedToken) {
+      return NextResponse.json(
+        { error: 'You were removed from this room.', code: 'KICKED' },
+        { status: 403 }
+      );
     }
 
     const [{ data: existingPlayer }, countResult] = await Promise.all([
@@ -99,6 +163,7 @@ export async function POST(request: Request) {
         {
           error: 'Nickname already taken in this room.',
           code: 'NICKNAME_TAKEN',
+          sessionId: session.id,
         },
         { status: 409 }
       );
@@ -124,7 +189,7 @@ export async function POST(request: Request) {
       .insert({
         session_id: session.id,
         nickname: trimmedNickname,
-        team_name: isTeamQuiz ? String(teamName).trim().slice(0, 40) : null,
+        team_name: isTeamQuiz ? trimmedTeam : null,
         connected: true,
       })
       .select('id, session_id, nickname, team_name, score, streak, connected')
@@ -138,6 +203,7 @@ export async function POST(request: Request) {
           {
             error: 'Nickname already taken in this room.',
             code: 'NICKNAME_TAKEN',
+            sessionId: session.id,
           },
           { status: 409 }
         );

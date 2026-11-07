@@ -17,6 +17,8 @@ import { CheckCircle, Clock, Award, Trash2 } from 'lucide-react';
 import { AnswerSwatch } from '@/components/brand/AnswerMark';
 import type { Question } from './quizEditorModel';
 import QuestionMediaField from './QuestionMediaField';
+import { useLocale } from '@/lib/i18n/useLocale';
+import { fill } from '@/lib/i18n/messages';
 
 interface QuestionEditorPaneProps {
   quizId: string;
@@ -24,6 +26,7 @@ interface QuestionEditorPaneProps {
   isDoublePointsRound: boolean;
   onTypeChange: (type: Question['type']) => void;
   onUpdate: (fields: Partial<Question>) => void;
+  onMedia: (questionId: string, fields: Pick<Question, 'media_url' | 'media_type'>) => void;
   onToggleDoublePoints: () => void;
   onUpdateAnswer: (ansIdx: number, text: string) => void;
   onToggleCorrect: (ansIdx: number) => void;
@@ -37,12 +40,14 @@ export default function QuestionEditorPane({
   isDoublePointsRound,
   onTypeChange,
   onUpdate,
+  onMedia,
   onToggleDoublePoints,
   onUpdateAnswer,
   onToggleCorrect,
   onAddAnswer,
   onRemoveAnswer,
 }: QuestionEditorPaneProps) {
+  const { t } = useLocale();
   return (
     <main className="space-y-6 p-4 md:col-span-9 md:max-h-[calc(100dvh-4.5rem)] md:overflow-y-auto md:p-6">
       {/* Question Meta Row */}
@@ -50,26 +55,26 @@ export default function QuestionEditorPane({
         {/* Question Type */}
         <div className="space-y-1.5">
           <Label className="text-arena-ink/60 text-[10px] uppercase font-bold tracking-wider">
-            Question Type
+            {t('questionType')}
           </Label>
           <Select value={activeQuestion.type} onValueChange={(val) => { if (val) onTypeChange(val); }}>
             <SelectTrigger className="bg-white border-arena-line h-9 text-xs rounded-xl">
-              <SelectValue placeholder="Select type" />
+              <SelectValue placeholder={t('selectType')} />
             </SelectTrigger>
             <SelectContent className="bg-arena-mist border-arena-line text-arena-ink">
-              <SelectItem value="mcq">Multiple Choice</SelectItem>
-              <SelectItem value="true_false">True / False</SelectItem>
-              <SelectItem value="multi_select">Multi-Select</SelectItem>
-              <SelectItem value="type_answer">Type Answer</SelectItem>
-              <SelectItem value="poll">Poll (Opinion)</SelectItem>
+              <SelectItem value="mcq">{t('multipleChoice')}</SelectItem>
+              <SelectItem value="true_false">{t('trueFalse')}</SelectItem>
+              <SelectItem value="multi_select">{t('multiSelect')}</SelectItem>
+              <SelectItem value="type_answer">{t('typeAnswerLabel')}</SelectItem>
+              <SelectItem value="poll">{t('pollOpinion')}</SelectItem>
             </SelectContent>
           </Select>
         </div>
 
         {/* Time Limit */}
         <div className="space-y-1.5">
-          <Label className="text-arena-ink/60 text-[10px] uppercase font-bold tracking-wider flex items-center justify-between pr-2">
-            <span>Time Limit</span>
+          <Label className="text-arena-ink/60 text-[10px] uppercase font-bold tracking-wider flex items-center justify-between pe-2">
+            <span>{t('timeLimit')}</span>
             <span className="font-mono text-arena-court font-bold">
               {activeQuestion.time_limit_seconds}s
             </span>
@@ -92,8 +97,8 @@ export default function QuestionEditorPane({
 
         {/* Points Value */}
         <div className="space-y-1.5">
-          <Label className="text-arena-ink/60 text-[10px] uppercase font-bold tracking-wider flex items-center justify-between pr-2">
-            <span>Base Points</span>
+          <Label className="text-arena-ink/60 text-[10px] uppercase font-bold tracking-wider flex items-center justify-between pe-2">
+            <span>{t('basePoints')}</span>
             <span className="font-mono text-arena-court font-bold">
               {activeQuestion.points_base}
             </span>
@@ -118,7 +123,7 @@ export default function QuestionEditorPane({
         {/* Scoring Decay Type */}
         <div className="space-y-1.5">
           <Label className="text-arena-ink/60 text-[10px] uppercase font-bold tracking-wider">
-            Scoring Curve
+            {t('scoringCurve')}
           </Label>
           <Select
             disabled={activeQuestion.type === 'poll'}
@@ -126,12 +131,12 @@ export default function QuestionEditorPane({
             onValueChange={(val) => { if (val) onUpdate({ scoring_type: val as Question['scoring_type'] }); }}
           >
             <SelectTrigger className="bg-white border-arena-line h-9 text-xs rounded-xl">
-              <SelectValue placeholder="Select type" />
+              <SelectValue placeholder={t('selectType')} />
             </SelectTrigger>
             <SelectContent className="bg-arena-mist border-arena-line text-arena-ink">
-              <SelectItem value="linear">Linear Decay (Speed Bonus)</SelectItem>
-              <SelectItem value="flat">Flat points (No Speed Bonus)</SelectItem>
-              <SelectItem value="none">No points round</SelectItem>
+              <SelectItem value="linear">{t('linearDecay')}</SelectItem>
+              <SelectItem value="flat">{t('flatPoints')}</SelectItem>
+              <SelectItem value="none">{t('noPointsRound')}</SelectItem>
             </SelectContent>
           </Select>
         </div>
@@ -141,7 +146,7 @@ export default function QuestionEditorPane({
       <div className="space-y-2">
         <div className="flex items-center justify-between">
           <Label className="text-arena-ink/55 text-xs font-semibold">
-            Question Prompt
+            {t('questionPrompt')}
           </Label>
           <div className="flex items-center gap-4 text-xs font-semibold text-arena-court">
             <label className="flex items-center gap-1.5 cursor-pointer">
@@ -150,12 +155,12 @@ export default function QuestionEditorPane({
                 onCheckedChange={onToggleDoublePoints}
                 className="data-[state=checked]:bg-arena-signal scale-75"
               />
-              Double Points Round (2x)
+              {t('doublePointsRound')}
             </label>
           </div>
         </div>
         <Textarea
-          placeholder="Type your question prompt here..."
+          placeholder={t('promptPlaceholder')}
           value={activeQuestion.prompt}
           onChange={(e) => onUpdate({ prompt: e.target.value })}
           className="bg-arena-mist/60 border-arena-line h-24 text-base focus-visible:ring-arena-court rounded-2xl p-4 font-semibold resize-none"
@@ -165,16 +170,17 @@ export default function QuestionEditorPane({
 
       <QuestionMediaField
         quizId={quizId}
+        questionId={activeQuestion.id ?? ''}
         mediaUrl={activeQuestion.media_url}
         mediaType={activeQuestion.media_type}
-        onChange={onUpdate}
+        onChange={onMedia}
       />
 
       {/* Answers Design Section */}
       <div className="space-y-4">
         <div className="flex items-center justify-between">
           <Label className="text-arena-ink/55 text-xs font-semibold">
-            Answer Options & Correct Key Configuration
+            {t('answerOptions')}
           </Label>
           {(activeQuestion.type === 'mcq' ||
             activeQuestion.type === 'multi_select' ||
@@ -185,7 +191,7 @@ export default function QuestionEditorPane({
               disabled={activeQuestion.answers.length >= 6}
               className="text-xs hover:bg-arena-mist text-arena-court hover:text-arena-court font-bold border border-arena-line rounded-xl h-8 px-3"
             >
-              + Add Option
+              + {t('addOption')}
             </Button>
           )}
         </div>
@@ -194,14 +200,14 @@ export default function QuestionEditorPane({
           // Type the Answer Workspace
           <div className="p-5 bg-arena-mist/40 border border-arena-line rounded-2xl space-y-3">
             <Label htmlFor="correctText" className="text-arena-ink/80 text-xs font-bold">
-              Correct Text Options (Fuzzy-matched, case-insensitive)
+              {t('acceptedAnswers')}
             </Label>
             <p className="text-arena-ink/60 text-xs leading-normal">
-              Type the exact expected word/words. Separate alternative acceptable answers with semicolons (e.g. <code>Washington; George Washington; George</code>).
+              {t('acceptedAnswersHint')}
             </p>
             <Input
               id="correctText"
-              placeholder="e.g. Earth; the earth"
+              placeholder={t('acceptedAnswersPlaceholder')}
               value={activeQuestion.answers[0]?.text || ''}
               onChange={(e) => onUpdateAnswer(0, e.target.value)}
               className="bg-white border-arena-line h-12 text-lg font-bold focus-visible:ring-arena-court rounded-xl"
@@ -226,12 +232,12 @@ export default function QuestionEditorPane({
 
                   {/* Text Input */}
                   <Input
-                    placeholder={`Option ${ansIdx + 1}`}
+                    placeholder={fill(t('optionPlaceholder'), { n: ansIdx + 1 })}
                     value={ans.text}
                     onChange={(e) => onUpdateAnswer(ansIdx, e.target.value)}
                     className="bg-transparent border-0 focus-visible:ring-0 focus-visible:border-0 h-10 text-sm font-semibold flex-1 px-1"
                     maxLength={60}
-                    disabled={activeQuestion.type === 'true_false'}
+                    dir="auto"
                   />
 
                   {/* Right Actions: Correct checkbox / Delete option */}
@@ -245,8 +251,9 @@ export default function QuestionEditorPane({
                             ? 'bg-emerald-500 border-emerald-400 text-arena-ink shadow-md shadow-emerald-500/20'
                             : 'border-arena-line hover:border-arena-ink/25 bg-white text-transparent'
                         }`}
-                        title="Mark as Correct answer"
-                        aria-label="Mark as Correct answer"
+                        title={t('markCorrect')}
+                        aria-label={t('markCorrect')}
+                        aria-pressed={ans.is_correct}
                       >
                         <CheckCircle className="w-4 h-4 fill-current" />
                       </button>
@@ -260,8 +267,8 @@ export default function QuestionEditorPane({
                           type="button"
                           onClick={() => onRemoveAnswer(ansIdx)}
                           className="text-arena-ink/60 hover:text-rose-400 transition-colors"
-                          title="Remove option"
-                          aria-label="Remove option"
+                          title={t('removeOption')}
+                          aria-label={t('removeOption')}
                         >
                           <Trash2 className="w-4 h-4" />
                         </button>

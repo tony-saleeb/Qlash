@@ -1,6 +1,6 @@
 'use client';
 
-import React, { useState } from 'react';
+import React, { useEffect, useState } from 'react';
 import { useRouter } from 'next/navigation';
 import { toast } from 'sonner';
 import { saveQuizData } from '@/lib/host/hostApi';
@@ -8,10 +8,24 @@ import { DEFAULT_QUIZ_THEME } from '@/lib/game/theme';
 import {
   DEFAULT_ANSWERS,
   createDefaultQuestion,
-  importQuestionsFromText,
+  hasDuplicateAnswerIds,
+  allowEditorLeave,
+  importQuizText,
+  newQuestionId,
+  nextAnswerOption,
+  patchQuestionById,
+  questionAfterTypeChange,
+  questionsWithInsert,
+  questionsWithoutIndex,
+  withSavedQuestionIds,
   type Question,
   type QuizEditorClientProps,
 } from './quizEditorModel';
+import { doublePointsQuestionIds } from '@/lib/game/doublePoints';
+import { questionIssue } from '@/lib/game/questionRules';
+import { decodeQuizFileText } from '@/lib/content/decodeQuizFile';
+import { useLocale } from '@/lib/i18n/useLocale';
+import { fill } from '@/lib/i18n/messages';
 import QuizEditorHeader from './QuizEditorHeader';
 import QuestionListSidebar from './QuestionListSidebar';
 import QuestionEditorPane from './QuestionEditorPane';
@@ -23,26 +37,24 @@ export default function QuizEditorClient({
   initialQuestions,
 }: QuizEditorClientProps) {
   const router = useRouter();
+  const { locale, t } = useLocale();
+  const [dirty, setDirty] = useState(false);
+  const [savedAt, setSavedAt] = useState(quiz.updated_at ?? '');
 
-  // Quiz Settings State
   const [title, setTitle] = useState(quiz.title);
   const [description, setDescription] = useState(quiz.description || '');
   const [randomizeQs, setRandomizeQs] = useState(quiz.randomize_questions);
   const [randomizeAs, setRandomizeAs] = useState(quiz.randomize_answers);
   const [teamMode, setTeamMode] = useState(quiz.team_mode);
-  const [doublePointsRounds, setDoublePointsRounds] = useState<string[]>(
-    quiz.double_points_rounds || []
+  const [doublePointsRounds, setDoublePointsRounds] = useState<string[]>(() =>
+    doublePointsQuestionIds(quiz.double_points_rounds || [], initialQuestions)
   );
 
-  // Questions State
   const [questions, setQuestions] = useState<Question[]>(
-    initialQuestions.length > 0
-      ? initialQuestions
-      : [createDefaultQuestion('mcq')]
+    initialQuestions.length > 0 ? initialQuestions : [createDefaultQuestion('mcq', locale)]
   );
   const [activeIndex, setActiveIndex] = useState(0);
 
-  // UI Dialog States
   const [settingsOpen, setSettingsOpen] = useState(false);
   const [importOpen, setImportOpen] = useState(false);
   const [saving, setSaving] = useState(false);
@@ -50,75 +62,79 @@ export default function QuizEditorClient({
 
   const activeQuestion = questions[activeIndex];
 
-  // Update question type
+  useEffect(() => {
+    if (!dirty) return;
+    const warn = (event: BeforeUnloadEvent) => {
+      event.preventDefault();
+      event.returnValue = '';
+    };
+    window.addEventListener('beforeunload', warn);
+    return () => window.removeEventListener('beforeunload', warn);
+  }, [dirty]);
+
+  const touch = () => setDirty(true);
+
   const handleTypeChange = (type: Question['type']) => {
-    const updated = [...questions];
-    const original = updated[activeIndex];
-    
-    // Create new blank default based on type
-    const template = createDefaultQuestion(type);
-    
-    // Merge existing prompt & media settings to avoid losing progress
-    template.prompt = original.prompt;
-    template.media_url = original.media_url;
-    template.media_type = original.media_type;
-    template.time_limit_seconds = original.time_limit_seconds;
-    template.points_base = original.points_base;
-
-    // For polls, override scoring type to none
-    if (type === 'poll') {
-      template.scoring_type = 'none';
-    } else if (original.type === 'poll') {
-      template.scoring_type = 'linear';
-    } else {
-      template.scoring_type = original.scoring_type;
-    }
-
-    updated[activeIndex] = template;
-    setQuestions(updated);
+    const index = activeIndex;
+    const original = questions[index];
+    if (!original || original.type === type) return;
+    touch();
+    setQuestions((current) =>
+      current.map((question, item) =>
+        item === index ? questionAfterTypeChange(question, type, locale) : question
+      )
+    );
   };
 
-  // Add question
   const addQuestion = (type: 'mcq' | 'true_false' | 'multi_select' | 'type_answer' | 'poll') => {
-    const newQ = createDefaultQuestion(type);
+    touch();
+    const newQ = createDefaultQuestion(type, locale);
     setQuestions([...questions, newQ]);
     setActiveIndex(questions.length);
-    toast.success('Question added.');
+    toast.success(t('questionAdded'));
   };
 
-  // Duplicate question
   const duplicateQuestion = (idx: number) => {
     const qToCopy = questions[idx];
+    touch();
     const copy: Question = {
       ...qToCopy,
-      id: undefined, // remove ID so it creates a new DB row on save
+      id: newQuestionId(),
       answers: qToCopy.answers.map((ans) => ({ ...ans })),
     };
     const updated = [...questions];
     updated.splice(idx + 1, 0, copy);
     setQuestions(updated);
     setActiveIndex(idx + 1);
-    toast.success('Question duplicated.');
+    toast.success(t('questionDuplicated'));
   };
 
-  // Delete question
   const removeQuestion = (idx: number) => {
     if (questions.length <= 1) {
-      toast.error('Your quiz must contain at least one question.');
+      toast.error(t('needOneQuestion'));
       return;
     }
-    const updated = questions.filter((_, i) => i !== idx);
-    setQuestions(updated);
+    const removed = questions[idx];
+    setQuestions(questionsWithoutIndex(questions, idx));
     setActiveIndex(Math.max(0, idx - 1));
-    toast.success('Question removed.');
+    touch();
+    toast.success(t('questionRemoved'), {
+      action: {
+        label: t('undo'),
+        onClick: () => {
+          setQuestions((current) => questionsWithInsert(current, idx, removed));
+          setActiveIndex(idx);
+        },
+      },
+    });
   };
 
-  // Shift question order
   const moveQuestion = (idx: number, direction: 'up' | 'down') => {
     if (direction === 'up' && idx === 0) return;
     if (direction === 'down' && idx === questions.length - 1) return;
 
     const targetIdx = direction === 'up' ? idx - 1 : idx + 1;
+    touch();
     const updated = [...questions];
     const temp = updated[idx];
     updated[idx] = updated[targetIdx];
@@ -128,37 +144,33 @@ export default function QuizEditorClient({
     setActiveIndex(targetIdx);
   };
 
-  // Edit active question fields
   const updateActiveQ = (fields: Partial<Question>) => {
     const updated = [...questions];
+    touch();
     updated[activeIndex] = { ...updated[activeIndex], ...fields };
     setQuestions(updated);
   };
 
-  // Edit choices within active question
   const updateAnswerOption = (ansIdx: number, text: string) => {
     const updated = [...questions];
+    touch();
     const active = { ...updated[activeIndex] };
-    active.answers = active.answers.map((ans, i) =>
-      i === ansIdx ? { ...ans, text } : ans
-    );
+    active.answers = active.answers.map((ans, i) => (i === ansIdx ? { ...ans, text } : ans));
     updated[activeIndex] = active;
     setQuestions(updated);
   };
 
-  // Update correct flags
   const toggleCorrectAnswer = (ansIdx: number) => {
     const updated = [...questions];
+    touch();
     const active = { ...updated[activeIndex] };
 
     if (active.type === 'mcq' || active.type === 'true_false') {
-      // Single correct answer only
       active.answers = active.answers.map((ans, i) => ({
         ...ans,
         is_correct: i === ansIdx,
       }));
     } else if (active.type === 'multi_select') {
-      // Multiple correct answers allowed
       active.answers = active.answers.map((ans, i) =>
         i === ansIdx ? { ...ans, is_correct: !ans.is_correct } : ans
       );
@@ -167,27 +179,24 @@ export default function QuizEditorClient({
     setQuestions(updated);
   };
 
-  // Add more MCQ options (up to 6)
   const addAnswerOption = () => {
-    if (activeQuestion.answers.length >= 6) {
-      toast.error('Maximum of 6 options allowed.');
+    const option = nextAnswerOption(activeQuestion.answers);
+    if (!option) {
+      toast.error(t('maxOptions'));
       return;
     }
-    const count = activeQuestion.answers.length;
-    const optTemplate = DEFAULT_ANSWERS[count];
     updateActiveQ({
-      answers: [...activeQuestion.answers, { ...optTemplate, text: '' }],
+      answers: [...activeQuestion.answers, option],
     });
   };
 
-  // Remove MCQ option (down to 2 minimum)
   const removeAnswerOption = (idx: number) => {
     if (activeQuestion.answers.length <= 2) {
-      toast.error('Minimum of 2 options required.');
+      toast.error(t('minOptions'));
       return;
     }
-    const updatedAnswers = activeQuestion.answers.filter((_, i) => i !== idx)
-      // re-map pre-defined colors & shapes to keep theme consistent
+    const updatedAnswers = activeQuestion.answers
+      .filter((_, i) => i !== idx)
       .map((ans, i) => ({
         ...ans,
         color: DEFAULT_ANSWERS[i].color,
@@ -196,94 +205,89 @@ export default function QuizEditorClient({
     updateActiveQ({ answers: updatedAnswers });
   };
 
-  // Double Points Round Toggle
-  const isDoublePointsRound = doublePointsRounds.includes(activeIndex.toString());
+  const activeQuestionId = activeQuestion?.id;
+  const isDoublePointsRound = Boolean(activeQuestionId && doublePointsRounds.includes(activeQuestionId));
   const toggleDoublePoints = () => {
-    const roundStr = activeIndex.toString();
-    if (doublePointsRounds.includes(roundStr)) {
-      setDoublePointsRounds(doublePointsRounds.filter((r) => r !== roundStr));
-    } else {
-      setDoublePointsRounds([...doublePointsRounds, roundStr]);
-    }
+    if (!activeQuestionId) return;
+    touch();
+    setDoublePointsRounds((prev) =>
+      prev.includes(activeQuestionId)
+        ? prev.filter((id) => id !== activeQuestionId)
+        : [...prev, activeQuestionId]
+    );
   };
 
-  // Handle CSV File upload selection
   const handleFileChange = (e: React.ChangeEvent<HTMLInputElement>) => {
     const file = e.target.files?.[0];
     if (!file) return;
 
-    const reader = new FileReader();
-    reader.onload = (event) => {
-      const text = event.target?.result as string;
-      setCsvText(text);
-      toast.success(`Successfully loaded ${file.name}! Click "Import Questions" below to confirm.`);
-    };
-    reader.onerror = () => {
-      toast.error('Failed to read the selected file.');
-    };
-    reader.readAsText(file);
+    void file
+      .arrayBuffer()
+      .then((buffer) => {
+        setCsvText(decodeQuizFileText(new Uint8Array(buffer)));
+        toast.success(fill(t('fileLoaded'), { name: file.name }));
+      })
+      .catch(() => {
+        toast.error(t('failedReadFile'));
+      });
   };
 
-  // Client-Side CSV Parsing for imports
   const handleCSVImport = () => {
     if (!csvText.trim()) {
-      toast.error('Paste a chat list or CSV first.');
+      toast.error(t('pasteFirst'));
       return;
     }
 
     try {
-      const importedQs = importQuestionsFromText(csvText);
-
-      if (importedQs.length > 0) {
-        setQuestions([...questions, ...importedQs]);
+      const imported = importQuizText(csvText);
+      if (imported.questions.length > 0) {
+        touch();
+        setQuestions([...questions, ...imported.questions]);
         setImportOpen(false);
         setCsvText('');
-        toast.success(`Successfully imported ${importedQs.length} questions!`);
+        toast.success(fill(t('importedQuestions'), { count: imported.questions.length }));
+        if (imported.warnings.length > 0) toast.warning(imported.warnings.join('\n'));
       }
     } catch (err: unknown) {
       console.error(err);
-      const message = err instanceof Error ? err.message : 'Failed to parse CSV. Please check formatting guidelines.';
+      const message = err instanceof Error ? err.message : t('failedParseCsv');
       toast.error(message);
     }
   };
 
-  // Batch Save Trigger
   const handleSaveQuiz = async () => {
-    // Basic verification checks
     if (!title.trim()) {
-      toast.error('Quiz title cannot be empty.');
+      toast.error(t('quizTitleEmpty'));
       return;
     }
 
     for (let i = 0; i < questions.length; i++) {
       const q = questions[i];
       if (!q.prompt.trim()) {
-        toast.error(`Question ${i + 1} has an empty prompt.`);
+        toast.error(fill(t('emptyPrompt'), { n: i + 1 }));
         setActiveIndex(i);
         return;
       }
-      if (q.type !== 'poll') {
-        const correctCount = q.answers.filter((a) => a.is_correct).length;
-        if (correctCount === 0) {
-          toast.error(`Question ${i + 1} must have at least one correct answer selected.`);
-          setActiveIndex(i);
-          return;
-        }
+      const issue = questionIssue(q, i);
+      if (issue) {
+        toast.error(issue);
+        setActiveIndex(i);
+        return;
       }
-      if (q.type === 'mcq' || q.type === 'multi_select' || q.type === 'poll') {
-        const emptyAns = q.answers.some((a) => !a.text.trim());
-        if (emptyAns) {
-          toast.error(`Question ${i + 1} has empty answer option fields.`);
-          setActiveIndex(i);
-          return;
-        }
+      if (
+        (q.type === 'mcq' || q.type === 'multi_select' || q.type === 'poll') &&
+        hasDuplicateAnswerIds(q.answers)
+      ) {
+        toast.error(fill(t('duplicateAnswerIds'), { n: i + 1 }));
+        setActiveIndex(i);
+        return;
       }
     }
 
     setSaving(true);
-    const loadingToast = toast.loading('Saving quiz data to server...');
+    const loadingToast = toast.loading(t('savingQuiz'));
     try {
-      await saveQuizData(
+      const saved = await saveQuizData(
         quiz.id,
         {
           title: title.trim(),
@@ -292,14 +296,18 @@ export default function QuizEditorClient({
           randomize_questions: randomizeQs,
           randomize_answers: randomizeAs,
           team_mode: teamMode,
-          double_points_rounds: doublePointsRounds,
+          double_points_rounds: doublePointsQuestionIds(doublePointsRounds, questions),
+          expected_updated_at: savedAt || undefined,
         },
         questions
       );
-      toast.success('All changes saved successfully!', { id: loadingToast });
+      setQuestions((current) => withSavedQuestionIds(current, saved.questionIds));
+      setSavedAt(saved.updatedAt);
+      setDirty(false);
+      toast.success(t('quizSaved'), { id: loadingToast });
       router.refresh();
     } catch (err: unknown) {
-      const message = err instanceof Error ? err.message : 'Failed to save quiz.';
+      const message = err instanceof Error ? err.message : t('failedSaveQuiz');
       toast.error(message, { id: loadingToast });
     } finally {
       setSaving(false);
@@ -312,13 +320,15 @@ export default function QuizEditorClient({
         title={title}
         questionCount={questions.length}
         saving={saving}
-        onBack={() => router.push('/dashboard')}
+        onBack={() => {
+          if (!allowEditorLeave(dirty, () => window.confirm(t('unsavedLeave')))) return;
+          router.push('/dashboard');
+        }}
         onImport={() => setImportOpen(true)}
         onSettings={() => setSettingsOpen(true)}
         onSave={handleSaveQuiz}
       />
 
-      {/* Editor Body Grid */}
       <div className="flex min-h-0 flex-1 flex-col md:grid md:grid-cols-12 md:overflow-hidden">
         <QuestionListSidebar
           questions={questions}
@@ -338,6 +348,10 @@ export default function QuizEditorClient({
           onTypeChange={handleTypeChange}
           onUpdate={updateActiveQ}
           onToggleDoublePoints={toggleDoublePoints}
+          onMedia={(questionId, fields) => {
+            touch();
+            setQuestions((current) => patchQuestionById(current, questionId, fields));
+          }}
           onUpdateAnswer={updateAnswerOption}
           onToggleCorrect={toggleCorrectAnswer}
           onAddAnswer={addAnswerOption}
@@ -353,11 +367,26 @@ export default function QuizEditorClient({
         randomizeQs={randomizeQs}
         randomizeAs={randomizeAs}
         teamMode={teamMode}
-        onTitleChange={setTitle}
-        onDescriptionChange={setDescription}
-        onRandomizeQsChange={setRandomizeQs}
-        onRandomizeAsChange={setRandomizeAs}
-        onTeamModeChange={setTeamMode}
+        onTitleChange={(value) => {
+          touch();
+          setTitle(value);
+        }}
+        onDescriptionChange={(value) => {
+          touch();
+          setDescription(value);
+        }}
+        onRandomizeQsChange={(value) => {
+          touch();
+          setRandomizeQs(value);
+        }}
+        onRandomizeAsChange={(value) => {
+          touch();
+          setRandomizeAs(value);
+        }}
+        onTeamModeChange={(value) => {
+          touch();
+          setTeamMode(value);
+        }}
       />
 
       <CsvImportDialog

@@ -20,6 +20,33 @@ export function remainingSeconds(
   return Math.floor(remainingMs(startedAtIso, timeLimitSeconds, now) / 1000);
 }
 
+/**
+ * Local-to-server clock offset from a Postgres now() stamp, read when the call
+ * that produced it returns. The stamp predates arrival, so the corrected clock
+ * can only trail the server: a host auto-reveal fires late, never early.
+ */
+export function serverClockOffsetMs(
+  serverStampIso: string | null | undefined,
+  receivedAt = Date.now()
+): number | null {
+  if (!serverStampIso) return null;
+  const stamped = Date.parse(serverStampIso);
+  return Number.isFinite(stamped) ? stamped - receivedAt : null;
+}
+
+/**
+ * Keep the last good laptop-to-server offset. A page-load `server_now` and each
+ * session row's `updated_at` are fresh database stamps. An old question start,
+ * or a pause encoded near 1970, is not a stamp and must not be passed here.
+ */
+export function adoptServerClock(
+  previous: number,
+  serverStampIso: string | null | undefined,
+  receivedAt = Date.now()
+): number {
+  return serverClockOffsetMs(serverStampIso, receivedAt) ?? previous;
+}
+
 /** Rebuild a wall-clock start so clients keep ticking in lockstep after pause/add-time. */
 export function startedAtFromRemaining(
   timeLimitSeconds: number,

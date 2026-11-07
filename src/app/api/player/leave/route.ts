@@ -1,11 +1,10 @@
 import { NextResponse } from 'next/server';
 import { createAdminClient } from '@/lib/supabase/admin';
-import { lobbyShouldCloseNow } from '@/lib/game/emptyLobby';
 import { limitPlayerHydrate, tooManyIfPlayerHydrateLimited, tooManyRequests } from '@/lib/api/playerLimit';
 
 export const dynamic = 'force-dynamic';
 
-/** Player leaves the room. If they were the last lobby player, the session closes. */
+/** Player leaves the room. The host screen closes an empty lobby. */
 export async function POST(request: Request) {
   try {
     const limited = await limitPlayerHydrate(request, 'leave');
@@ -43,26 +42,7 @@ export async function POST(request: Request) {
     const { error: deleteError } = await admin.from('players').delete().eq('id', playerId).eq('session_id', sessionId);
     if (deleteError) throw deleteError;
 
-    let roomClosed = false;
-    if (session.status === 'lobby') {
-      const { count, error: countError } = await admin
-        .from('players')
-        .select('id', { count: 'exact', head: true })
-        .eq('session_id', sessionId);
-      if (countError) throw countError;
-
-      if (lobbyShouldCloseNow({ status: session.status, hadPlayers: true, playerCount: count || 0 })) {
-        const { error: closeError } = await admin
-          .from('game_sessions')
-          .update({ status: 'finished' })
-          .eq('id', sessionId)
-          .eq('status', 'lobby');
-        if (closeError) throw closeError;
-        roomClosed = true;
-      }
-    }
-
-    return NextResponse.json({ success: true, roomClosed });
+    return NextResponse.json({ success: true, roomClosed: false });
   } catch (err) {
     console.error('Player leave error:', err);
     return NextResponse.json({ error: 'Internal Server Error' }, { status: 500 });

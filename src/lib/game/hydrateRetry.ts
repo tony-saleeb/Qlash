@@ -9,6 +9,13 @@ export const HYDRATE_MAX_ATTEMPTS = 4;
 /** Slow enough to stay under the per-player bucket, fast enough to feel live. */
 export const HYDRATE_WATCHDOG_MS = 2_500;
 
+/**
+ * While a question is already on screen the fast watchdog stays quiet.
+ * This slower poll catches a broadcast the phone missed after a reconnect.
+ * Four calls a minute, plus the watchdog, stay inside the 40-hydrate budget.
+ */
+export const LIVE_RESYNC_MS = 15_000;
+
 const HYDRATE_BACKOFF_MS = [400, 900, 1800, 3000];
 const HYDRATE_MAX_DELAY_MS = 5_000;
 
@@ -23,6 +30,16 @@ export function hydrateRetryDelayMs(attempt: number, retryAfterSec?: number | nu
     return Math.min(Math.max(retryAfterSec * 1000, base), HYDRATE_MAX_DELAY_MS);
   }
   return base;
+}
+
+/** True while a live round can move on without this phone noticing. */
+export function needsLiveResync(status: string): boolean {
+  return (
+    status === 'question_active' ||
+    status === 'question_paused' ||
+    status === 'question_reveal' ||
+    status === 'leaderboard'
+  );
 }
 
 /** True when the player should be looking at a question but has no payload. */

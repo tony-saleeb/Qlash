@@ -26,6 +26,7 @@ export function parseCreatedSession(data: unknown): CreatedLiveSession | null {
     question_order: asQuestionOrder(row.question_order),
     late_join_through_index:
       typeof row.late_join_through_index === 'number' ? row.late_join_through_index : DEFAULT_LATE_JOIN_THROUGH_INDEX,
+    join_locked: row.join_locked === true,
   };
 }
 
@@ -51,8 +52,9 @@ export function toGameSessionRow(row: CreatedLiveSession | GameSessionRow): Game
     active_multiplier: row.active_multiplier,
     question_order: row.question_order ?? null,
     late_join_through_index: row.late_join_through_index ?? DEFAULT_LATE_JOIN_THROUGH_INDEX,
+    join_locked: row.join_locked === true,
   };
 }
 
 export const SESSION_RETURNING =
-  'id, pin, status, current_question_index, question_started_at, quiz_id, host_id, active_multiplier, question_order, late_join_through_index';
+  'id, pin, status, current_question_index, question_started_at, quiz_id, host_id, active_multiplier, question_order, late_join_through_index, join_locked';

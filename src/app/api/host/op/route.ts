@@ -10,6 +10,7 @@ import {
   pauseGameSession,
   revealQuestionResults,
   resumeGameSession,
+  setJoinLocked,
   setLateJoinThroughIndex,
   setSessionMultiplier,
   startGameSession,
@@ -20,11 +21,18 @@ import {
   createQuiz,
   deleteQuiz,
   enableQuizShare,
+  rotateQuizShare,
+  stopQuizShare,
   saveQuizData,
 } from '@/app/actions/quizzes';
 import { createRecapQuiz } from '@/app/actions/reports';
 import { setHostLocale } from '@/app/actions/host';
+import { tooManyRequests } from '@/lib/api/playerLimit';
+import { RATE_LIMITS } from '@/lib/game/constants';
+import { hostOpClientError, hostOpRequestAllowed } from '@/lib/host/hostOpGuard';
 import { isHostOp, type HostOpName } from '@/lib/host/ops';
+import { clientIpFromRequest, rateLimit } from '@/lib/rate-limit';
+import { readHostAuth } from '@/lib/supabase/hostAuth';
 
 export const dynamic = 'force-dynamic';
 
@@ -62,6 +70,8 @@ async function runHostOp(op: HostOpName, args: Args) {
       return addQuestionTime(String(args.sessionId), Number(args.extraSeconds ?? 10));
     case 'setLateJoinThroughIndex':
       return setLateJoinThroughIndex(String(args.sessionId), Number(args.throughIndex));
+    case 'setJoinLocked':
+      return setJoinLocked(String(args.sessionId), args.locked === true);
     case 'createQuiz':
       return createQuiz(String(args.title ?? ''), String(args.description ?? ''));
     case 'deleteQuiz':
@@ -72,6 +82,10 @@ async function runHostOp(op: HostOpName, args: Args) {
       return createPackQuiz(String(args.packId));
     case 'enableQuizShare':
       return enableQuizShare(String(args.quizId));
+    case 'rotateQuizShare':
+      return rotateQuizShare(String(args.quizId));
+    case 'stopQuizShare':
+      return stopQuizShare(String(args.quizId));
     case 'saveQuizData':
       return saveQuizData(String(args.quizId), args.settings as never, args.questions as never);
     case 'createRecapQuiz':
@@ -84,16 +98,44 @@ async function runHostOp(op: HostOpName, args: Args) {
 }
 
 export async function POST(request: Request) {
+  if (!hostOpRequestAllowed(request)) {
+    return NextResponse.json({ error: 'This request was refused.' }, { status: 403 });
+  }
+
+  const ipLimited = await rateLimit({
+    key: `host-op:ip:${clientIpFromRequest(request)}`,
+    limit: RATE_LIMITS.hostOpPerIp.limit,
+    windowMs: RATE_LIMITS.hostOpPerIp.windowMs,
+  });
+  if (!ipLimited.ok) return tooManyRequests(ipLimited.retryAfterSec);
+
+  let body: { op?: string; args?: Args };
   try {
-    const body = (await request.json()) as { op?: string; args?: Args };
-    if (!body.op || typeof body.op !== 'string' || !isHostOp(body.op)) {
-      return NextResponse.json({ error: 'Missing operation.' }, { status: 400 });
+    body = (await request.json()) as { op?: string; args?: Args };
+  } catch {
+    return NextResponse.json({ error: 'The request body must be JSON.' }, { status: 400 });
+  }
+  if (!body?.op || typeof body.op !== 'string' || !isHostOp(body.op)) {
+    return NextResponse.json({ error: 'Missing operation.' }, { status: 400 });
+  }
+
+  try {
+    const { user } = await readHostAuth();
+    if (!user) {
+      return NextResponse.json({ error: 'Unauthorized. Please log in.' }, { status: 401 });
     }
+    const hostLimited = await rateLimit({
+      key: `host-op:${user.id}`,
+      limit: RATE_LIMITS.hostOpPerHost.limit,
+      windowMs: RATE_LIMITS.hostOpPerHost.windowMs,
+    });
+    if (!hostLimited.ok) return tooManyRequests(hostLimited.retryAfterSec);
+
     const data = await runHostOp(body.op, body.args ?? {});
     return NextResponse.json({ data });
   } catch (err) {
-    const message = err instanceof Error ? err.message : 'Request failed.';
-    const status = /unauthorized/i.test(message) ? 401 : 400;
-    return NextResponse.json({ error: message }, { status });
+    console.error('host op failed', err);
+    const mapped = hostOpClientError(err);
+    return NextResponse.json({ error: mapped.message }, { status: mapped.status });
   }
 }

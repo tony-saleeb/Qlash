@@ -41,6 +41,21 @@ export function maybeSeededShuffle<T>(items: readonly T[], enabled: boolean, see
   return enabled ? seededShuffle(items, seed) : [...items];
 }
 
+/**
+ * Live answer layout shared by the projector, the question:start broadcast and
+ * the phone hydrate. Sorting by id first makes the result ignore stored order,
+ * so a second call on an already-laid-out list returns the same layout.
+ */
+export function answersInPlayOrder<T extends { id: string }>(
+  answers: readonly T[],
+  enabled: boolean,
+  seed: string
+): T[] {
+  if (!enabled) return [...answers];
+  const canonical = [...answers].sort((a, b) => (a.id < b.id ? -1 : a.id > b.id ? 1 : 0));
+  return seededShuffle(canonical, seed);
+}
+
 /** Rebuild play order from persisted question_order so projector and clicker match. */
 export function questionsInPlayOrder<T extends { id: string }>(
   questions: readonly T[],

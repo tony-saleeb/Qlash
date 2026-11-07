@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest';
-import { looksLikeCsv, parseChatQuestions } from '@/lib/content/parseChat';
+import { looksLikeCsv, parseChatPaste, parseChatQuestions } from '@/lib/content/parseChat';
 
 describe('parseChatQuestions', () => {
   it('reads numbered Arabic questions with a star on the right answer', () => {
@@ -47,9 +47,37 @@ C. Jerusalem
   });
 
   it('defaults to the first answer when nothing is starred', () => {
-    const [question] = parseChatQuestions('1. Color of the sky?\nBlue\nGreen\nRed');
-    expect(question?.answers[0]?.correct).toBe(true);
-    expect(question?.answers.filter((answer) => answer.correct)).toHaveLength(1);
+    const pasted = parseChatPaste('1. Color of the sky?\nBlue\nGreen\nRed');
+    expect(pasted.questions[0]?.answers[0]?.correct).toBe(true);
+    expect(pasted.questions[0]?.answers.filter((answer) => answer.correct)).toHaveLength(1);
+    expect(pasted.warnings[0]).toMatch(/No answer was starred/);
+  });
+
+  it('keeps a numbered Arabic prompt that contains a colon', () => {
+    const questions = parseChatQuestions(`
+1. سؤال أول؟
+أ) واحد *
+
+2. أكمل: الجملة دي
+أ) نعم *
+ب) لا
+`);
+    expect(questions).toHaveLength(2);
+    expect(questions[1]?.prompt).toContain('أكمل');
+  });
+
+  it('keeps only the first six answers', () => {
+    const pasted = parseChatPaste(`1. Pick?
+A. one *
+B. two
+C. three
+D. four
+E. five
+F. six
+G. seven
+H. eight`);
+    expect(pasted.questions[0]?.answers).toHaveLength(6);
+    expect(pasted.warnings[0]).toMatch(/first 6/);
   });
 });
 
@@ -57,6 +85,7 @@ describe('looksLikeCsv', () => {
   it('detects the editor CSV template', () => {
     expect(looksLikeCsv('Prompt, Type, TimeLimit, Points, CorrectKey, A, B')).toBe(true);
     expect(looksLikeCsv('"Who?","mcq",20,1000,"1","A","B"')).toBe(true);
+    expect(looksLikeCsv('Prompt;Type;Time;Points;Correct;A;B')).toBe(true);
     expect(looksLikeCsv('1. عاصمة مصر إيه؟\nالقاهرة *')).toBe(false);
   });
 });

@@ -26,3 +26,16 @@ jobs:
           NEXT_PUBLIC_SUPABASE_URL: https://placeholder.supabase.co
           NEXT_PUBLIC_SUPABASE_ANON_KEY: placeholder
           NEXT_PUBLIC_SITE_URL: http://localhost:3000
+
+  sql:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: supabase/setup-cli@v1
+        with:
+          version: latest
+      - run: supabase start
+      - run: bash scripts/ci-apply-schema.sh supabase_db_qlash
+      - run: docker exec -i supabase_db_qlash psql -U postgres -d postgres -v ON_ERROR_STOP=1 < scripts/ci-seed-host.sql
+      - run: docker exec -i supabase_db_qlash psql -U postgres -d postgres -v ON_ERROR_STOP=1 < scripts/verify-scoring.sql
+      - run: supabase test db

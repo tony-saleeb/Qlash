@@ -34,9 +34,18 @@ import {
 } from '@/lib/game/types';
 import {
   isStaleHydrate,
+  keepAnswerLayout,
   publicQuestionFromStartPayload,
   shouldAcceptQuestionClock,
 } from '@/lib/game/liveQuestion';
+import {
+  claimHydrate,
+  createHydrateGate,
+  hydrateResponseIsStale,
+  noteHydrateStateEvent,
+  settleHydrate,
+} from '@/lib/game/hydrateGate';
+import { choiceIdsForReveal, restoredAnswerIds, shouldLockRestoredAnswer } from '@/lib/game/restoredAnswer';
 import { remainingFromPausedElapsed, remainingMs, remainingSeconds } from '@/lib/game/clock';
 import { SERVER_LATE_CUTOFF_MS } from '@/lib/game/constants';
 import { answerUsesInk, resolveAnswerColor } from '@/lib/game/marks';
@@ -46,6 +55,8 @@ import { canSendReaction, type LobbyReactionId } from '@/lib/game/reactions';
 import {
   HYDRATE_MAX_ATTEMPTS,
   HYDRATE_WATCHDOG_MS,
+  LIVE_RESYNC_MS,
+  needsLiveResync,
   hydrateRetryDelayMs,
   hydrateShouldRetry,
   needsQuestionHydrate,
@@ -142,8 +153,7 @@ export default function PlayerGameClient({
   const sawOpenQuestionRef = React.useRef(false);
   const sessionStatusRef = React.useRef(sessionStatus);
   const lastStartSoundQidRef = React.useRef<string | null>(null);
-  const hydrateInFlightRef = React.useRef(false);
-  const hydrateAgainRef = React.useRef(false);
+  const hydrateGateRef = React.useRef(createHydrateGate());
   const sessionStateHandlerRef = React.useRef<((payload: Record<string, unknown>) => void) | null>(null);
   const playerRemovedHandlerRef = React.useRef<((payload: Record<string, unknown>) => void) | null>(null);
   const serverClockOffsetMsRef = React.useRef<number | null>(null);
@@ -202,7 +212,7 @@ export default function PlayerGameClient({
     let cancelled = false;
     void fetchRoster().then((rows) => {
       if (cancelled || !rows.length) return;
-      const rank = rows.findIndex((row) => row.id === player.id) + 1;
+      const rank = rows.findIndex((row) => row.isMe || row.id === player.id) + 1;
       setLiveRank(rank > 0 ? rank : null);
     });
     return () => {
@@ -252,11 +262,23 @@ export default function PlayerGameClient({
       serverStartedAt?: string | null,
       status?: string
     ) => {
-      const prevId = activeQuestionRef.current?.id;
+      const current = activeQuestionRef.current;
+      const prevId = current?.id;
+      // question:start and the hydrate both deliver the round; the second one
+      // must not unlock a tapped answer or move buttons under a finger.
+      if (current && question.id === prevId) {
+        const next = keepAnswerLayout(current, question);
+        setActiveQuestion(next);
+        activeQuestionRef.current = next;
+        syncQuestionClock(next, serverStartedAt, status);
+        return;
+      }
       setActiveQuestion(question);
+      activeQuestionRef.current = question;
       lastSubmitRef.current = null;
       revealAppliedRef.current = null;
       if (question.id !== prevId) {
+        revealGenRef.current += 1;
         clockStartedAtRef.current = null;
       }
       syncQuestionClock(question, serverStartedAt, status);
@@ -280,12 +302,31 @@ export default function PlayerGameClient({
     [syncQuestionClock]
   );
 
-  const hydrateOnce = useCallback(
+  const loadPodium = useCallback(
     async (playerId: string) => {
+      const allPlayers = await fetchRoster();
+      if (allPlayers.length) {
+        setFinalRank(allPlayers.findIndex((row) => row.isMe || row.id === playerId) + 1);
+        setPodiumPlayers(allPlayers);
+        const mine = allPlayers.find((row) => row.isMe || row.id === playerId);
+        if (mine) {
+          setPlayer((prev) =>
+            prev ? { ...prev, score: mine.score, streak: mine.streak } : prev
+          );
+        }
+      }
+    },
+    [fetchRoster]
+  );
+
+  const hydrateOnce = useCallback(
+    async (playerId: string, capturedEvent: number) => {
       const token = localStorage.getItem(`quizarena_token_${sessionId}`) || '';
+      const stale = () => hydrateResponseIsStale(capturedEvent, hydrateGateRef.current);
       try {
         let res: Response | null = null;
         for (let attempt = 0; attempt < HYDRATE_MAX_ATTEMPTS; attempt += 1) {
+          if (stale()) return;
           try {
             res = await fetch('/api/player/current-question', {
               method: 'POST',
@@ -295,6 +336,7 @@ export default function PlayerGameClient({
           } catch {
             res = null;
           }
+          if (stale()) return;
           if (res?.ok) break;
           if (res && !hydrateShouldRetry(res.status)) return;
           if (attempt === HYDRATE_MAX_ATTEMPTS - 1) return;
@@ -303,16 +345,17 @@ export default function PlayerGameClient({
             setTimeout(resolve, hydrateRetryDelayMs(attempt, Number.isFinite(retryAfter) ? retryAfter : null))
           );
         }
-        if (!res?.ok) return;
+        if (!res?.ok || stale()) return;
         const data = await res.json();
+        if (stale()) return;
         captureServerClock(data.server_now);
 
+        if (isStaleHydrate({ liveIndex: questionIndexRef.current, hydrateIndex: data.question_index })) {
+          return;
+        }
         if (data.status) setSessionStatus(data.status);
         if (typeof data.active_multiplier === 'number') {
           setActiveMultiplier(data.active_multiplier);
-        }
-        if (isStaleHydrate({ liveIndex: questionIndexRef.current, hydrateIndex: data.question_index })) {
-          return;
         }
         if (typeof data.question_index === 'number') {
           questionIndexRef.current = data.question_index;
@@ -320,11 +363,23 @@ export default function PlayerGameClient({
         if (data.question) {
           const current = activeQuestionRef.current;
           if (current?.id === data.question.id) {
-            setActiveQuestion(data.question);
-            activeQuestionRef.current = data.question;
-            syncQuestionClock(data.question, data.server_started_at, data.status);
+            const next = keepAnswerLayout(current, data.question);
+            setActiveQuestion(next);
+            activeQuestionRef.current = next;
+            syncQuestionClock(next, data.server_started_at, data.status);
           } else {
             applyQuestionPayload(data.question, data.server_started_at, data.status);
+          }
+          const restored = restoredAnswerIds(data.submitted_answer_ids);
+          if (shouldLockRestoredAnswer(data.status, restored)) {
+            setSelectedAnswerIds(restored);
+            setSubmissionState('submitted');
+            lastSubmitRef.current = {
+              questionId: data.question.id,
+              selected: restored,
+              accepted: true,
+              error: null,
+            };
           }
           if (data.status === 'question_reveal') {
             const token = localStorage.getItem(`quizarena_token_${sessionId}`) || '';
@@ -360,6 +415,13 @@ export default function PlayerGameClient({
                   timedOut: true,
                 });
               } else if ((round.submitted ?? round.hadSubmission) && round.submission) {
+                const storedChoice = choiceIdsForReveal(
+                  lastSubmitRef.current?.questionId === data.question.id
+                    ? lastSubmitRef.current.selected
+                    : [],
+                  round.submission.selected_answer_ids
+                );
+                if (storedChoice.length > 0) setSelectedAnswerIds(storedChoice);
                 setRoundResult({
                   isCorrect: Boolean(round.submission.is_correct),
                   pointsAwarded: Number(round.submission.points_awarded) || 0,
@@ -376,49 +438,52 @@ export default function PlayerGameClient({
               }
             }
           }
-          return;
+        }
+        if (data.status === 'leaderboard') {
+          const rows = await fetchRoster();
+          if (rows.length) {
+            const mine = rows.find((row) => row.isMe || row.id === playerId);
+            if (mine) {
+              setPlayer((prev) =>
+                prev ? { ...prev, score: mine.score, streak: mine.streak } : prev
+              );
+            }
+            const rank = rows.findIndex((row) => row.isMe || row.id === playerId) + 1;
+            setLiveRank(rank > 0 ? rank : null);
+          }
+        } else if (data.status === 'finished') {
+          await loadPodium(playerId);
         }
       } catch (err) {
         console.error('Failed to hydrate current question', err);
       }
     },
-    [sessionId, applyQuestionPayload, syncQuestionClock]
+    [sessionId, applyQuestionPayload, syncQuestionClock, fetchRoster, loadPodium]
   );
 
   /**
-   * question:start and the game_sessions UPDATE both land at once, so collapse
-   * overlapping calls into one request and replay only the last one.
+   * question:start and the game_sessions UPDATE both land at once, so one
+   * request runs at a time. A response captured before a newer room event
+   * is dropped, then the pending read runs.
    */
   const hydrateCurrentQuestion = useCallback(
     async (playerId: string) => {
-      if (hydrateInFlightRef.current) {
-        hydrateAgainRef.current = true;
-        return;
-      }
-      hydrateInFlightRef.current = true;
+      const gate = hydrateGateRef.current;
+      if (claimHydrate(gate) === null) return;
       try {
-        await hydrateOnce(playerId);
-        while (hydrateAgainRef.current) {
-          hydrateAgainRef.current = false;
-          await hydrateOnce(playerId);
+        let again = true;
+        while (again) {
+          const captured = gate.event;
+          await hydrateOnce(playerId, captured);
+          again = settleHydrate(gate);
         }
-      } finally {
-        hydrateInFlightRef.current = false;
-        hydrateAgainRef.current = false;
+      } catch (err) {
+        gate.inFlight = false;
+        gate.pending = false;
+        throw err;
       }
     },
     [hydrateOnce]
-  );
-
-  const loadPodium = useCallback(
-    async (playerId: string) => {
-      const allPlayers = await fetchRoster();
-      if (allPlayers.length) {
-        setFinalRank(allPlayers.findIndex((row) => row.id === playerId) + 1);
-        setPodiumPlayers(allPlayers);
-      }
-    },
-    [fetchRoster]
   );
 
   const syncOfficialScore = useCallback(
@@ -490,6 +555,11 @@ export default function PlayerGameClient({
               was_late: false,
             };
             const tapped = lastSubmitRef.current?.questionId === questionId;
+            const storedChoice = choiceIdsForReveal(
+              tapped ? lastSubmitRef.current?.selected ?? [] : [],
+              submission.selected_answer_ids
+            );
+            if (storedChoice.length > 0) setSelectedAnswerIds(storedChoice);
             const isCorrect = Boolean(submission.is_correct);
             const late = Boolean(submission.was_late) && isCorrect;
             const timedOut = tapped && data.submitted === false;
@@ -542,13 +612,14 @@ export default function PlayerGameClient({
     [sessionId, syncOfficialScore]
   );
 
-  useSessionChannel(sessionId, {
+  const { connection } = useSessionChannel(sessionId, {
     supabase,
     onEvents: {
       'clash:countdown': () => {
         setClashPlay(true);
       },
       'question:start': (msg) => {
+        noteHydrateStateEvent(hydrateGateRef.current);
         setClashPlay(false);
         const question = publicQuestionFromStartPayload(msg.payload);
         if (question) {
@@ -563,6 +634,7 @@ export default function PlayerGameClient({
         if (playerId) void hydrateCurrentQuestion(playerId);
       },
       'question:update': () => {
+        noteHydrateStateEvent(hydrateGateRef.current);
         const playerId = playerRef.current?.id;
         if (playerId) {
           void hydrateCurrentQuestion(playerId);
@@ -647,6 +719,7 @@ export default function PlayerGameClient({
     };
 
     sessionStateHandlerRef.current = (payload) => {
+      noteHydrateStateEvent(hydrateGateRef.current);
       const row =
         payload.new && typeof payload.new === 'object'
           ? (payload.new as Record<string, unknown>)
@@ -666,16 +739,23 @@ export default function PlayerGameClient({
         const indexChanged =
           questionIndexRef.current !== null && nextIndex !== questionIndexRef.current;
         questionIndexRef.current = nextIndex;
+        if (indexChanged) {
+          revealGenRef.current += 1;
+          setRoundResult(null);
+          setSubmissionState('idle');
+          setActiveQuestion(null);
+          activeQuestionRef.current = null;
+          if (newStatus === 'finished') {
+            void loadPodium(playerId);
+          } else {
+            void hydrateCurrentQuestion(playerId);
+          }
+          return;
+        }
         if (
           (newStatus === 'question_active' || newStatus === 'question_paused') &&
-          (indexChanged || !activeQuestionRef.current)
+          !activeQuestionRef.current
         ) {
-          if (indexChanged) {
-            setRoundResult(null);
-            setSubmissionState('idle');
-            setActiveQuestion(null);
-            activeQuestionRef.current = null;
-          }
           hydrateCurrentQuestion(playerId);
           return;
         }
@@ -750,6 +830,20 @@ export default function PlayerGameClient({
     };
   }, [player?.id, sessionId, router, hydrateCurrentQuestion, revealFromServer, loadPodium, t, nowMs]);
 
+  const sawConnectionRef = React.useRef(0);
+  useEffect(() => {
+    const playerId = player?.id;
+    if (!playerId || connection === 0) return;
+    if (sawConnectionRef.current === 0) {
+      sawConnectionRef.current = connection;
+      return;
+    }
+    if (sawConnectionRef.current === connection) return;
+    sawConnectionRef.current = connection;
+    void hydrateCurrentQuestion(playerId);
+    if (sessionStatusRef.current === 'finished') void loadPodium(playerId);
+  }, [connection, player?.id, hydrateCurrentQuestion, loadPodium]);
+
   /**
    * Last line of defence against a spinner: if the room is on a question and
    * this player still has no payload, keep asking until it arrives. Covers a
@@ -764,6 +858,15 @@ export default function PlayerGameClient({
     }, HYDRATE_WATCHDOG_MS);
     return () => window.clearInterval(id);
   }, [player?.id, sessionStatus, activeQuestion, hydrateCurrentQuestion]);
+
+  useEffect(() => {
+    const playerId = player?.id;
+    if (!playerId || !needsLiveResync(sessionStatus)) return;
+    const id = window.setInterval(() => {
+      void hydrateCurrentQuestion(playerId);
+    }, LIVE_RESYNC_MS);
+    return () => window.clearInterval(id);
+  }, [player?.id, sessionStatus, hydrateCurrentQuestion]);
 
   useEffect(() => {
     if (sessionStatus !== 'question_active' || !activeQuestion || !clockStartedAt) return;
@@ -866,6 +969,14 @@ export default function PlayerGameClient({
     });
   };
 
+  /** A send that never landed leaves the round open, so "tap again" has to work. */
+  const reopenAfterFailedSubmit = (questionId: string) => {
+    if (sessionStatusRef.current !== 'question_active') return;
+    if (activeQuestionRef.current?.id !== questionId) return;
+    setSubmissionState('idle');
+    setSelectedAnswerIds([]);
+  };
+
   // Instant lock-in UX — never wait on the network to feel responsive
   const submitAnswer = async (answersToSubmit: string[]) => {
     if (!player || !activeQuestion || submissionState !== 'idle') return;
@@ -924,6 +1035,19 @@ export default function PlayerGameClient({
 
       const data = await response.json().catch(() => ({}));
       if (!response.ok) {
+        const paused =
+          response.status === 403 &&
+          typeof data.error === 'string' &&
+          /paused/i.test(data.error);
+        if (paused) {
+          // The tap did not land. Forget it so the reveal is not "Time's up",
+          // and put the choices back for when the host resumes.
+          lastSubmitRef.current = null;
+          toast.message(t('paused'));
+          setSubmissionState('idle');
+          setSelectedAnswerIds([]);
+          return;
+        }
         const closed =
           response.status === 403 &&
           typeof data.error === 'string' &&
@@ -938,6 +1062,9 @@ export default function PlayerGameClient({
         toast.message(closed ? t('timesUp') : t('submitFailed'));
         if (sessionStatusRef.current === 'question_reveal') {
           void revealFromServer(player.id, activeQuestion.id);
+        } else if (!closed) {
+          reopenAfterFailedSubmit(activeQuestion.id);
+          if (response.status === 403) void hydrateCurrentQuestion(player.id);
         }
         return;
       }
@@ -963,6 +1090,8 @@ export default function PlayerGameClient({
         toast.error(err instanceof Error ? err.message : t('submitFailed'));
         if (sessionStatusRef.current === 'question_reveal') {
           void revealFromServer(player.id, activeQuestion.id);
+        } else {
+          reopenAfterFailedSubmit(activeQuestion.id);
         }
       }
     }

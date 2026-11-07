@@ -1,4 +1,5 @@
 import { NextResponse } from 'next/server';
+import { scopedRateLimitKey } from '@/lib/api/ids';
 import { RATE_LIMITS } from '@/lib/game/constants';
 import { clientIpFromRequest, rateLimit, rateLimitSharded } from '@/lib/rate-limit';
 
@@ -25,7 +26,7 @@ export async function limitPlayerHydrateSharded(request: Request, bucket: string
 
 export async function limitPlayerHydrateByPlayer(playerId: string, bucket: string) {
   return rateLimit({
-    key: `${bucket}:player:${playerId}`,
+    key: scopedRateLimitKey(`${bucket}:player`, playerId),
     limit: RATE_LIMITS.playerHydratePerPlayer.limit,
     windowMs: RATE_LIMITS.playerHydratePerPlayer.windowMs,
   });

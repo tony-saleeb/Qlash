@@ -1,6 +1,6 @@
 /** @vitest-environment jsdom */
 import { describe, expect, it, vi } from 'vitest';
-import { renderHook, waitFor } from '@testing-library/react';
+import { act, renderHook, waitFor } from '@testing-library/react';
 import { createClientMock } from '@/test/supabaseMock';
 import { useSessionChannel } from '@/hooks/useSessionChannel';
 
@@ -34,6 +34,11 @@ describe('useSessionChannel', () => {
       event: 'host:skip',
       payload: { reason: 'test' },
     });
+    expect(result.current.connection).toBe(1);
+
+    const onStatus = channel.subscribe.mock.calls[0][0] as (status: string) => void;
+    act(() => onStatus('SUBSCRIBED'));
+    expect(result.current.connection).toBe(2);
   });
 
   it('does not resubscribe when the parent passes a new client object', async () => {

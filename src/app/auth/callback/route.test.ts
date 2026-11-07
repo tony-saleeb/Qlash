@@ -41,4 +41,25 @@ describe('GET /auth/callback', () => {
     const response = await GET(new Request('http://qlash.test/auth/callback?code=abc'));
     expect(response.headers.get('location')).toBe('https://qlash.app/dashboard');
   });
+
+  it('does not exchange a missing code and refuses an off-site next path', async () => {
+    vi.stubEnv('NEXT_PUBLIC_SITE_URL', '');
+    exchangeCodeForSession.mockClear();
+    const { GET } = await import('@/app/auth/callback/route');
+    const missing = await GET(new Request('http://qlash.test/auth/callback?next=/dashboard'));
+    expect(exchangeCodeForSession).not.toHaveBeenCalled();
+    expect(missing.headers.get('location')).toBe('http://qlash.test/');
+
+    exchangeCodeForSession.mockResolvedValueOnce({ error: null });
+    const offsite = await GET(
+      new Request('http://qlash.test/auth/callback?code=abc&next=https://evil.com')
+    );
+    expect(offsite.headers.get('location')).toBe('http://qlash.test/dashboard');
+
+    exchangeCodeForSession.mockResolvedValueOnce({ error: null });
+    const kept = await GET(
+      new Request('http://qlash.test/auth/callback?code=abc&next=/dashboard/quizzes/1')
+    );
+    expect(kept.headers.get('location')).toBe('http://qlash.test/dashboard/quizzes/1');
+  });
 });

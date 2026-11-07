@@ -31,6 +31,7 @@ export function useSessionChannel(
   const onEventsRef = useRef(options?.onEvents);
   onEventsRef.current = options?.onEvents;
   const [ready, setReady] = useState(false);
+  const [connection, setConnection] = useState(0);
   const readyRef = useRef(false);
   const deniedRef = useRef(false);
 

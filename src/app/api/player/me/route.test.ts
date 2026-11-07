@@ -7,6 +7,8 @@ vi.mock('@/lib/supabase/admin', () => ({
 }));
 
 const admin = createClientMock();
+const sessionId = '11111111-1111-4111-8111-111111111111';
+const token = '44444444-4444-4444-8444-444444444444';
 
 describe('POST /api/player/me', () => {
   beforeEach(() => {
@@ -22,7 +24,9 @@ describe('POST /api/player/me', () => {
   it('rejects an unknown token', async () => {
     admin.setTable('player_tokens', { data: null, error: null });
     const { POST } = await import('@/app/api/player/me/route');
-    const result = await readJson(await POST(jsonRequest({ sessionId: 'sess-1', token: 'bad' })));
+    const result = await readJson(
+      await POST(jsonRequest({ sessionId, token: '55555555-5555-4555-8555-555555555555' }))
+    );
     expect(result.status).toBe(401);
   });
 
@@ -34,7 +38,7 @@ describe('POST /api/player/me', () => {
     });
     const { POST } = await import('@/app/api/player/me/route');
     const result = await readJson(
-      await POST(jsonRequest({ sessionId: 'sess-1', token: 'tok' }))
+      await POST(jsonRequest({ sessionId, token }))
     );
     expect(result.status).toBe(404);
   });
@@ -50,7 +54,7 @@ describe('POST /api/player/me', () => {
     });
     const { POST } = await import('@/app/api/player/me/route');
     const result = await readJson(
-      await POST(jsonRequest({ sessionId: 'sess-1', token: 'tok', nickname: 'Bob' }))
+      await POST(jsonRequest({ sessionId, token, nickname: 'Bob' }))
     );
     expect(result.status).toBe(403);
     expect(result.body.error).toMatch(/Nickname does not match/);
@@ -67,7 +71,7 @@ describe('POST /api/player/me', () => {
     });
     const { POST } = await import('@/app/api/player/me/route');
     const result = await readJson(
-      await POST(jsonRequest({ sessionId: 'sess-1', token: 'tok' }))
+      await POST(jsonRequest({ sessionId, token }))
     );
     expect(result.status).toBe(200);
     expect(result.body.sessionStatus).toBe('finished');
@@ -92,7 +96,7 @@ describe('POST /api/player/me', () => {
     });
     const { POST } = await import('@/app/api/player/me/route');
     const result = await readJson(
-      await POST(jsonRequest({ sessionId: 'sess-1', token: 'tok', nickname: 'Ada' }))
+      await POST(jsonRequest({ sessionId, token, nickname: 'Ada' }))
     );
     expect(result.status).toBe(200);
     expect(result.body.player).toMatchObject({ id: 'p1', nickname: 'Ada', connected: true });

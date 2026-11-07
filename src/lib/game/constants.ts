@@ -1,6 +1,9 @@
 /** Hard ceiling for any live room. */
 export const MAX_PLAYERS_PER_SESSION = 80;
 
+/** Unfinished rooms one host may have at once. Finished rooms do not count. */
+export const MAX_OPEN_LOBBIES = 8;
+
 export const NICKNAME_MIN_LEN = 1;
 export const NICKNAME_MAX_LEN = 20;
 
@@ -43,9 +46,15 @@ export function quizLibraryCap(plan: unknown): number {
 /** Classroom Wi‑Fi often NATs ~80 devices behind one IP — keep limits above a full lobby. */
 export const RATE_LIMITS = {
   joinPerIp: { limit: 240, windowMs: 60_000 },
+  /** A real class can still walk in. A script cannot fill all 80 seats in one burst. */
+  joinPerSession: { limit: 30, windowMs: 10_000 },
   submitPerIp: { limit: 900, windowMs: 60_000 },
   submitPerPlayer: { limit: 20, windowMs: 60_000 },
+  submitAuthFailPerIp: { limit: 60, windowMs: 60_000 },
   pinLookupPerIp: { limit: 240, windowMs: 60_000 },
   playerHydratePerIp: { limit: 2000, windowMs: 60_000 },
   playerHydratePerPlayer: { limit: 40, windowMs: 60_000 },
+  /** One teacher clicking through a class, not a script opening rooms. */
+  hostOpPerIp: { limit: 600, windowMs: 60_000 },
+  hostOpPerHost: { limit: 300, windowMs: 60_000 },
 } as const;

@@ -1,3 +1,4 @@
+import { MAX_OPEN_LOBBIES } from '@/lib/game/constants';
 import { getHostAuth } from '@/lib/supabase/hostAuth';
 import { DEFAULT_LATE_JOIN_THROUGH_INDEX } from '@/lib/game/lateJoin';
 import { randomLivePin } from '@/lib/game/livePin';
@@ -14,6 +15,16 @@ export { isMissingCreateLobbyRpc, parseCreatedSession, toGameSessionRow } from '
 export async function createLiveLobby(quizId: string): Promise<CreatedLiveSession> {
   const { supabase, user } = await getHostAuth();
 
+  const { count, error: countError } = await supabase
+    .from('game_sessions')
+    .select('id', { count: 'exact', head: true })
+    .eq('host_id', user.id)
+    .neq('status', 'finished');
+  if (countError) throw new Error('Could not start a room.');
+  if ((count ?? 0) >= MAX_OPEN_LOBBIES) {
+    throw new Error('Finish an open room before starting another.');
+  }
+
   const { data, error } = await supabase.rpc('create_live_lobby', { p_quiz_id: quizId });
   const fromRpc = parseCreatedSession(data);
   if (fromRpc) return fromRpc;
@@ -26,6 +37,7 @@ export async function createLiveLobby(quizId: string): Promise<CreatedLiveSessio
     .select('id')
     .eq('id', quizId)
     .eq('host_id', user.id)
+    .is('deleted_at', null)
     .single();
 
   if (quizError || !quiz) {

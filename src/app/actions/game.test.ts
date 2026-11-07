@@ -65,6 +65,7 @@ describe('host game actions', () => {
     host.setTables({
       quizzes: { data: { id: 'quiz-1' }, error: null },
       game_sessions: [
+        { data: null, error: null, count: 0 },
         { data: null, error: { code: '23505', message: 'duplicate pin' } },
         { data: { id: 'sess-2', pin: '550000', status: 'lobby', host_id: 'host-1' }, error: null },
       ],
@@ -90,7 +91,7 @@ describe('host game actions', () => {
     const session = await createGameSession('quiz-1');
     expect(session.id).toBe('sess-rpc');
     expect(session.pin).toBe('654321');
-    expect(host.from).not.toHaveBeenCalled();
+    expect(host.lastInsert('game_sessions')).toBeUndefined();
   });
 
   it('does not fall back to insert when the quiz is unauthorized', async () => {
@@ -100,7 +101,16 @@ describe('host game actions', () => {
     });
     const { createGameSession } = await import('@/app/actions/game');
     await expect(createGameSession('quiz-1')).rejects.toThrow(/Quiz not found or unauthorized/);
-    expect(host.from).not.toHaveBeenCalled();
+    expect(host.lastInsert('game_sessions')).toBeUndefined();
+  });
+
+  it('refuses another lobby when this host already has the open-room cap', async () => {
+    host.setTables({
+      game_sessions: { data: null, error: null, count: 8 },
+    });
+    const { createGameSession } = await import('@/app/actions/game');
+    await expect(createGameSession('quiz-1')).rejects.toThrow(/Finish an open room/);
+    expect(host.rpc).not.toHaveBeenCalled();
   });
 
   it('refuses to start without a question order and only from lobby', async () => {
@@ -185,11 +195,23 @@ describe('host game actions', () => {
       players: { data: {}, error: null },
     });
     await expect(kickPlayer('p1', 'sess-1')).resolves.toEqual({ success: true });
+
+    admin.setTables({
+      players: { data: { nickname: 'Ada' }, error: null },
+      player_tokens: { data: { client_token: 'tok-1' }, error: null },
+      session_kicks: { data: {}, error: null },
+    });
+    await expect(kickPlayer('p1', 'sess-1')).resolves.toEqual({ success: true });
+    expect(admin.lastInsert('session_kicks')).toEqual({
+      session_id: 'sess-1',
+      nickname: 'Ada',
+      client_token: 'tok-1',
+    });
   });
 
-  it('persists the live 2x multiplier', async () => {
+  it('arms 2x on the leaderboard and locks it once the question starts', async () => {
     host.setTable('game_sessions', {
-      data: { id: 'sess-1', active_multiplier: 2, status: 'question_active' },
+      data: { id: 'sess-1', active_multiplier: 2, status: 'leaderboard' },
       error: null,
     });
     const { setSessionMultiplier } = await import('@/app/actions/game');
@@ -198,6 +220,12 @@ describe('host game actions', () => {
       active_multiplier: 2,
     });
     expect(host.lastUpdate('game_sessions')).toEqual({ active_multiplier: 2 });
+
+    host.setTable('game_sessions', {
+      data: { id: 'sess-1', active_multiplier: 1, status: 'question_active' },
+      error: null,
+    });
+    await expect(setSessionMultiplier('sess-1', 2)).rejects.toThrow(/lock once the question starts/);
   });
 
   it('reveals via the scoring RPC', async () => {
@@ -217,6 +245,14 @@ describe('host game actions', () => {
       p_session_id: 'sess-1',
       p_question_id: 'q1',
     });
+  });
+
+  it('stops the jump when the live room cannot be read', async () => {
+    host.rpc.mockClear();
+    host.setTable('game_sessions', { data: null, error: { message: 'read failed' } });
+    const { goToNextQuestion } = await import('@/app/actions/game');
+    await expect(goToNextQuestion('sess-1', 1)).rejects.toThrow(/read failed/);
+    expect(host.rpc).not.toHaveBeenCalled();
   });
 
   it('applies the current round scores before jumping to another question', async () => {

@@ -12,6 +12,11 @@ describe('lobby reactions', () => {
     expect(isLobbyReactionId('slash')).toBe(true);
     expect(isLobbyReactionId('bolt')).toBe(true);
     expect(isLobbyReactionId('star')).toBe(false);
+    expect(isLobbyReactionId('Slash')).toBe(false);
+    expect(isLobbyReactionId('slash ')).toBe(false);
+    expect(isLobbyReactionId('')).toBe(false);
+    expect(isLobbyReactionId(null)).toBe(false);
+    expect(isLobbyReactionId(1)).toBe(false);
   });
 
   it('enforces a cooldown so the projector is not flooded', () => {
@@ -22,6 +27,9 @@ describe('lobby reactions', () => {
   it('scatters floaters across the board', () => {
     expect(reactionLeftPercent(0)).toBe('8%');
     expect(reactionLeftPercent(83)).toBe('91%');
+    expect(reactionLeftPercent(-3)).toBe('11%');
+    expect(reactionLeftPercent(Number.NaN)).toBe('8%');
+    expect(reactionLeftPercent(Number.POSITIVE_INFINITY)).toBe('8%');
   });
 
   it('lets cheers hit the projector in lobby and lock-wait', () => {

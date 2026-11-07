@@ -82,6 +82,49 @@ describe('POST /api/player/round-result', () => {
     expect(result.body.correctAnswerIds).toEqual(['a']);
   });
 
+  it('returns the stored choice so the reveal card does not show a later tap', async () => {
+    admin.setTables({
+      player_tokens: { data: { client_token: 'tok' }, error: null },
+      game_sessions: {
+        data: {
+          status: 'question_reveal',
+          quiz_id: 'quiz-1',
+          question_order: ['q'],
+          current_question_index: 0,
+        },
+        error: null,
+      },
+      answers_submitted: {
+        data: {
+          points_awarded: 0,
+          is_correct: false,
+          was_late: false,
+          selected_answer_ids: ['b'],
+        },
+        error: null,
+      },
+      players: { data: { id: 'p', score: 0, streak: 0 }, error: null },
+      questions: {
+        data: {
+          id: 'q',
+          order_index: 0,
+          answers: [
+            { id: 'a', is_correct: true },
+            { id: 'b', is_correct: false },
+          ],
+        },
+        error: null,
+      },
+    });
+    const { POST } = await import('@/app/api/player/round-result/route');
+    const result = await readJson(
+      await POST(jsonRequest({ sessionId: 's', playerId: 'p', token: 'tok', questionId: 'q' }))
+    );
+    expect(result.status).toBe(200);
+    expect(result.body.submission.selected_answer_ids).toEqual(['b']);
+    expect(result.body.submission.is_correct).toBe(false);
+  });
+
   it('returns 404 when the player is not in this session and leaks no answer key', async () => {
     admin.setTables({
       player_tokens: { data: { client_token: 'tok' }, error: null },
@@ -119,6 +162,29 @@ describe('POST /api/player/round-result', () => {
       await POST(jsonRequest({ sessionId: 's', playerId: 'p', token: 'tok', questionId: 'q1' }))
     );
     expect(result.status).toBe(403);
+  });
+
+  it('returns 404 and no answer key when the question is not on this quiz', async () => {
+    admin.setTables({
+      player_tokens: { data: { client_token: 'tok' }, error: null },
+      players: { data: { id: 'p', score: 0, streak: 0 }, error: null },
+      game_sessions: {
+        data: {
+          status: 'question_reveal',
+          quiz_id: 'quiz-1',
+          question_order: ['q1'],
+          current_question_index: 0,
+        },
+        error: null,
+      },
+      questions: { data: null, error: null },
+    });
+    const { POST } = await import('@/app/api/player/round-result/route');
+    const missing = await readJson(
+      await POST(jsonRequest({ sessionId: 's', playerId: 'p', token: 'tok', questionId: 'foreign' }))
+    );
+    expect(missing.status).toBe(404);
+    expect(missing.body.correctAnswerIds).toBeUndefined();
   });
 
   it('returns the answer key for the question currently in reveal', async () => {

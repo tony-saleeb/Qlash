@@ -1,4 +1,5 @@
 import type { Metadata, Viewport } from "next";
+import { headers } from "next/headers";
 import Script from "next/script";
 import { Bricolage_Grotesque, Cairo, Figtree } from "next/font/google";
 import localFont from "next/font/local";
@@ -46,7 +47,6 @@ export const metadata: Metadata = {
   metadataBase: metadataBaseUrl(),
   title: {
     default: SITE_TITLE,
-    template: `%s · ${SITE_NAME}`,
   },
   description: SITE_DESCRIPTION,
   applicationName: SITE_NAME,
@@ -82,6 +82,7 @@ export default async function RootLayout({
 }>) {
   const locale = await readRequestLocale();
   const dir = locale === "ar" ? "rtl" : "ltr";
+  const nonce = (await headers()).get("x-nonce") ?? undefined;
 
   return (
     <html
@@ -93,6 +94,7 @@ export default async function RootLayout({
       <body className="min-h-dvh max-w-[100vw] overflow-x-clip font-sans text-arena-ink antialiased">
         <Script
           id="qlash-locale-boot"
+          nonce={nonce}
           strategy="beforeInteractive"
           dangerouslySetInnerHTML={{ __html: localeBootScript() }}
         />
