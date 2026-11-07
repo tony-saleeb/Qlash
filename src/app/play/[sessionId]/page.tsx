@@ -5,13 +5,13 @@ import PlayerGameClient from '@/app/play/[sessionId]/PlayerGameClient';
 export const dynamic = 'force-dynamic';
 
 interface PlayerSessionPageProps {
-  params: {
+  params: Promise<{
     sessionId: string;
-  };
+  }>;
 }
 
 export default async function PlayerSessionPage({ params }: PlayerSessionPageProps) {
-  const { sessionId } = params;
+  const { sessionId } = await params;
   const admin = createAdminClient();
 
   const { data: session, error } = await admin

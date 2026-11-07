@@ -12,6 +12,6 @@ export const metadata: Metadata = {
   },
 };
 
-export default function PlayJoinPage() {
-  return <PlayJoinClient initialLocale={readRequestLocale()} />;
+export default async function PlayJoinPage() {
+  return <PlayJoinClient initialLocale={await readRequestLocale()} />;
 }

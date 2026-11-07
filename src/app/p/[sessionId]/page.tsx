@@ -10,10 +10,11 @@ import { metadataBaseUrl } from '@/lib/siteUrl';
 
 export const dynamic = 'force-dynamic';
 
-type PageProps = { params: { sessionId: string } };
+type PageProps = { params: Promise<{ sessionId: string }> };
 
 export async function generateMetadata({ params }: PageProps): Promise<Metadata> {
-  const podium = await getFinishedPodium(params.sessionId);
+  const { sessionId } = await params;
+  const podium = await getFinishedPodium(sessionId);
   if (!podium) {
     return { title: 'Qlash', robots: { index: false } };
   }
@@ -30,10 +31,11 @@ export async function generateMetadata({ params }: PageProps): Promise<Metadata>
 }
 
 export default async function PodiumSharePage({ params }: PageProps) {
-  const podium = await getFinishedPodium(params.sessionId);
+  const { sessionId } = await params;
+  const podium = await getFinishedPodium(sessionId);
   if (!podium) notFound();
 
-  const locale = readRequestLocale();
+  const locale = await readRequestLocale();
   const dir = locale === 'ar' ? 'rtl' : 'ltr';
   const url = podiumUrl(metadataBaseUrl().origin, podium.sessionId);
   const whatsapp = whatsAppShareUrl(podiumShareText(locale, podium.quizTitle, podium.top, url));

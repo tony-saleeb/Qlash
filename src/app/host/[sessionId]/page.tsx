@@ -10,16 +10,17 @@ import { loadHostRoom } from '@/lib/host/hostRoom';
 export const dynamic = 'force-dynamic';
 
 interface HostSessionPageProps {
-  params: {
+  params: Promise<{
     sessionId: string;
-  };
-  searchParams: {
+  }>;
+  searchParams: Promise<{
     view?: string;
-  };
+  }>;
 }
 
 export default async function HostSessionPage({ params, searchParams }: HostSessionPageProps) {
-  const { sessionId } = params;
+  const { sessionId } = await params;
+  const query = await searchParams;
   const { supabase, user } = await readHostAuth();
   if (!user) {
     redirect('/');
@@ -35,7 +36,7 @@ export default async function HostSessionPage({ params, searchParams }: HostSess
 
   const hostRow = hostResult.data;
 
-  const clicker = isHostClickerView(searchParams.view);
+  const clicker = isHostClickerView(query.view);
   const initialLocale = normalizeLocale(hostRow?.ui_locale);
 
   return clicker ? (

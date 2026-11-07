@@ -1,6 +1,6 @@
 import { createClient } from '@/lib/supabase/server';
 
-type HostClient = ReturnType<typeof createClient>;
+type HostClient = Awaited<ReturnType<typeof createClient>>;
 
 export type HostUser = { id: string; email: string | null };
 
@@ -8,7 +8,7 @@ export type HostUser = { id: string; email: string | null };
  * Host identity from the verified JWT claims. The cookie session is not trusted.
  */
 export async function readHostAuth(): Promise<{ supabase: HostClient; user: HostUser | null }> {
-  const supabase = createClient();
+  const supabase = await createClient();
   const { data, error } = await supabase.auth.getClaims();
   const subject = data?.claims.sub;
   if (error || !subject) {

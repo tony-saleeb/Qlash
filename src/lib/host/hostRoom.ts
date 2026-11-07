@@ -27,7 +27,7 @@ export type HostRoomPayload = {
   players: Player[];
 };
 
-type HostClient = ReturnType<typeof createClient>;
+type HostClient = Awaited<ReturnType<typeof createClient>>;
 
 function asPlayers(value: unknown): Player[] {
   if (!Array.isArray(value)) return [];

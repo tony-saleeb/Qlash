@@ -75,12 +75,12 @@ export const metadata: Metadata = {
   },
 };
 
-export default function RootLayout({
+export default async function RootLayout({
   children,
 }: Readonly<{
   children: React.ReactNode;
 }>) {
-  const locale = readRequestLocale();
+  const locale = await readRequestLocale();
   const dir = locale === "ar" ? "rtl" : "ltr";
 
   return (

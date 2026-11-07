@@ -1,6 +1,6 @@
 /** @type {import('next').NextConfig} */
 const nextConfig = {
-  // 'unsafe-inline' is needed because Next 14 inlines the RSC payload and the
+  // 'unsafe-inline' is needed because Next inlines the RSC payload and the
   // locale boot script; promote to enforced CSP once a full game logs zero violations.
   poweredByHeader: false,
   experimental: {

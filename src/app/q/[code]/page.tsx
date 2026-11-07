@@ -15,10 +15,11 @@ import { metadataBaseUrl } from '@/lib/siteUrl';
 
 export const dynamic = 'force-dynamic';
 
-type PageProps = { params: { code: string } };
+type PageProps = { params: Promise<{ code: string }> };
 
 export async function generateMetadata({ params }: PageProps): Promise<Metadata> {
-  const preview = await getSharedQuizPreview(params.code);
+  const { code } = await params;
+  const preview = await getSharedQuizPreview(code);
   if (!preview) {
     return { title: 'Qlash', robots: { index: false } };
   }
@@ -36,12 +37,13 @@ export async function generateMetadata({ params }: PageProps): Promise<Metadata>
 }
 
 export default async function SharedQuizPage({ params }: PageProps) {
-  const preview = await getSharedQuizPreview(params.code);
+  const { code } = await params;
+  const preview = await getSharedQuizPreview(code);
   if (!preview) notFound();
 
-  const locale = readRequestLocale();
+  const locale = await readRequestLocale();
   const dir = locale === 'ar' ? 'rtl' : 'ltr';
-  const supabase = createClient();
+  const supabase = await createClient();
   const { data } = await supabase.auth.getClaims();
   const signedIn = Boolean(data?.claims.sub);
   const importHref = signedIn ? `/import/${preview.shareCode}` : `/?import=${encodeURIComponent(preview.shareCode)}`;

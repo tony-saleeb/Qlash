@@ -3,8 +3,8 @@ import { BrandMark } from '@/components/brand/BrandMark';
 import { readRequestLocale } from '@/lib/i18n/requestLocale';
 import { t } from '@/lib/i18n/messages';
 
-export default function PodiumNotFound() {
-  const locale = readRequestLocale();
+export default async function PodiumNotFound() {
+  const locale = await readRequestLocale();
   return (
     <div className="flex min-h-dvh flex-col items-center justify-center bg-arena-canvas px-6 text-center">
       <BrandMark size="sm" />
