@@ -5,7 +5,7 @@ import {
   tooManyIfPlayerHydrateLimited,
   tooManyRequests,
 } from '@/lib/api/playerLimit';
-import { sanitizeAnswers, type AnswerOption } from '@/lib/game/types';
+import { toPublicAnswers, type AnswerOption } from '@/lib/game/types';
 import { maybeSeededShuffle } from '@/lib/game/shuffle';
 
 export const dynamic = 'force-dynamic';
@@ -92,7 +92,7 @@ export async function POST(request: Request) {
     };
     const randomizeAnswers = Boolean(quizMeta.quizzes?.randomize_answers);
     const answers = maybeSeededShuffle(
-      sanitizeAnswers((question.answers || []) as AnswerOption[]),
+      toPublicAnswers(question.type, (question.answers || []) as AnswerOption[]),
       randomizeAnswers,
       `${sessionId}:${question.id}`
     );

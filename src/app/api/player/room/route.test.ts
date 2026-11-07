@@ -6,12 +6,18 @@ vi.mock('@/lib/supabase/admin', () => ({
   createAdminClient: vi.fn(),
 }));
 
+type RateLimitResult = { ok: boolean; retryAfterSec?: number };
+type RateLimitParams = { key: string; limit: number; windowMs: number };
+
 const { rateLimitMock } = vi.hoisted(() => ({
-  rateLimitMock: vi.fn(() => ({ ok: true as const })),
+  rateLimitMock: vi.fn((params: RateLimitParams): RateLimitResult => {
+    void params;
+    return { ok: true };
+  }),
 }));
 
 vi.mock('@/lib/rate-limit', () => ({
-  rateLimit: (...args: unknown[]) => rateLimitMock(...args),
+  rateLimit: (params: RateLimitParams) => rateLimitMock(params),
   clientIpFromRequest: () => 'test-ip',
 }));
 
@@ -34,6 +40,13 @@ describe('POST /api/player/room', () => {
     expect(result.status).toBe(200);
     expect(result.body).toEqual({ teamMode: true });
     expect(result.body.sessionId).toBeUndefined();
+    const sessionCall = admin.fromCalls.find((entry) => entry.table === 'game_sessions');
+    const captured = (
+      sessionCall?.chain as { _captured?: { method: string; args: unknown[] }[] }
+    )._captured;
+    expect(captured).toEqual(
+      expect.arrayContaining([{ method: 'neq', args: ['status', 'finished'] }])
+    );
   });
 
   it('returns teamMode false for an unknown PIN', async () => {

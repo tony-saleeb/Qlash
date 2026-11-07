@@ -8,8 +8,9 @@ export const alt = 'Qlash class podium';
 export const size = { width: 1200, height: 630 };
 export const contentType = 'image/png';
 
-export default async function PodiumOg({ params }: { params: { sessionId: string } }) {
-  const podium = await getFinishedPodium(params.sessionId);
+export default async function PodiumOg({ params }: { params: Promise<{ sessionId: string }> }) {
+  const { sessionId } = await params;
+  const podium = await getFinishedPodium(sessionId);
   const title = ogSafeText(podium?.quizTitle, 'Class podium');
   const places = (podium?.top ?? []).map((place, index) => ({
     rank: index + 1,

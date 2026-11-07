@@ -15,10 +15,11 @@ import { metadataBaseUrl } from '@/lib/siteUrl';
 
 export const dynamic = 'force-dynamic';
 
-type PageProps = { params: { code: string } };
+type PageProps = { params: Promise<{ code: string }> };
 
 export async function generateMetadata({ params }: PageProps): Promise<Metadata> {
-  const preview = await getSharedQuizPreview(params.code);
+  const { code } = await params;
+  const preview = await getSharedQuizPreview(code);
   if (!preview) {
     return { title: 'Qlash', robots: { index: false } };
   }
@@ -36,17 +37,16 @@ export async function generateMetadata({ params }: PageProps): Promise<Metadata>
 }
 
 export default async function SharedQuizPage({ params }: PageProps) {
-  const preview = await getSharedQuizPreview(params.code);
+  const { code } = await params;
+  const preview = await getSharedQuizPreview(code);
   if (!preview) notFound();
 
-  const locale = readRequestLocale();
+  const locale = await readRequestLocale();
   const dir = locale === 'ar' ? 'rtl' : 'ltr';
-  const supabase = createClient();
-  const {
-    data: { session },
-  } = await supabase.auth.getSession();
-  const user = session?.user;
-  const importHref = user ? `/import/${preview.shareCode}` : `/?import=${encodeURIComponent(preview.shareCode)}`;
+  const supabase = await createClient();
+  const { data } = await supabase.auth.getClaims();
+  const signedIn = Boolean(data?.claims.sub);
+  const importHref = signedIn ? `/import/${preview.shareCode}` : `/?import=${encodeURIComponent(preview.shareCode)}`;
   const url = quizPreviewUrl(metadataBaseUrl().origin, preview.shareCode);
   const whatsapp = whatsAppShareUrl(quizShareText(locale, preview.title, preview.questionCount, url));
 
@@ -54,7 +54,7 @@ export default async function SharedQuizPage({ params }: PageProps) {
     <div dir={dir} className="arena-noise relative flex min-h-dvh flex-col bg-arena-canvas text-arena-ink">
       <header className="flex items-center justify-between border-b-2 border-arena-ink bg-white px-4 py-3 sm:px-6">
         <BrandMark size="sm" />
-        <Link href="/" className="text-xs font-bold uppercase tracking-wider text-arena-ink/50">
+        <Link href="/" className="text-xs font-bold uppercase tracking-wider text-arena-ink/60">
           {t(locale, 'backHome')}
         </Link>
       </header>
@@ -68,7 +68,7 @@ export default async function SharedQuizPage({ params }: PageProps) {
             {preview.description}
           </p>
         ) : null}
-        <p className="mt-4 text-sm font-semibold text-arena-ink/50">
+        <p className="mt-4 text-sm font-semibold text-arena-ink/60">
           {preview.questionCount} {t(locale, 'questionsWord')}
           {preview.teamMode ? ` · ${t(locale, 'teamMode')}` : ''}
         </p>

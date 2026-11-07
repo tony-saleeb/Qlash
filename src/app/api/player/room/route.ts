@@ -31,6 +31,7 @@ export async function POST(request: Request) {
       .from('game_sessions')
       .select('quizzes(team_mode)')
       .eq('pin', pin)
+      .neq('status', 'finished')
       .maybeSingle();
 
     const quiz = session as { quizzes: { team_mode: boolean } | { team_mode: boolean }[] | null } | null;

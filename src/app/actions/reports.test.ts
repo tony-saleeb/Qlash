@@ -20,8 +20,7 @@ describe('getSessionReport', () => {
   });
 
   it('rejects unauthenticated hosts', async () => {
-    host.auth.getSession.mockResolvedValue({ data: { session: null } });
-    host.auth.getUser.mockResolvedValue({ data: { user: null }, error: { message: 'no' } });
+    host.auth.getClaims.mockResolvedValue({ data: null, error: { message: 'no' } });
     await expect(getSessionReport('s1')).rejects.toThrow(/Unauthorized/);
   });
 

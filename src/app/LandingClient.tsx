@@ -11,7 +11,7 @@ import { Label } from '@/components/ui/label';
 import { toast } from 'sonner';
 import { User } from '@supabase/supabase-js';
 import { ArenaFloor, BrandMark } from '@/components/brand/BrandMark';
-import { authCallbackUrl } from '@/lib/siteUrl';
+import { authCallbackUrl, publicSiteUrl } from '@/lib/siteUrl';
 import { unlockGameAudio } from '@/lib/sounds';
 import { LocaleToggle } from '@/components/brand/LocaleToggle';
 import { useLocale } from '@/lib/i18n/useLocale';
@@ -135,21 +135,19 @@ export default function LandingClient({ initialLocale }: { initialLocale?: Local
           setAuthLoading(false);
           return;
         }
-        const registerRes = await fetch('/api/host/register', {
-          method: 'POST',
-          headers: { 'Content-Type': 'application/json' },
-          body: JSON.stringify({
-            email,
-            password,
-            displayName: displayName.trim(),
-          }),
+        const { data, error } = await supabase.auth.signUp({
+          email,
+          password,
+          options: {
+            data: { display_name: displayName.trim() },
+            emailRedirectTo: `${publicSiteUrl() || window.location.origin}/auth/confirm?next=/dashboard`,
+          },
         });
-        const registerBody = (await registerRes.json().catch(() => ({}))) as { error?: string };
-        if (!registerRes.ok) {
-          throw new Error(registerBody.error || 'Could not create account.');
-        }
-        const { error, data } = await supabase.auth.signInWithPassword({ email, password });
         if (error) throw error;
+        if (!data.session) {
+          toast.success(t('confirmEmailSent'));
+          return;
+        }
         enterHost(data.user, t('accountReady'));
       }
     } catch (error) {
@@ -258,7 +256,7 @@ export default function LandingClient({ initialLocale }: { initialLocale?: Local
                   type="button"
                   onClick={() => setPanel('join')}
                   className={`flex-1 min-h-12 py-3.5 text-center font-display text-sm font-extrabold uppercase tracking-wide transition ${
-                    panel === 'join' ? 'bg-arena-ink text-white' : 'bg-white text-arena-ink/40 hover:text-arena-ink'
+                    panel === 'join' ? 'bg-arena-ink text-white' : 'bg-white text-arena-ink/60 hover:text-arena-ink'
                   }`}
                 >
                   {t('playerTab')}
@@ -267,7 +265,7 @@ export default function LandingClient({ initialLocale }: { initialLocale?: Local
                   type="button"
                   onClick={() => setPanel('host')}
                   className={`flex-1 min-h-12 border-s-2 border-arena-ink py-3.5 text-center font-display text-sm font-extrabold uppercase tracking-wide transition ${
-                    panel === 'host' ? 'bg-arena-ink text-white' : 'bg-white text-arena-ink/40 hover:text-arena-ink'
+                    panel === 'host' ? 'bg-arena-ink text-white' : 'bg-white text-arena-ink/60 hover:text-arena-ink'
                   }`}
                 >
                   {t('hostTab')}
@@ -278,7 +276,7 @@ export default function LandingClient({ initialLocale }: { initialLocale?: Local
                 {panel === 'join' ? (
                   <form onSubmit={handlePlayerJoin} className="space-y-4">
                     <div>
-                      <Label htmlFor="pin" className="text-[11px] font-bold uppercase tracking-[0.18em] text-arena-ink/45">
+                      <Label htmlFor="pin" className="text-[11px] font-bold uppercase tracking-[0.18em] text-arena-ink/60">
                         {t('gamePin')}
                       </Label>
                       <Input
@@ -293,7 +291,7 @@ export default function LandingClient({ initialLocale }: { initialLocale?: Local
                       />
                     </div>
                     <div>
-                      <Label htmlFor="nickname" className="text-[11px] font-bold uppercase tracking-[0.18em] text-arena-ink/45">
+                      <Label htmlFor="nickname" className="text-[11px] font-bold uppercase tracking-[0.18em] text-arena-ink/60">
                         {t('nickname')}
                       </Label>
                       <Input
@@ -330,7 +328,7 @@ export default function LandingClient({ initialLocale }: { initialLocale?: Local
                   </form>
                 ) : currentHost ? (
                   <div className="space-y-4 text-center">
-                    <p className="text-[11px] font-bold uppercase tracking-[0.18em] text-arena-ink/40">{t('signedIn')}</p>
+                    <p className="text-[11px] font-bold uppercase tracking-[0.18em] text-arena-ink/60">{t('signedIn')}</p>
                     <p className="truncate font-display text-lg font-bold">{currentHost.email}</p>
                     <Link
                       href="/dashboard"
@@ -346,7 +344,7 @@ export default function LandingClient({ initialLocale }: { initialLocale?: Local
                         setCurrentHost(null);
                         toast.success(t('signedOutToast'));
                       }}
-                      className="text-xs font-semibold text-arena-ink/45 underline-offset-4 hover:underline"
+                      className="text-xs font-semibold text-arena-ink/60 underline-offset-4 hover:underline"
                     >
                       {t('signOut')}
                     </button>
@@ -380,7 +378,7 @@ export default function LandingClient({ initialLocale }: { initialLocale?: Local
                     </Button>
                     <div className="flex items-center gap-3">
                       <div className="h-px flex-1 bg-arena-line" />
-                      <span className="text-[10px] font-bold uppercase tracking-widest text-arena-ink/35">{t('orEmail')}</span>
+                      <span className="text-[10px] font-bold uppercase tracking-widest text-arena-ink/60">{t('orEmail')}</span>
                       <div className="h-px flex-1 bg-arena-line" />
                     </div>
                     <form onSubmit={handleHostAuth} className="space-y-3">
@@ -418,7 +416,7 @@ export default function LandingClient({ initialLocale }: { initialLocale?: Local
                       <button
                         type="button"
                         onClick={() => setAuthMode(authMode === 'login' ? 'signup' : 'login')}
-                        className="w-full text-center text-xs font-semibold text-arena-ink/50 underline-offset-4 hover:underline"
+                        className="w-full text-center text-xs font-semibold text-arena-ink/60 underline-offset-4 hover:underline"
                       >
                         {authMode === 'login' ? t('needAccount') : t('haveAccount')}
                       </button>

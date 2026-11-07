@@ -5,13 +5,13 @@ import QuizEditorClient from '@/app/dashboard/quizzes/[id]/edit/QuizEditorClient
 export const dynamic = 'force-dynamic';
 
 interface EditQuizPageProps {
-  params: {
+  params: Promise<{
     id: string;
-  };
+  }>;
 }
 
 export default async function EditQuizPage({ params }: EditQuizPageProps) {
-  const { id: quizId } = params;
+  const { id: quizId } = await params;
   const { supabase, user } = await readHostAuth();
   if (!user) {
     redirect('/');

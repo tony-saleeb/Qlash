@@ -93,18 +93,11 @@ export async function POST(request: Request) {
       return NextResponse.json({ error: 'Internal Server Error' }, { status: 500 });
     }
 
-    const result = data as {
-      success?: boolean;
-      duplicate?: boolean;
-      pointsAwarded?: number;
-      isCorrect?: boolean;
-    } | null;
+    const result = data as { duplicate?: boolean } | null;
     return NextResponse.json({
       success: true,
-      message: result?.duplicate ? 'Answer already recorded.' : 'Answer submitted successfully.',
       duplicate: Boolean(result?.duplicate),
-      pointsAwarded: result?.pointsAwarded ?? 0,
-      isCorrect: Boolean(result?.isCorrect),
+      message: result?.duplicate ? 'Answer already recorded.' : 'Answer submitted successfully.',
     });
   } catch (err: unknown) {
     console.error('Answer submission error:', err);

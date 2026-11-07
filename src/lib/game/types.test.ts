@@ -3,6 +3,7 @@ import {
   buildQuestionStartPayload,
   correctAnswerIds,
   sanitizeAnswers,
+  toPublicAnswers,
   toPublicQuestion,
   type Question,
 } from '@/lib/game/types';
@@ -56,6 +57,20 @@ describe('toPublicQuestion', () => {
     });
     expect(payload).not.toHaveProperty('points_base');
     expect(payload).not.toHaveProperty('scoring_type');
+  });
+});
+
+describe('toPublicAnswers', () => {
+  it('hides accepted text for type_answer and keeps mcq text', () => {
+    const typed: Question = {
+      ...question,
+      type: 'type_answer',
+      answers: [{ id: 'a', text: 'Paris;paris city', color: '#1368ce', shape: 'diamond', is_correct: true }],
+    };
+    expect(toPublicAnswers('type_answer', typed.answers)).toEqual([]);
+    expect(toPublicQuestion(typed).answers).toEqual([]);
+    expect(buildQuestionStartPayload(typed, 0, '2026-08-13T20:00:00.000Z').answers).toEqual([]);
+    expect(toPublicAnswers('mcq', question.answers)[0]?.text).toBe('Paris');
   });
 });
 

@@ -1,4 +1,3 @@
-import type { User } from '@supabase/supabase-js';
 import { createClient } from '@/lib/supabase/server';
 import type { Player, Question, GameSessionRow } from '@/lib/game/types';
 import { parseCreatedSession, toGameSessionRow } from '@/lib/host/createLobbySession';
@@ -28,7 +27,7 @@ export type HostRoomPayload = {
   players: Player[];
 };
 
-type HostClient = ReturnType<typeof createClient>;
+type HostClient = Awaited<ReturnType<typeof createClient>>;
 
 function asPlayers(value: unknown): Player[] {
   if (!Array.isArray(value)) return [];
@@ -58,7 +57,7 @@ type NestedSessionRow = Record<string, unknown> & {
 
 export async function loadHostRoom(
   supabase: HostClient,
-  user: User,
+  user: { id: string },
   sessionId: string
 ): Promise<HostRoomPayload | null> {
   const { data, error } = await supabase

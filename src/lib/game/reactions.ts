@@ -13,7 +13,7 @@ export const LOBBY_REACTION_MARKS: {
   { id: 'chevron', color: '#0a6b5c', colorClass: 'bg-arena-court', markClass: 'text-white' },
 ];
 
-export const REACTION_COOLDOWN_MS = 650;
+export const REACTION_COOLDOWN_MS = 1500;
 export const MAX_FLOATING_REACTIONS = 36;
 export const REACTION_FLOAT_MS = 2400;
 

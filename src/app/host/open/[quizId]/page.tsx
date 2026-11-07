@@ -5,13 +5,13 @@ import { createLiveLobby } from '@/lib/host/createLiveLobby';
 export const dynamic = 'force-dynamic';
 
 interface OpenHostPageProps {
-  params: {
+  params: Promise<{
     quizId: string;
-  };
+  }>;
 }
 
 export default async function OpenHostPage({ params }: OpenHostPageProps) {
-  const { quizId } = params;
+  const { quizId } = await params;
   if (!quizId) {
     redirect('/dashboard');
   }

@@ -32,13 +32,15 @@ export function useSessionChannel(
   onEventsRef.current = options?.onEvents;
   const [ready, setReady] = useState(false);
   const readyRef = useRef(false);
+  const deniedRef = useRef(false);
 
   useEffect(() => {
     if (!sessionId) return;
 
     const client = supabaseRef.current;
-    const channel = client.channel(`session_channel_${sessionId}`, {
-      config: { broadcast: { ack: false } },
+    deniedRef.current = false;
+    const channel = client.channel(`session:${sessionId}`, {
+      config: { private: true, broadcast: { ack: false } },
     });
     channelRef.current = channel;
     setReady(false);
@@ -54,7 +56,20 @@ export function useSessionChannel(
       });
     }
 
-    channel.subscribe((status) => {
+    channel.subscribe((status, err) => {
+      if (status === 'CHANNEL_ERROR') {
+        readyRef.current = false;
+        setReady(false);
+        if (!deniedRef.current) {
+          deniedRef.current = true;
+          const message =
+            err && typeof err === 'object' && 'message' in err
+              ? String(err.message)
+              : 'session channel CHANNEL_ERROR';
+          console.warn(message);
+        }
+        return;
+      }
       const isReady = status === 'SUBSCRIBED';
       readyRef.current = isReady;
       setReady(isReady);
@@ -62,6 +77,7 @@ export function useSessionChannel(
 
     return () => {
       readyRef.current = false;
+      deniedRef.current = false;
       setReady(false);
       channelRef.current = null;
       client.removeChannel(channel);
@@ -69,6 +85,7 @@ export function useSessionChannel(
   }, [sessionId]);
 
   const send = useCallback(async (event: string, payload: SessionBroadcastPayload) => {
+    if (deniedRef.current) return { ok: false as const };
     const trySend = async () => {
       if (!channelRef.current) return 'error' as const;
       return channelRef.current.send({

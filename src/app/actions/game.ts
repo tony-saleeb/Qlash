@@ -3,21 +3,6 @@
 import { getHostAuth } from '@/lib/supabase/hostAuth';
 import { createLiveLobby } from '@/lib/host/createLiveLobby';
 
-async function stampQuestionClock(
-  supabase: Awaited<ReturnType<typeof getHostAuth>>['supabase'],
-  sessionId: string
-): Promise<string> {
-  const { data, error } = await supabase.rpc('start_question_clock', {
-    p_session_id: sessionId,
-  });
-  if (error || (typeof data !== 'string' && !(data instanceof Date))) {
-    throw new Error(
-      error?.message || 'Unable to start the question clock. Run schema-p10-late-grading.sql.'
-    );
-  }
-  return typeof data === 'string' ? data : data.toISOString();
-}
-
 async function applyScoresBeforeAdvance(
   supabase: Awaited<ReturnType<typeof getHostAuth>>['supabase'],
   sessionId: string,
@@ -244,33 +229,24 @@ export async function goToLeaderboard(sessionId: string) {
 /** Start first question from lobby (host-authenticated). */
 export async function startGameSession(sessionId: string, questionOrder: string[]) {
   try {
-    const { supabase, user } = await getHostAuth();
+    const { supabase } = await getHostAuth();
 
     if (!Array.isArray(questionOrder) || questionOrder.length === 0) {
       throw new Error('Question order is required to start the game.');
     }
 
-    const { data, error } = await supabase
-      .from('game_sessions')
-      .update({
-        status: 'question_active',
-        current_question_index: 0,
-        active_multiplier: 1,
-        scores_applied_question_id: null,
-        question_order: questionOrder,
-      })
-      .eq('id', sessionId)
-      .eq('host_id', user.id)
-      .eq('status', 'lobby')
-      .select('id, status')
-      .single();
+    const { data, error } = await supabase.rpc('start_game', {
+      p_session_id: sessionId,
+      p_question_order: questionOrder,
+    });
 
-    if (error || !data) {
-      throw new Error('Unable to start game. Ensure the session is in lobby and you are the host.');
+    if (error || typeof data !== 'string') {
+      throw new Error(
+        error?.message || 'Unable to start game. Ensure the session is in lobby and you are the host.'
+      );
     }
 
-    const serverStartedAt = await stampQuestionClock(supabase, sessionId);
-    return { success: true, serverStartedAt };
+    return { success: true, serverStartedAt: data };
   } catch (err) {
     console.error('startGameSession error:', err);
     throw new Error(err instanceof Error ? err.message : 'Failed to start game.');
@@ -279,34 +255,11 @@ export async function startGameSession(sessionId: string, questionOrder: string[
 
 export async function pauseGameSession(sessionId: string) {
   try {
-    const { supabase, user } = await getHostAuth();
-
-    const { data: session, error: fetchError } = await supabase
-      .from('game_sessions')
-      .select('id, status, question_started_at')
-      .eq('id', sessionId)
-      .eq('host_id', user.id)
-      .single();
-
-    if (fetchError || !session) throw new Error('Unauthorized or session not found.');
-    if (session.status !== 'question_active' || !session.question_started_at) {
-      throw new Error('Game is not in an active question state.');
+    const { supabase } = await getHostAuth();
+    const { error } = await supabase.rpc('pause_question', { p_session_id: sessionId });
+    if (error) {
+      throw new Error(error.message || 'Game is not in an active question state.');
     }
-
-    const startedAt = new Date(session.question_started_at).getTime();
-    const elapsed = Date.now() - startedAt;
-    const pausedStartedAt = new Date(elapsed).toISOString();
-
-    const { error } = await supabase
-      .from('game_sessions')
-      .update({
-        status: 'question_paused',
-        question_started_at: pausedStartedAt,
-      })
-      .eq('id', sessionId)
-      .eq('host_id', user.id);
-
-    if (error) throw error;
     return { success: true };
   } catch (err) {
     console.error('pauseGameSession error:', err);
@@ -316,34 +269,12 @@ export async function pauseGameSession(sessionId: string) {
 
 export async function resumeGameSession(sessionId: string) {
   try {
-    const { supabase, user } = await getHostAuth();
-
-    const { data: session, error: fetchError } = await supabase
-      .from('game_sessions')
-      .select('id, status, question_started_at')
-      .eq('id', sessionId)
-      .eq('host_id', user.id)
-      .single();
-
-    if (fetchError || !session) throw new Error('Unauthorized or session not found.');
-    if (session.status !== 'question_paused' || !session.question_started_at) {
-      throw new Error('Game is not paused.');
+    const { supabase } = await getHostAuth();
+    const { data, error } = await supabase.rpc('resume_question', { p_session_id: sessionId });
+    if (error || typeof data !== 'string') {
+      throw new Error(error?.message || 'Game is not paused.');
     }
-
-    const elapsed = new Date(session.question_started_at).getTime();
-    const newStartedAt = new Date(Date.now() - elapsed).toISOString();
-
-    const { error } = await supabase
-      .from('game_sessions')
-      .update({
-        status: 'question_active',
-        question_started_at: newStartedAt,
-      })
-      .eq('id', sessionId)
-      .eq('host_id', user.id);
-
-    if (error) throw error;
-    return { success: true, serverStartedAt: newStartedAt };
+    return { success: true, serverStartedAt: data };
   } catch (err) {
     console.error('resumeGameSession error:', err);
     throw new Error(err instanceof Error ? err.message : 'Failed to resume game.');
@@ -353,40 +284,15 @@ export async function resumeGameSession(sessionId: string) {
 /** Add seconds to the current question clock (default +10s). */
 export async function addQuestionTime(sessionId: string, extraSeconds = 10) {
   try {
-    const { supabase, user } = await getHostAuth();
-    const ms = Math.max(1, extraSeconds) * 1000;
-
-    const { data: session, error: fetchError } = await supabase
-      .from('game_sessions')
-      .select('id, status, question_started_at')
-      .eq('id', sessionId)
-      .eq('host_id', user.id)
-      .single();
-
-    if (fetchError || !session) throw new Error('Unauthorized or session not found.');
-    if (!session.question_started_at) throw new Error('No active question clock.');
-    if (!['question_active', 'question_paused'].includes(session.status)) {
-      throw new Error('Cannot add time in the current state.');
+    const { supabase } = await getHostAuth();
+    const { data, error } = await supabase.rpc('add_question_time', {
+      p_session_id: sessionId,
+      p_seconds: extraSeconds,
+    });
+    if (error || typeof data !== 'string') {
+      throw new Error(error?.message || 'Cannot add time in the current state.');
     }
-
-    let newStartedAt: string;
-    if (session.status === 'question_paused') {
-      const elapsed = new Date(session.question_started_at).getTime();
-      const newElapsed = Math.max(0, elapsed - ms);
-      newStartedAt = new Date(newElapsed).toISOString();
-    } else {
-      const startedAt = new Date(session.question_started_at).getTime();
-      newStartedAt = new Date(startedAt + ms).toISOString();
-    }
-
-    const { error } = await supabase
-      .from('game_sessions')
-      .update({ question_started_at: newStartedAt })
-      .eq('id', sessionId)
-      .eq('host_id', user.id);
-
-    if (error) throw error;
-    return { success: true, serverStartedAt: newStartedAt, addedSeconds: extraSeconds };
+    return { success: true, serverStartedAt: data, addedSeconds: extraSeconds };
   } catch (err) {
     console.error('addQuestionTime error:', err);
     throw new Error(err instanceof Error ? err.message : 'Failed to add time.');
@@ -397,22 +303,14 @@ export async function goToNextQuestion(sessionId: string, nextIndex: number) {
   try {
     const { supabase, user } = await getHostAuth();
     await applyScoresBeforeAdvance(supabase, sessionId, user.id);
-    const { data, error } = await supabase
-      .from('game_sessions')
-      .update({
-        status: 'question_active',
-        current_question_index: nextIndex,
-        active_multiplier: 1,
-        scores_applied_question_id: null,
-      })
-      .eq('id', sessionId)
-      .eq('host_id', user.id)
-      .select('id')
-      .single();
-
-    if (error || !data) throw error || new Error('Failed to open next question.');
-    const serverStartedAt = await stampQuestionClock(supabase, sessionId);
-    return { success: true, serverStartedAt };
+    const { data, error } = await supabase.rpc('advance_question', {
+      p_session_id: sessionId,
+      p_index: nextIndex,
+    });
+    if (error || typeof data !== 'string') {
+      throw new Error(error?.message || 'Failed to open next question.');
+    }
+    return { success: true, serverStartedAt: data };
   } catch (err) {
     console.error('goToNextQuestion error:', err);
     throw new Error(err instanceof Error ? err.message : 'Failed to open next question.');

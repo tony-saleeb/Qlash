@@ -100,8 +100,7 @@ describe('quiz library actions', () => {
   });
 
   it('rejects unauthenticated library access', async () => {
-    host.auth.getSession.mockResolvedValue({ data: { session: null } });
-    host.auth.getUser.mockResolvedValue({ data: { user: null }, error: { message: 'no' } });
+    host.auth.getClaims.mockResolvedValue({ data: null, error: { message: 'no' } });
     const { createQuiz } = await import('@/app/actions/quizzes');
     await expect(createQuiz('Clash')).rejects.toThrow(/Unauthorized/);
   });

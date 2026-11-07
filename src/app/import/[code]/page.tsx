@@ -6,16 +6,17 @@ import { BrandMark } from '@/components/brand/BrandMark';
 
 export const dynamic = 'force-dynamic';
 
-export default async function ImportQuizPage({ params }: { params: { code: string } }) {
+export default async function ImportQuizPage({ params }: { params: Promise<{ code: string }> }) {
+  const { code } = await params;
   const { user } = await readHostAuth();
 
   if (!user) {
-    redirect(`/?import=${encodeURIComponent(params.code)}`);
+    redirect(`/?import=${encodeURIComponent(code)}`);
   }
 
   let quiz;
   try {
-    quiz = await importSharedQuiz(params.code);
+    quiz = await importSharedQuiz(code);
   } catch (err: unknown) {
     const message = err instanceof Error ? err.message : 'Could not import that quiz.';
     return (

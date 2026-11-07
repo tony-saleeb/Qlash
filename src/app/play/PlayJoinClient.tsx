@@ -104,7 +104,7 @@ export default function PlayJoinClient({ initialLocale }: { initialLocale?: Loca
 
       <main className="relative z-10 mx-auto flex w-full max-w-md flex-1 flex-col justify-center px-6 pb-16">
         <div className="arena-panel motion-rise p-6 sm:p-8">
-          <p className="text-[11px] font-bold uppercase tracking-[0.22em] text-arena-ink/40">{t('join')}</p>
+          <p className="text-[11px] font-bold uppercase tracking-[0.22em] text-arena-ink/60">{t('join')}</p>
           <h1 className="mt-1 font-display text-3xl font-extrabold tracking-tight text-arena-ink">{t('jumpIn')}</h1>
           <p className="mt-2 text-sm font-medium text-arena-ink/55">
             {inviteLocked ? t('inviteOnlyHint') : t('joinHint')}
@@ -118,7 +118,7 @@ export default function PlayJoinClient({ initialLocale }: { initialLocale?: Loca
           <form onSubmit={handlePlayerJoin} className="mt-6 space-y-4">
             {!inviteLocked && (
               <div>
-                <Label htmlFor="pin" className="text-[11px] font-bold uppercase tracking-[0.18em] text-arena-ink/45">
+                <Label htmlFor="pin" className="text-[11px] font-bold uppercase tracking-[0.18em] text-arena-ink/60">
                   {t('gamePin')}
                 </Label>
                 <Input
@@ -134,7 +134,7 @@ export default function PlayJoinClient({ initialLocale }: { initialLocale?: Loca
               </div>
             )}
             <div>
-              <Label htmlFor="nickname" className="text-[11px] font-bold uppercase tracking-[0.18em] text-arena-ink/45">
+              <Label htmlFor="nickname" className="text-[11px] font-bold uppercase tracking-[0.18em] text-arena-ink/60">
                 {t('nickname')}
               </Label>
               <Input

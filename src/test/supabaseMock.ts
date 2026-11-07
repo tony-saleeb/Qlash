@@ -53,7 +53,32 @@ export function createQueryChain(getResult: () => QueryResult) {
   return chain;
 }
 
-export function createClientMock(user = { id: 'host-1', email: 'host@qlash.test' }) {
+type MockUser = { id: string; email?: string } | null;
+
+function claimsResult(user: MockUser) {
+  if (!user) return { data: null, error: { message: 'Unauthorized' } };
+  return {
+    data: {
+      claims: { sub: user.id, email: user.email ?? null },
+      header: { alg: 'ES256' },
+      signature: new Uint8Array(),
+    },
+    error: null,
+  };
+}
+
+type AuthUserResult = {
+  data: { user: MockUser };
+  error: { message: string } | null;
+};
+
+type AuthSessionResult = {
+  data: { session: { user: { id: string; email?: string } } | null };
+};
+
+export function createClientMock(
+  user: MockUser = { id: 'host-1', email: 'host@qlash.test' }
+) {
   const tables: Record<string, TableQueue> = {};
   const indexes: Record<string, number> = {};
   const rpcMap: Record<string, QueryResult | ((args: unknown) => QueryResult)> = {};
@@ -104,10 +129,11 @@ export function createClientMock(user = { id: 'host-1', email: 'host@qlash.test'
     removeChannel: vi.fn(),
     fromCalls,
     auth: {
-      getSession: vi.fn(async () => ({
+      getSession: vi.fn(async (): Promise<AuthSessionResult> => ({
         data: { session: user ? { user } : null },
       })),
-      getUser: vi.fn(async () => ({
+      getClaims: vi.fn(async () => claimsResult(user)),
+      getUser: vi.fn(async (): Promise<AuthUserResult> => ({
         data: { user },
         error: user ? null : { message: 'Unauthorized' },
       })),
@@ -156,6 +182,8 @@ export function createClientMock(user = { id: 'host-1', email: 'host@qlash.test'
       this.auth.getSession.mockResolvedValue({
         data: { session: user ? { user } : null },
       });
+      this.auth.getClaims.mockReset();
+      this.auth.getClaims.mockResolvedValue(claimsResult(user));
     },
   };
 }

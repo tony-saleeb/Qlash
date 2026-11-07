@@ -1,6 +1,6 @@
 ---
 description: Stay on the Qlash growth sequence. Do not invent a different roadmap.
-alwaysApply: true
+alwaysApply: false
 ---
 
 # Qlash growth rails

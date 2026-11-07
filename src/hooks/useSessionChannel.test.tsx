@@ -17,8 +17,10 @@ describe('useSessionChannel', () => {
 
     await waitFor(() => expect(result.current.ready).toBe(true));
     expect(supabase.channel).toHaveBeenCalledWith(
-      'session_channel_sess-1',
-      expect.objectContaining({ config: { broadcast: { ack: false } } })
+      'session:sess-1',
+      expect.objectContaining({
+        config: { private: true, broadcast: { ack: false } },
+      })
     );
 
     await result.current.send('host:skip', { reason: 'test' });

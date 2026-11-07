@@ -54,7 +54,11 @@ export async function POST(request: Request) {
     }
 
     if (session.status !== 'finished') {
-      void admin.from('players').update({ connected: true }).eq('id', player.id);
+      const { error: presenceError } = await admin
+        .from('players')
+        .update({ connected: true })
+        .eq('id', player.id);
+      if (presenceError) console.error('presence update failed:', presenceError);
     }
 
     return NextResponse.json({

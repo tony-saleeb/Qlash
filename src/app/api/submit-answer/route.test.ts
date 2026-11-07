@@ -6,13 +6,20 @@ vi.mock('@/lib/supabase/admin', () => ({
   createAdminClient: vi.fn(),
 }));
 
+type RateLimitResult = { ok: boolean; retryAfterSec?: number };
+type RateLimitParams = { key: string; limit: number; windowMs: number };
+type ShardedRateLimitParams = RateLimitParams & { seed: string; shards?: number };
+
 const { rateLimitMock } = vi.hoisted(() => ({
-  rateLimitMock: vi.fn(() => ({ ok: true as const })),
+  rateLimitMock: vi.fn((params: RateLimitParams | ShardedRateLimitParams): RateLimitResult => {
+    void params;
+    return { ok: true };
+  }),
 }));
 
 vi.mock('@/lib/rate-limit', () => ({
-  rateLimit: (...args: unknown[]) => rateLimitMock(...args),
-  rateLimitSharded: (...args: unknown[]) => rateLimitMock(...args),
+  rateLimit: (params: RateLimitParams) => rateLimitMock(params),
+  rateLimitSharded: (params: ShardedRateLimitParams) => rateLimitMock(params),
   clientIpFromRequest: () => 'test-ip',
 }));
 
@@ -90,7 +97,7 @@ describe('POST /api/submit-answer', () => {
     expect(result.body.error).toMatch(/schema-fast-submit/);
   });
 
-  it('returns points and duplicate flag from a successful RPC', async () => {
+  it('returns only success, duplicate, and message from a successful RPC', async () => {
     admin.setRpc('submit_live_answer', {
       data: { success: true, duplicate: true, pointsAwarded: 750, isCorrect: true },
       error: null,
@@ -98,13 +105,13 @@ describe('POST /api/submit-answer', () => {
     const { POST } = await import('@/app/api/submit-answer/route');
     const result = await readJson(await POST(jsonRequest(validBody)));
     expect(result.status).toBe(200);
-    expect(result.body).toMatchObject({
+    expect(result.body).toEqual({
       success: true,
       duplicate: true,
-      pointsAwarded: 750,
-      isCorrect: true,
       message: 'Answer already recorded.',
     });
+    expect(result.body).not.toHaveProperty('isCorrect');
+    expect(result.body).not.toHaveProperty('pointsAwarded');
     expect(admin.rpc).toHaveBeenCalledWith('submit_live_answer', {
       p_player_id: 'p1',
       p_token: 'tok',

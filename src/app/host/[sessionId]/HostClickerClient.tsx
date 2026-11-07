@@ -179,7 +179,7 @@ export default function HostClickerClient({
 
   useEffect(() => {
     const channel = supabase
-      .channel(`host_clicker_${session.id}`)
+      .channel(`session:${session.id}:host`, { config: { private: true } })
       .on(
         'postgres_changes',
         { event: '*', schema: 'public', table: 'players', filter: `session_id=eq.${session.id}` },
@@ -301,31 +301,16 @@ export default function HostClickerClient({
   const handlePauseResume = () =>
     run(async () => {
       if (session.status === 'question_paused') {
-        const { serverStartedAt } = await resumeGameSession(session.id);
-        void sendSessionEvent('timer:sync', {
-          status: 'question_active',
-          server_started_at: serverStartedAt,
-          remaining_seconds: activeQuestion
-            ? remainingSeconds(serverStartedAt, activeQuestion.time_limit_seconds)
-            : remaining,
-        });
+        await resumeGameSession(session.id);
       } else {
         await pauseGameSession(session.id);
-        void sendSessionEvent('timer:sync', {
-          status: 'question_paused',
-          remaining_seconds: remaining,
-        });
       }
     });
 
   const handleAddTime = () =>
     run(async () => {
       const { serverStartedAt } = await addQuestionTime(session.id, 10);
-      void sendSessionEvent('timer:sync', {
-        status: session.status,
-        server_started_at: serverStartedAt,
-        remaining_seconds: remaining + 10,
-      });
+      setSession((prev) => ({ ...prev, question_started_at: serverStartedAt }));
     });
 
   const handleReveal = () =>
@@ -333,13 +318,8 @@ export default function HostClickerClient({
       if (revealingRef.current || !activeQuestion) return;
       revealingRef.current = true;
       try {
-        const results = await revealQuestionResults(session.id, activeQuestion.id);
+        await revealQuestionResults(session.id, activeQuestion.id);
         setSession((prev) => ({ ...prev, status: 'question_reveal' }));
-        const correctOptionIds = activeQuestion.answers.filter((ans) => ans.is_correct).map((ans) => ans.id);
-        void sendSessionEvent('question:reveal', {
-          correct_answer_ids: correctOptionIds,
-          option_counts: results.optionCounts,
-        });
       } finally {
         revealingRef.current = false;
       }
@@ -491,7 +471,7 @@ export default function HostClickerClient({
 
       {(session.status === 'question_active' || session.status === 'question_paused') && activeQuestion && (
         <div className="mt-5 flex flex-1 flex-col gap-4">
-          <p className="text-[11px] font-bold uppercase tracking-[0.2em] text-white/45">
+          <p className="text-[11px] font-bold uppercase tracking-[0.2em] text-white/50">
             {t('questionLabel')} {session.current_question_index + 1} {t('ofWord')}{' '}
             {sessionQuestionCount(session.question_order, playQuestions.length)}
             {session.status === 'question_paused' ? ` · ${t('paused')}` : ''}
@@ -517,7 +497,7 @@ export default function HostClickerClient({
               waiting.map((player) => (
                 <li key={player.id} dir="auto" className="truncate text-sm font-bold">
                   {player.nickname}
-                  {!isPlayerConnected(player) ? <span className="ml-2 text-xs font-medium text-white/35">{t('offline')}</span> : null}
+                  {!isPlayerConnected(player) ? <span className="ml-2 text-xs font-medium text-white/50">{t('offline')}</span> : null}
                 </li>
               ))
             )}

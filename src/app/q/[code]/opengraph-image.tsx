@@ -8,8 +8,9 @@ export const alt = 'Shared Qlash quiz';
 export const size = { width: 1200, height: 630 };
 export const contentType = 'image/png';
 
-export default async function SharedQuizOg({ params }: { params: { code: string } }) {
-  const preview = await getSharedQuizPreview(params.code);
+export default async function SharedQuizOg({ params }: { params: Promise<{ code: string }> }) {
+  const { code } = await params;
+  const preview = await getSharedQuizPreview(code);
   const title = ogSafeText(preview?.title, 'Shared quiz');
   const detail = preview
     ? `${preview.questionCount} questions · Import into ${SITE_NAME}`

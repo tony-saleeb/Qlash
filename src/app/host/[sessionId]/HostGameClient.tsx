@@ -43,7 +43,6 @@ import { useSessionChannel } from '@/hooks/useSessionChannel';
 import { useAutoCloseEmptyLobby } from '@/hooks/useAutoCloseEmptyLobby';
 import {
   buildQuestionStartPayload,
-  sanitizeAnswers,
   type Player,
   type LeaderboardPlayer,
   type Question,
@@ -124,22 +123,6 @@ export default function HostGameClient({
   const { send: sendSessionEvent } = useSessionChannel(initialSession.id, {
     supabase,
     onEvents: {
-      'lobby:react': (msg) => {
-        if (!canCheerOnProjector(sessionStatusRef.current)) return;
-        const mark = msg.payload.mark;
-        const nickname = String(msg.payload.nickname || '').trim().slice(0, 15);
-        if (!isLobbyReactionId(mark) || !nickname) return;
-        const item: FloatingReaction = {
-          id: `${Date.now()}-${Math.random().toString(36).slice(2, 7)}`,
-          mark,
-          nickname,
-          left: reactionLeftPercent(Math.floor(Math.random() * 84)),
-        };
-        setLobbyReactions((prev) => [...prev.slice(-(MAX_FLOATING_REACTIONS - 1)), item]);
-        window.setTimeout(() => {
-          setLobbyReactions((prev) => prev.filter((row) => row.id !== item.id));
-        }, REACTION_FLOAT_MS);
-      },
       'clash:countdown': () => {
         setClashRunning(true);
       },
@@ -326,22 +309,13 @@ export default function HostGameClient({
       setRevealData(results);
       setSession((prev) => ({ ...prev, status: 'question_reveal' }));
 
-      const correctOptionIds = activeQuestion.answers
-        .filter((ans) => ans.is_correct)
-        .map((ans) => ans.id);
-
-      void sendSessionEvent('question:reveal', {
-        correct_answer_ids: correctOptionIds,
-        option_counts: results.optionCounts,
-      });
-
       toast.success(t('resultsCalculated'), { id: loadingToast });
     } catch (err) {
       toast.error(err instanceof Error ? err.message : t('failedReveal'), { id: loadingToast });
     } finally {
       revealingRef.current = false;
     }
-  }, [session.id, activeQuestion, sendSessionEvent, t]);
+  }, [session.id, activeQuestion, t]);
 
   // One Realtime channel for players, session row, and submissions
   useEffect(() => {
@@ -369,7 +343,7 @@ export default function HostGameClient({
     };
 
     const channel = supabase
-      .channel(`host_live_${session.id}`)
+      .channel(`session:${session.id}:host`, { config: { private: true } })
       .on(
         'postgres_changes',
         {
@@ -477,6 +451,23 @@ export default function HostGameClient({
           }
         }
       )
+      .on('broadcast', { event: 'lobby:react' }, (msg) => {
+        if (!canCheerOnProjector(sessionStatusRef.current)) return;
+        const payload = (msg as { payload?: { mark?: unknown; nickname?: unknown } }).payload;
+        const mark = payload?.mark;
+        const nickname = String(payload?.nickname || '').trim().slice(0, 15);
+        if (!isLobbyReactionId(mark) || !nickname) return;
+        const item: FloatingReaction = {
+          id: `${Date.now()}-${Math.random().toString(36).slice(2, 7)}`,
+          mark,
+          nickname,
+          left: reactionLeftPercent(Math.floor(Math.random() * 84)),
+        };
+        setLobbyReactions((prev) => [...prev.slice(-(MAX_FLOATING_REACTIONS - 1)), item]);
+        window.setTimeout(() => {
+          setLobbyReactions((prev) => prev.filter((row) => row.id !== item.id));
+        }, REACTION_FLOAT_MS);
+      })
       .subscribe();
 
     return () => {
@@ -630,22 +621,10 @@ export default function HostGameClient({
     const isPaused = session.status === 'question_paused';
     try {
       if (isPaused) {
-        const { serverStartedAt } = await resumeGameSession(session.id);
-        void sendSessionEvent('timer:sync', {
-          status: 'question_active',
-          server_started_at: serverStartedAt,
-          remaining_seconds: activeQuestion
-            ? remainingSeconds(serverStartedAt, activeQuestion.time_limit_seconds)
-            : timeLeft,
-        });
+        await resumeGameSession(session.id);
         toast.success(t('gameResumed'));
       } else {
-        const remaining = timeLeft;
         await pauseGameSession(session.id);
-        void sendSessionEvent('timer:sync', {
-          status: 'question_paused',
-          remaining_seconds: remaining,
-        });
         toast.success(t('gamePausedToast'));
       }
     } catch (err) {
@@ -657,13 +636,7 @@ export default function HostGameClient({
     if (!session.question_started_at) return;
     try {
       const { serverStartedAt } = await addQuestionTime(session.id, 10);
-      const remaining = timeLeft + 10;
-      setTimeLeft(remaining);
-      void sendSessionEvent('timer:sync', {
-        status: session.status,
-        server_started_at: serverStartedAt,
-        remaining_seconds: remaining,
-      });
+      setSession((prev) => ({ ...prev, question_started_at: serverStartedAt }));
       toast.success(t('addedTenSeconds'));
     } catch (err) {
       toast.error(err instanceof Error ? err.message : t('failedAddTime'));
@@ -852,8 +825,7 @@ export default function HostGameClient({
       activeQuestion.answers = updatedAnswers;
 
       await sendSessionEvent('question:update', {
-        prompt: editPrompt,
-        answers: sanitizeAnswers(updatedAnswers),
+        question_id: activeQuestion.id,
       });
 
       setIsEditorOpen(false);
@@ -870,8 +842,6 @@ export default function HostGameClient({
     try {
       await setSessionMultiplier(session.id, newState ? 2 : 1);
       setIsMultiplierActive(newState);
-
-      await sendSessionEvent('multiplier:change', { multiplier: newState ? 2 : 1 });
 
       addActivityEntry('multiplier', newState ? t('activityDoubleOn') : t('activityDoubleOff'));
       toast.success(newState ? t('doublePointsActivated') : t('multiplierOffToast'));
@@ -965,7 +935,7 @@ export default function HostGameClient({
             <BrandMark tone="light" size="sm" />
             <div className="hidden min-w-0 border-l border-white/15 pl-4 sm:block">
               <p dir="auto" className="truncate font-display text-sm font-bold text-white">{quiz.title}</p>
-              <p className="text-[11px] font-medium uppercase tracking-[0.18em] text-white/40">{t('liveLobby')}</p>
+              <p className="text-[11px] font-medium uppercase tracking-[0.18em] text-white/50">{t('liveLobby')}</p>
             </div>
           </div>
           <div className="flex flex-wrap items-center justify-end gap-2 sm:gap-3">
@@ -994,7 +964,7 @@ export default function HostGameClient({
             </div>
 
             <div className="mx-auto w-full max-w-md border-2 border-arena-ink bg-white p-3 text-center shadow-[8px_8px_0_rgba(0,0,0,0.35)] sm:p-5 lg:mx-0">
-              <p className="text-[10px] font-bold uppercase tracking-[0.22em] text-arena-ink/40">{t('roomPin')}</p>
+              <p className="text-[10px] font-bold uppercase tracking-[0.22em] text-arena-ink/60">{t('roomPin')}</p>
               <div className="mt-2 sm:mt-3">
                 <PinDisplay pin={session.pin} large />
               </div>
@@ -1062,7 +1032,7 @@ export default function HostGameClient({
                   ))}
                 </div>
                 <p className="font-display text-xl font-bold text-white">{t('waitingForPlayers')}</p>
-                <p className="mt-2 max-w-xs text-xs text-white/40">{t('nicknamesLand')}</p>
+                <p className="mt-2 max-w-xs text-xs text-white/50">{t('nicknamesLand')}</p>
                 <div className="mt-6 flex flex-col gap-2 sm:flex-row">
                   <Button
                     type="button"
@@ -1086,7 +1056,7 @@ export default function HostGameClient({
                       className={`group relative flex items-center gap-2.5 border px-3 py-2.5 transition ${
                         isPlayerConnected(p)
                           ? 'border-white/15 bg-white/10 text-white'
-                          : 'border-white/5 bg-white/[0.03] text-white/35'
+                          : 'border-white/5 bg-white/[0.03] text-white/50'
                       }`}
                     >
                       <span
@@ -1100,7 +1070,7 @@ export default function HostGameClient({
                         type="button"
                         disabled={!!kickingId}
                         onClick={() => handleKickPlayer(p.id, p.nickname)}
-                        className="shrink-0 text-white/35 opacity-0 transition group-hover:opacity-100 hover:text-arena-signal"
+                        className="shrink-0 text-white/50 opacity-0 transition group-hover:opacity-100 hover:text-arena-signal"
                         title={t('kickPlayerAria')}
                         aria-label={t('kickPlayerAria')}
                       >
@@ -1118,7 +1088,7 @@ export default function HostGameClient({
         </main>
 
         <footer className="sticky bottom-0 z-20 flex flex-col items-stretch justify-between gap-3 border-t border-white/10 bg-arena-stage/95 px-4 py-3 pb-[max(0.75rem,env(safe-area-inset-bottom))] backdrop-blur-sm sm:gap-4 sm:px-6 sm:py-5 sm:flex-row sm:items-center lg:static lg:bg-black/20 lg:backdrop-blur-none">
-          <p className="hidden text-center text-xs uppercase tracking-[0.14em] text-white/40 sm:block sm:text-left">
+          <p className="hidden text-center text-xs uppercase tracking-[0.14em] text-white/50 sm:block sm:text-left">
             {t('keepScreenVisible')} <bdi className="text-white font-bold">{session.pin}</bdi>
           </p>
           <div className="flex w-full flex-col gap-2 sm:w-auto sm:flex-row sm:items-center">
@@ -1349,7 +1319,7 @@ export default function HostGameClient({
                       <li key={player.id} className="flex items-center justify-between border border-white/15 bg-white/10 px-3 py-2">
                         <span dir="auto" className="truncate text-sm font-bold">{player.nickname}</span>
                         {!isPlayerConnected(player) ? (
-                          <span className="text-[10px] uppercase tracking-wider text-white/40">{t('offline')}</span>
+                          <span className="text-[10px] uppercase tracking-wider text-white/50">{t('offline')}</span>
                         ) : null}
                       </li>
                     ))
@@ -1581,7 +1551,7 @@ export default function HostGameClient({
                     }`} />
                     <div className="min-w-0">
                       <p className="text-xs text-white/80 font-medium leading-snug">{entry.message}</p>
-                      <p className="text-[9px] text-white/40 mt-0.5">
+                      <p className="text-[9px] text-white/50 mt-0.5">
                         {entry.time.toLocaleTimeString()}
                       </p>
                     </div>

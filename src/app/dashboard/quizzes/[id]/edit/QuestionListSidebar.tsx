@@ -28,7 +28,7 @@ export default function QuestionListSidebar({
   return (
     <aside className="flex flex-col border-b border-arena-line bg-white/40 md:col-span-3 md:max-h-[calc(100dvh-4.5rem)] md:justify-between md:overflow-y-auto md:border-b-0 md:border-r">
       <div className="space-y-3 p-3 md:p-4">
-        <span className="text-xs font-bold uppercase tracking-widest text-arena-ink/45">
+        <span className="text-xs font-bold uppercase tracking-widest text-arena-ink/60">
           Questions
         </span>
 
@@ -52,7 +52,7 @@ export default function QuestionListSidebar({
                     {idx + 1}
                   </span>
                   <div className="flex flex-col min-w-0 w-full gap-0.5">
-                    <span className="text-xs text-arena-ink/45 font-semibold uppercase tracking-wider">
+                    <span className="text-xs text-arena-ink/60 font-semibold uppercase tracking-wider">
                       {q.type.replace('_', ' ')} {isDouble && '⭐ 2x'}
                     </span>
                     <p dir="auto" className="text-xs font-medium truncate">
@@ -69,7 +69,7 @@ export default function QuestionListSidebar({
                       onMove(idx, 'up');
                     }}
                     disabled={idx === 0}
-                    className="text-arena-ink/45 hover:text-arena-ink disabled:opacity-20"
+                    className="text-arena-ink/60 hover:text-arena-ink disabled:opacity-20"
                   >
                     <ArrowUp className="w-3 h-3" />
                   </button>
@@ -79,7 +79,7 @@ export default function QuestionListSidebar({
                       onMove(idx, 'down');
                     }}
                     disabled={idx === questions.length - 1}
-                    className="text-arena-ink/45 hover:text-arena-ink disabled:opacity-20"
+                    className="text-arena-ink/60 hover:text-arena-ink disabled:opacity-20"
                   >
                     <ArrowDown className="w-3 h-3" />
                   </button>
@@ -88,7 +88,7 @@ export default function QuestionListSidebar({
                       e.stopPropagation();
                       onDuplicate(idx);
                     }}
-                    className="text-arena-ink/45 hover:text-arena-court"
+                    className="text-arena-ink/60 hover:text-arena-court"
                     title="Duplicate Question"
                     aria-label="Duplicate Question"
                   >
@@ -99,7 +99,7 @@ export default function QuestionListSidebar({
                       e.stopPropagation();
                       onRemove(idx);
                     }}
-                    className="text-arena-ink/45 hover:text-rose-400"
+                    className="text-arena-ink/60 hover:text-rose-400"
                     title="Delete Question"
                     aria-label="Delete Question"
                   >
@@ -114,7 +114,7 @@ export default function QuestionListSidebar({
 
       {/* Quick Add Question Panel */}
       <div className="sticky bottom-0 mt-0 space-y-2 border-t border-arena-line bg-white/80 p-3 pt-3 md:mt-4 md:bg-white/80">
-        <span className="text-[10px] text-arena-ink/45 font-bold uppercase tracking-wider block">
+        <span className="text-[10px] text-arena-ink/60 font-bold uppercase tracking-wider block">
           Add Question
         </span>
         <div className="grid grid-cols-2 gap-1.5">
