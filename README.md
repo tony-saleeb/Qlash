@@ -2,7 +2,7 @@
 
 Live classroom quiz for Arabic / church / school rooms. Hosts sign in. Players join with a PIN — no account. Live rooms cap at **80**.
 
-Stack: Next.js 14, Supabase (Auth, Postgres, Realtime), pnpm, Vitest.
+Stack: Next.js 15, React 19, Supabase (Auth, Postgres, Realtime), pnpm, Vitest.
 
 ## Local setup
 
@@ -49,6 +49,18 @@ Run these in the Supabase SQL editor, in order, on a new project:
 19. `schema-p15-anon-lockdown.sql` — revoke anonymous reads of players and game sessions
 
 Existing projects that already have the live loop: run **5–19** (re-run fast-submit, then p3, p4, media, p5, p6, p7, p8, p9, p10, p11, p12, p13, p14, p15).
+
+## Security
+
+`schema-p12-hardening.sql` through `schema-p15-anon-lockdown.sql` are steps 16–19 above. Apply them in that order. Realtime: public access must stay disabled.
+
+| Script | When |
+|---|---|
+| `node scripts/security/check-grants.mjs` | After p12, and again after later SQL. Env: `SUPABASE_URL`, `SUPABASE_ANON_KEY`, `TEST_HOST_EMAIL`, `TEST_HOST_PASSWORD`, `FOREIGN_QUIZ_ID`. |
+| `node scripts/security/realtime-probe.mjs <sessionId>` | After p14, once while public Realtime is still on and again after it is disabled. Env: `SUPABASE_URL`, `SUPABASE_ANON_KEY`. |
+| `node scripts/scale-realtime.mjs <sessionId> [players=80]` | On the plan production uses, during a real 3-question game. Env: `SUPABASE_URL`, `SUPABASE_ANON_KEY`. |
+
+Per question, one room of 80 players: `question:start` ≈ 81 events, each state change ≈ 81, answers → host ≤ 80, reveal score updates → host ≈ 80, reactions → host only, ≤ 10/s/room.
 
 ## Production URL + Google login
 
