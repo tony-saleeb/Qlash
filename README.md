@@ -58,8 +58,9 @@ Run these in the Supabase SQL editor, in order, on a new project:
 28. `schema-p24-import-once.sql` — one import per share code
 29. `schema-p25-rate-limit-keys.sql` — hashed rate-limit keys and pruning
 30. `schema-p26-stale-rooms.sql` — close quiet rooms and refuse joins after 12 hours
+31. `schema-p27-privilege-lock.sql` — fixed search path on the cap triggers; revoke truncate, trigger, and references
 
-Existing projects that already have the live loop: run **5–30** in that order.
+Existing projects that already have the live loop: run **5–31** in that order.
 
 ## Security
 

@@ -71,6 +71,7 @@ grant all on table public.rate_limit_buckets to service_role;
 create or replace function public.enforce_session_player_cap()
 returns trigger
 language plpgsql
+set search_path = public
 as $$
 declare
   n int;

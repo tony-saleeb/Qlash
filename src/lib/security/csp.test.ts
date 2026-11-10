@@ -6,6 +6,10 @@ describe('content security policy', () => {
     const policy = contentSecurityPolicy('noncevalue', false);
     expect(policy).toContain("script-src 'self' 'nonce-noncevalue' 'strict-dynamic' 'unsafe-inline'");
     expect(policy).toContain('media-src \'self\' blob: https://*.supabase.co https:');
+    expect(policy).toContain("style-src 'self' 'unsafe-inline'");
+    expect(policy).toContain("font-src 'self' data:");
+    expect(policy).not.toContain('fonts.googleapis.com');
+    expect(policy).not.toContain('fonts.gstatic.com');
     expect(policy).toContain('report-uri /api/csp-report');
     expect(policy).toContain('report-to csp-endpoint');
     expect(policy).not.toContain('unsafe-eval');

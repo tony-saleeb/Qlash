@@ -146,6 +146,11 @@ export default function LandingClient({ initialLocale }: { initialLocale?: Local
           setAuthLoading(false);
           return;
         }
+        if (password.length < 8) {
+          toast.error(t('passwordTooShort'));
+          setAuthLoading(false);
+          return;
+        }
         const { data, error } = await supabase.auth.signUp({
           email,
           password,

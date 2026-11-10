@@ -28,6 +28,7 @@ comment on column public.game_sessions.late_join_through_index is
 create or replace function public.enforce_quiz_library_cap()
 returns trigger
 language plpgsql
+set search_path = public
 as $$
 declare
   n int;
