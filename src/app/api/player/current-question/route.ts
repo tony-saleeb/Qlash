@@ -6,7 +6,7 @@ import {
   tooManyRequests,
 } from '@/lib/api/playerLimit';
 import { toPublicAnswers, type AnswerOption } from '@/lib/game/types';
-import { maybeSeededShuffle } from '@/lib/game/shuffle';
+import { answersInPlayOrder } from '@/lib/game/shuffle';
 
 export const dynamic = 'force-dynamic';
 
@@ -29,7 +29,7 @@ export async function POST(request: Request) {
     const admin = createAdminClient();
 
     // 80 phones hydrate at once — keep this to a single round-trip of reads.
-    const [{ data: tokenRow }, { data: player }, { data: session }, perPlayer] = await Promise.all([
+    const [{ data: tokenRow }, { data: player }, { data: session }] = await Promise.all([
       admin.from('player_tokens').select('client_token').eq('player_id', playerId).maybeSingle(),
       admin.from('players').select('id').eq('id', playerId).eq('session_id', sessionId).maybeSingle(),
       admin
@@ -39,7 +39,6 @@ export async function POST(request: Request) {
         )
         .eq('id', sessionId)
         .single(),
-      tooManyIfPlayerHydrateLimited(playerId, 'question'),
     ]);
 
     if (!tokenRow || tokenRow.client_token !== token) {
@@ -50,6 +49,7 @@ export async function POST(request: Request) {
       return NextResponse.json({ error: 'Player not found.' }, { status: 404 });
     }
 
+    const perPlayer = await tooManyIfPlayerHydrateLimited(playerId, 'question');
     if (perPlayer) return perPlayer;
 
     if (!session) {
@@ -87,11 +87,22 @@ export async function POST(request: Request) {
       return NextResponse.json({ error: 'Question not found.' }, { status: 404 });
     }
 
+    const { data: priorAnswer } = await admin
+      .from('answers_submitted')
+      .select('selected_answer_ids')
+      .eq('session_id', sessionId)
+      .eq('question_id', question.id)
+      .eq('player_id', playerId)
+      .maybeSingle();
+    const submittedAnswerIds = Array.isArray(priorAnswer?.selected_answer_ids)
+      ? priorAnswer.selected_answer_ids.filter((id: unknown): id is string => typeof id === 'string' && id.length > 0)
+      : [];
+
     const quizMeta = question as unknown as {
       quizzes?: { randomize_answers?: boolean } | null;
     };
     const randomizeAnswers = Boolean(quizMeta.quizzes?.randomize_answers);
-    const answers = maybeSeededShuffle(
+    const answers = answersInPlayOrder(
       toPublicAnswers(question.type, (question.answers || []) as AnswerOption[]),
       randomizeAnswers,
       `${sessionId}:${question.id}`
@@ -112,6 +123,7 @@ export async function POST(request: Request) {
       },
       server_started_at: session.question_started_at,
       question_index: session.current_question_index,
+      submitted_answer_ids: submittedAnswerIds,
       server_now: new Date().toISOString(),
     });
   } catch (err) {

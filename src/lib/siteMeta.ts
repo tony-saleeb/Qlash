@@ -1,5 +1,13 @@
 export const SITE_NAME = 'Qlash';
 
+/** One Qlash in the tab. Titles that already name the product are left as written. */
+export function pageTitle(title: string): string {
+  const trimmed = title.trim();
+  if (!trimmed) return SITE_NAME;
+  if (trimmed.includes(SITE_NAME)) return trimmed;
+  return `${trimmed} · ${SITE_NAME}`;
+}
+
 export const SITE_TITLE = 'Qlash — live classroom quiz';
 
 export const SITE_DESCRIPTION =

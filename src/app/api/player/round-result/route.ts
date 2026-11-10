@@ -79,7 +79,7 @@ export async function POST(request: Request) {
 
     const { data: submission } = await admin
       .from('answers_submitted')
-      .select('points_awarded, is_correct, was_late')
+      .select('points_awarded, is_correct, was_late, selected_answer_ids')
       .eq('session_id', sessionId)
       .eq('question_id', questionId)
       .eq('player_id', playerId)

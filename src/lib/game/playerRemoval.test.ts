@@ -29,4 +29,12 @@ describe('isOwnRemoval', () => {
   it('rejects a non-string id', () => {
     expect(isOwnRemoval({ old: { id: 42 } }, 'p1')).toBe(false);
   });
+
+  it('rejects a missing old row, an empty id, and a case mismatch', () => {
+    expect(isOwnRemoval({}, 'p1')).toBe(false);
+    expect(isOwnRemoval({ old: null }, 'p1')).toBe(false);
+    expect(isOwnRemoval({ old: { id: '' } }, 'p1')).toBe(false);
+    expect(isOwnRemoval({ old: { id: 'P1' } }, 'p1')).toBe(false);
+    expect(isOwnRemoval([], 'p1')).toBe(false);
+  });
 });

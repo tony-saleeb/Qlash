@@ -1,5 +1,5 @@
 import { createAdminClient } from '@/lib/supabase/admin';
-import { normalizeShareCode } from '@/lib/content/shareCode';
+import { isShareCode, normalizeShareCode } from '@/lib/content/shareCode';
 import { whatsAppShareUrl } from '@/lib/game/lobbyLink';
 import type { Locale } from '@/lib/i18n/locale';
 
@@ -42,19 +42,24 @@ export function quizWhatsAppHref(
 }
 
 export async function getSharedQuizPreview(rawCode: string): Promise<SharedQuizPreview | null> {
+  if (!isShareCode(rawCode)) return null;
   const shareCode = normalizeShareCode(rawCode);
-  if (shareCode.length < 6) return null;
 
   const admin = createAdminClient();
   const { data: quiz, error } = await admin
     .from('quizzes')
     .select('id, title, description, team_mode')
     .eq('share_code', shareCode)
+    .is('deleted_at', null)
     .maybeSingle();
 
   if (error || !quiz) return null;
 
-  const { data: questions } = await admin.from('questions').select('id').eq('quiz_id', quiz.id);
+  const { data: questions } = await admin
+    .from('questions')
+    .select('id')
+    .eq('quiz_id', quiz.id)
+    .is('archived_at', null);
 
   return {
     title: typeof quiz.title === 'string' && quiz.title.trim() ? quiz.title : 'Qlash quiz',

@@ -1,5 +1,7 @@
 const fs = require('fs');
+const crypto = require('crypto');
 const { createClient } = require('@supabase/supabase-js');
+const { pickProbeQuiz } = require('./probeQuiz.cjs');
 
 const envPath = './.env.local';
 if (!fs.existsSync(envPath)) {
@@ -91,14 +93,39 @@ async function runScaleTest() {
   }
   const hostId = hosts[0].id;
 
-  const { data: quiz, error: quizErr } = await supabase
+  const { data: library, error: libraryErr } = await supabase
     .from('quizzes')
-    .insert({ host_id: hostId, title: 'Scale Test Quiz (Auto)', description: 'scale-test' })
-    .select()
-    .single();
-  if (quizErr || !quiz) {
-    console.error('Quiz create failed', quizErr);
+    .select('id, deleted_at')
+    .eq('host_id', hostId);
+  if (libraryErr) {
+    console.error('Quiz lookup failed', libraryErr);
     process.exit(1);
+  }
+  const plan = pickProbeQuiz(library);
+  let quiz = plan.id ? { id: plan.id } : null;
+  let createdQuiz = plan.created;
+  if (createdQuiz) {
+    const { data: inserted, error: quizErr } = await supabase
+      .from('quizzes')
+      .insert({ host_id: hostId, title: 'Scale Test Quiz (Auto)', description: 'scale-test' })
+      .select()
+      .single();
+    if (quizErr || !inserted) {
+      const capped = /QUIZ_CAP/.test(quizErr?.message ?? '');
+      const { data: latest } = capped
+        ? await supabase.from('quizzes').select('id, deleted_at').eq('host_id', hostId)
+        : { data: null };
+      const again = pickProbeQuiz(latest ?? []);
+      if (capped && again.id) {
+        quiz = { id: again.id };
+        createdQuiz = false;
+      } else {
+        console.error('Quiz create failed', quizErr);
+        process.exit(1);
+      }
+    } else {
+      quiz = inserted;
+    }
   }
 
   const { data: question, error: questionErr } = await supabase
@@ -116,7 +143,7 @@ async function runScaleTest() {
     .select()
     .single();
   if (questionErr || !question) {
-    await supabase.from('quizzes').delete().eq('id', quiz.id);
+    if (createdQuiz) await supabase.from('quizzes').delete().eq('id', quiz.id);
     console.error('Question create failed', questionErr);
     process.exit(1);
   }
@@ -138,7 +165,7 @@ async function runScaleTest() {
     .single();
   if (sessionErr || !session) {
     await supabase.from('questions').delete().eq('id', question.id);
-    await supabase.from('quizzes').delete().eq('id', quiz.id);
+    if (createdQuiz) await supabase.from('quizzes').delete().eq('id', quiz.id);
     console.error('Session create failed', sessionErr);
     process.exit(1);
   }
@@ -147,7 +174,7 @@ async function runScaleTest() {
   const playersToInsert = [];
   for (let i = 1; i <= NUM_PLAYERS; i++) {
     const nickname = `Player_${i}`;
-    tokenByNickname[nickname] = `token_player_${i}_${Math.random().toString(36).slice(2, 8)}`;
+    tokenByNickname[nickname] = crypto.randomUUID();
     playersToInsert.push({
       session_id: session.id,
       nickname,
@@ -165,7 +192,7 @@ async function runScaleTest() {
     console.error('Players insert failed', playersErr);
     await supabase.from('game_sessions').delete().eq('id', session.id);
     await supabase.from('questions').delete().eq('id', question.id);
-    await supabase.from('quizzes').delete().eq('id', quiz.id);
+    if (createdQuiz) await supabase.from('quizzes').delete().eq('id', quiz.id);
     process.exit(1);
   }
 
@@ -176,7 +203,7 @@ async function runScaleTest() {
     console.error('Tokens insert failed', tokensErr);
     await supabase.from('game_sessions').delete().eq('id', session.id);
     await supabase.from('questions').delete().eq('id', question.id);
-    await supabase.from('quizzes').delete().eq('id', quiz.id);
+    if (createdQuiz) await supabase.from('quizzes').delete().eq('id', quiz.id);
     process.exit(1);
   }
 
@@ -264,7 +291,7 @@ async function runScaleTest() {
   console.log('\nCleaning up...');
   await supabase.from('game_sessions').delete().eq('id', session.id);
   await supabase.from('questions').delete().eq('id', question.id);
-  await supabase.from('quizzes').delete().eq('id', quiz.id);
+  if (createdQuiz) await supabase.from('quizzes').delete().eq('id', quiz.id);
   console.log('=== Done ===');
   console.log('\nHow to read this:');
   console.log('- Single player ≈ what one phone feels (goal: <500ms on prod).');

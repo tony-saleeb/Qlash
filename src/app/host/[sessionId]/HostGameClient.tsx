@@ -20,8 +20,9 @@ import {
   resumeGameSession,
   addQuestionTime,
   setHostLocale,
+  setJoinLocked,
 } from '@/lib/host/hostApi';
-import { Flame, Users, Play, Pause, UserX, AlertCircle, Trophy, ArrowRight, Home, CheckCircle2, Clock, Settings, Edit3, Zap, SkipForward, Send, Activity, ChevronDown, ChevronUp, MessageSquare, X, ClipboardList, Smartphone, Link2, LogOut, MessageCircle } from 'lucide-react';
+import { Flame, Users, Play, Pause, UserX, AlertCircle, Trophy, ArrowRight, Home, CheckCircle2, Clock, Settings, Edit3, Zap, SkipForward, Send, Activity, ChevronDown, ChevronUp, MessageSquare, X, ClipboardList, Smartphone, Link2, LogOut, MessageCircle, Lock } from 'lucide-react';
 import confetti from 'canvas-confetti';
 import { bindAudioUnlock, playJoinSound, playTickSound, playRevealSound, playFanfareSound, unlockGameAudio } from '@/lib/sounds';
 import { BrandMark, PinDisplay, StageBadge, playerChipColor } from '@/components/brand/BrandMark';
@@ -48,10 +49,10 @@ import {
   type Question,
   type GameSessionRow,
 } from '@/lib/game/types';
-import { maybeSeededShuffle, questionsInPlayOrder } from '@/lib/game/shuffle';
+import { answersInPlayOrder, maybeSeededShuffle, questionsInPlayOrder } from '@/lib/game/shuffle';
 import { aggregateTeamScores, scoreBarPercent } from '@/lib/game/teams';
 import { MAX_PLAYERS_PER_SESSION, HOST_REVEAL_DELAY_MS } from '@/lib/game/constants';
-import { remainingFromPausedElapsed, remainingSeconds } from '@/lib/game/clock';
+import { adoptServerClock, remainingFromPausedElapsed, remainingSeconds } from '@/lib/game/clock';
 import { answerUsesInk, resolveAnswerColor } from '@/lib/game/marks';
 import { AnswerSwatch } from '@/components/brand/AnswerMark';
 import { hostClickerPath } from '@/lib/game/lateJoin';
@@ -67,7 +68,8 @@ import {
   sessionQuestionCount,
 } from '@/lib/game/playOrder';
 import { buildTeachableReveal, formatTeachableCopy } from '@/lib/game/teachableReveal';
-import { mergeLiveSession } from '@/lib/game/liveQuestion';
+import { hostQuestionSession, mergeLiveSession } from '@/lib/game/liveQuestion';
+import { applyLiveQuestionEdit, questionUpdatePayload } from '@/lib/game/liveQuestionEdit';
 import {
   canCheerOnProjector,
   isLobbyReactionId,
@@ -106,6 +108,8 @@ interface HostGameClientProps {
   initialPlayers: Player[];
   playerCap?: number;
   initialLocale?: Locale;
+  /** Postgres now() from the host page, so a reload starts with the database clock. */
+  initialServerNow?: string | null;
 }
 
 export default function HostGameClient({
@@ -115,10 +119,15 @@ export default function HostGameClient({
   initialPlayers,
   playerCap = MAX_PLAYERS_PER_SESSION,
   initialLocale,
+  initialServerNow = null,
 }: HostGameClientProps) {
   const router = useRouter();
   const supabase = createClient();
-  const { questions, questionsLoading } = useHostQuestionBank(quiz.id, initialQuestions, supabase);
+  const { questions, questionsLoading, setQuestions } = useHostQuestionBank(
+    quiz.id,
+    initialQuestions,
+    supabase
+  );
   const sessionStatusRef = useRef(initialSession.status);
   const { send: sendSessionEvent } = useSessionChannel(initialSession.id, {
     supabase,
@@ -259,6 +268,14 @@ export default function HostGameClient({
   const timerRef = useRef<NodeJS.Timeout | null>(null);
   const lastTickSecondRef = useRef<number | null>(null);
   const displayedSecondRef = useRef<number | null>(null);
+  const serverClockOffsetMsRef = useRef(0);
+
+  useEffect(() => {
+    serverClockOffsetMsRef.current = adoptServerClock(
+      serverClockOffsetMsRef.current,
+      initialServerNow
+    );
+  }, [initialServerNow]);
   const revealingRef = useRef(false);
   const pendingClockIndexRef = useRef<number | null>(null);
   const playersFlushRef = useRef<Map<string, Player>>(new Map());
@@ -400,6 +417,10 @@ export default function HostGameClient({
         },
         (payload) => {
           const updatedSession = payload.new as typeof session;
+          serverClockOffsetMsRef.current = adoptServerClock(
+            serverClockOffsetMsRef.current,
+            updatedSession.updated_at
+          );
           setSession((prev) => {
             if (
               pendingClockIndexRef.current !== null &&
@@ -531,7 +552,11 @@ export default function HostGameClient({
     let graceTimer: ReturnType<typeof setTimeout> | null = null;
 
     const updateTimer = () => {
-      const remaining = remainingSeconds(startedAtIso, timeLimit);
+      const remaining = remainingSeconds(
+        startedAtIso,
+        timeLimit,
+        Date.now() + serverClockOffsetMsRef.current
+      );
       if (remaining !== displayedSecondRef.current) {
         displayedSecondRef.current = remaining;
         setTimeLeft(remaining);
@@ -646,7 +671,7 @@ export default function HostGameClient({
   const prepareQuestionForPlay = useCallback(
     (question: Question): Question => ({
       ...question,
-      answers: maybeSeededShuffle(
+      answers: answersInPlayOrder(
         question.answers,
         randomizeAnswers,
         `${session.id}:${question.id}`
@@ -662,15 +687,7 @@ export default function HostGameClient({
     setAnsweredIds(new Set());
     setFirstLockName(null);
     setTimeLeft(question.time_limit_seconds);
-    setSession((prev) =>
-      mergeLiveSession(prev, {
-        ...prev,
-        status: 'question_active',
-        current_question_index: nextIndex,
-        question_started_at: serverStartedAt,
-        active_multiplier: 1,
-      })
-    );
+    setSession((prev) => hostQuestionSession(prev, nextIndex, serverStartedAt));
   }, []);
 
   useEffect(() => {
@@ -691,6 +708,7 @@ export default function HostGameClient({
         session.id,
         ordered.map((q) => q.id)
       );
+      serverClockOffsetMsRef.current = adoptServerClock(serverClockOffsetMsRef.current, serverStartedAt);
       setIsMultiplierActive(false);
       revealingRef.current = false;
 
@@ -749,6 +767,7 @@ export default function HostGameClient({
       paintLiveQuestion(nextIndex, nextQ, null);
 
       const { serverStartedAt } = await goToNextQuestion(session.id, nextIndex);
+      serverClockOffsetMsRef.current = adoptServerClock(serverClockOffsetMsRef.current, serverStartedAt);
       paintLiveQuestion(nextIndex, nextQ, serverStartedAt);
       pendingClockIndexRef.current = null;
 
@@ -806,27 +825,23 @@ export default function HostGameClient({
     if (!activeQuestion) return;
     try {
       // Update question in database
-      const updatedAnswers = activeQuestion.answers.map((ans) => {
-        const edited = editAnswers.find((ea) => ea.id === ans.id);
-        return edited ? { ...ans, text: edited.text } : ans;
-      });
+      const stored = questions.find((question) => question.id === activeQuestion.id);
+      if (!stored) throw new Error(t('failedSaveQuestion'));
+      const updated = applyLiveQuestionEdit(stored, { prompt: editPrompt, answers: editAnswers });
 
       const { error } = await supabase
         .from('questions')
         .update({
-          prompt: editPrompt,
-          answers: updatedAnswers,
+          prompt: updated.prompt,
+          answers: updated.answers,
         })
-        .eq('id', activeQuestion.id);
+        .eq('id', stored.id);
 
       if (error) throw error;
 
-      activeQuestion.prompt = editPrompt;
-      activeQuestion.answers = updatedAnswers;
+      setQuestions((prev) => prev.map((question) => (question.id === updated.id ? updated : question)));
 
-      await sendSessionEvent('question:update', {
-        question_id: activeQuestion.id,
-      });
+      await sendSessionEvent('question:update', questionUpdatePayload(updated));
 
       setIsEditorOpen(false);
       addActivityEntry('edit', t('activityEditedLive'));
@@ -837,7 +852,10 @@ export default function HostGameClient({
   };
 
   // Multiplier Toggle: persist on session (server-owned) then broadcast UX cue
+  const canArmMultiplier = session.status === 'lobby' || session.status === 'leaderboard';
+
   const handleToggleMultiplier = async () => {
+    if (!canArmMultiplier) return;
     const newState = !isMultiplierActive;
     try {
       await setSessionMultiplier(session.id, newState ? 2 : 1);
@@ -849,6 +867,49 @@ export default function HostGameClient({
       toast.error(err instanceof Error ? err.message : t('failedMultiplier'));
     }
   };
+
+  const handleToggleJoinLock = async () => {
+    const next = !session.join_locked;
+    try {
+      await setJoinLocked(session.id, next);
+      setSession((prev) => ({ ...prev, join_locked: next }));
+      toast.success(next ? t('joinsLocked') : t('joinsOpen'));
+    } catch (err) {
+      toast.error(err instanceof Error ? err.message : t('failedJoinLock'));
+    }
+  };
+
+  const joinLockButton = (
+    <Button
+      type="button"
+      onClick={() => void handleToggleJoinLock()}
+      variant="ghost"
+      className={cn(
+        hostCtrl,
+        session.join_locked && 'border-arena-signal bg-arena-signal text-white hover:border-arena-signal hover:bg-arena-signal'
+      )}
+    >
+      <Lock className="h-4 w-4" />
+      {session.join_locked ? t('unlockJoins') : t('lockJoins')}
+    </Button>
+  );
+
+  const multiplierButton = (
+    <Button
+      type="button"
+      onClick={() => void handleToggleMultiplier()}
+      disabled={!canArmMultiplier}
+      title={canArmMultiplier ? undefined : t('doublePointsLocked')}
+      variant="ghost"
+      className={cn(
+        hostCtrl,
+        isMultiplierActive && 'border-amber-400 bg-amber-400 text-arena-ink hover:border-amber-300 hover:bg-amber-300'
+      )}
+    >
+      <Zap className={cn('h-4 w-4', isMultiplierActive && 'fill-current')} />
+      {isMultiplierActive ? t('doublePointsOnShort') : t('doublePointsShort')}
+    </Button>
+  );
 
   // Question Jumper: Jump to any question index
   const handleJumpToQuestion = async (listIndex: number) => {
@@ -865,6 +926,7 @@ export default function HostGameClient({
       paintLiveQuestion(targetIndex, targetQ, null);
 
       const { serverStartedAt } = await goToNextQuestion(session.id, targetIndex);
+      serverClockOffsetMsRef.current = adoptServerClock(serverClockOffsetMsRef.current, serverStartedAt);
       paintLiveQuestion(targetIndex, targetQ, serverStartedAt);
       pendingClockIndexRef.current = null;
       setIsJumperOpen(false);
@@ -1104,6 +1166,8 @@ export default function HostGameClient({
             <Button type="button" variant="ghost" className={hostCtrl} onClick={shareLobbyWhatsApp}>
               <MessageCircle className="h-4 w-4" /> {t('shareWhatsApp')}
             </Button>
+            {joinLockButton}
+            {multiplierButton}
             <Button
               type="button"
               variant="ghost"
@@ -1435,18 +1499,8 @@ export default function HostGameClient({
               </DialogContent>
             </Dialog>
 
-            {/* Multiplier Toggle */}
-            <Button
-              onClick={handleToggleMultiplier}
-              variant="ghost"
-              className={cn(
-                hostCtrl,
-                isMultiplierActive && 'border-amber-400 bg-amber-400 text-arena-ink hover:border-amber-300 hover:bg-amber-300'
-              )}
-            >
-              <Zap className={cn('h-4 w-4', isMultiplierActive && 'fill-current')} />
-              {isMultiplierActive ? t('doublePointsOnShort') : t('doublePointsShort')}
-            </Button>
+            {joinLockButton}
+            {multiplierButton}
 
             {/* Host Announcement */}
             <Dialog open={isAnnouncementOpen} onOpenChange={setIsAnnouncementOpen}>
@@ -1782,6 +1836,9 @@ export default function HostGameClient({
           <span className="text-xs font-semibold text-white/50">
             PIN <bdi>{session.pin}</bdi>
           </span>
+          <div className="flex items-center gap-2">
+            {joinLockButton}
+            {multiplierButton}
           {isLastQuestion ? (
             <Button onClick={handleShowPodium} className={hostCta}>
               {t('showFinalPodium')} <Trophy className="h-4 w-4 text-arena-acid" />
@@ -1791,6 +1848,7 @@ export default function HostGameClient({
               {t('nextQuestion')} <ArrowRight className="h-4 w-4" />
             </Button>
           )}
+          </div>
         </div>
       </GameShell>
     );

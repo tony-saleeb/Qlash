@@ -32,7 +32,7 @@ describe('POST /api/player/leave', () => {
     expect(result.status).toBe(401);
   });
 
-  it('removes the last lobby player and closes the room', async () => {
+  it('removes the last lobby player and leaves the room open', async () => {
     admin.setTables({
       player_tokens: { data: { client_token: 'tok', player_id: 'p1' }, error: null },
       players: [
@@ -50,8 +50,8 @@ describe('POST /api/player/leave', () => {
       await POST(jsonRequest({ sessionId: 'sess-1', playerId: 'p1', token: 'tok' }))
     );
     expect(result.status).toBe(200);
-    expect(result.body).toEqual({ success: true, roomClosed: true });
-    expect(admin.lastUpdate('game_sessions')).toEqual({ status: 'finished' });
+    expect(result.body).toEqual({ success: true, roomClosed: false });
+    expect(admin.lastUpdate('game_sessions')).toBeUndefined();
   });
 
   it('leaves other lobby players in place', async () => {
@@ -89,5 +89,34 @@ describe('POST /api/player/leave', () => {
     expect(result.status).toBe(200);
     expect(result.body.roomClosed).toBe(false);
     expect(admin.lastUpdate('game_sessions')).toBeUndefined();
+  });
+
+  it('returns 404 when the player or the session is already gone', async () => {
+    const { POST } = await import('@/app/api/player/leave/route');
+    admin.setTables({
+      player_tokens: { data: { client_token: 'tok', player_id: 'p1' }, error: null },
+      players: { data: null, error: null },
+      game_sessions: { data: { id: 'sess-1', status: 'lobby' }, error: null },
+    });
+    expect(
+      (await readJson(await POST(jsonRequest({ sessionId: 'sess-1', playerId: 'p1', token: 'tok' })))).status
+    ).toBe(404);
+
+    admin.setTables({
+      player_tokens: { data: { client_token: 'tok', player_id: 'p1' }, error: null },
+      players: { data: { id: 'p1', session_id: 'sess-1' }, error: null },
+      game_sessions: { data: null, error: null },
+    });
+    expect(
+      (await readJson(await POST(jsonRequest({ sessionId: 'sess-1', playerId: 'p1', token: 'tok' })))).status
+    ).toBe(404);
+  });
+
+  it('returns 500 when the body is not JSON', async () => {
+    const { POST } = await import('@/app/api/player/leave/route');
+    const response = await POST(
+      new Request('http://localhost/api', { method: 'POST', body: '{', headers: { 'content-type': 'application/json' } })
+    );
+    expect(response.status).toBe(500);
   });
 });

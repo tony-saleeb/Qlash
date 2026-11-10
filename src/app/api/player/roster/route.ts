@@ -1,6 +1,7 @@
 import { NextResponse } from 'next/server';
 import { createAdminClient } from '@/lib/supabase/admin';
 import { limitPlayerHydrate, tooManyIfPlayerHydrateLimited, tooManyRequests } from '@/lib/api/playerLimit';
+import { publicRoster } from '@/lib/game/publicRoster';
 
 export const dynamic = 'force-dynamic';
 
@@ -42,13 +43,16 @@ export async function POST(request: Request) {
 
     const { data: players, error } = await admin
       .from('players')
-      .select('id, nickname, score, streak, connected')
+      .select('id, nickname, team_name, score, streak, connected')
       .eq('session_id', sessionId)
       .order('score', { ascending: false });
 
     if (error) throw error;
 
-    return NextResponse.json({ success: true, players: players || [] });
+    return NextResponse.json({
+      success: true,
+      players: publicRoster(players || [], tokenRow.player_id),
+    });
   } catch (err) {
     console.error('Player roster error:', err);
     return NextResponse.json({ error: 'Internal Server Error' }, { status: 500 });

@@ -1,6 +1,6 @@
 import { redirect } from 'next/navigation';
 import { readHostAuth } from '@/lib/supabase/hostAuth';
-import { createLiveLobby } from '@/lib/host/createLiveLobby';
+import { OpenLobbyConfirm } from '@/app/host/open/[quizId]/OpenLobbyConfirm';
 
 export const dynamic = 'force-dynamic';
 
@@ -10,17 +10,29 @@ interface OpenHostPageProps {
   }>;
 }
 
+/** Opening the link only shows the confirm button. The lobby starts on click. */
 export default async function OpenHostPage({ params }: OpenHostPageProps) {
   const { quizId } = await params;
   if (!quizId) {
     redirect('/dashboard');
   }
 
-  const { user } = await readHostAuth();
+  const { supabase, user } = await readHostAuth();
   if (!user) {
     redirect('/');
   }
 
-  const session = await createLiveLobby(quizId);
-  redirect(`/host/${session.id}`);
+  const { data: quiz } = await supabase
+    .from('quizzes')
+    .select('id, title')
+    .eq('id', quizId)
+    .eq('host_id', user.id)
+    .is('deleted_at', null)
+    .maybeSingle();
+
+  if (!quiz?.id) {
+    redirect('/dashboard');
+  }
+
+  return <OpenLobbyConfirm quizId={quiz.id} title={quiz.title || 'Quiz'} />;
 }

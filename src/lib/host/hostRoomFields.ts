@@ -1,14 +1,14 @@
 import type { Player } from '@/lib/game/types';
 
 export const HOST_SESSION_SELECT =
-  'id, pin, status, current_question_index, question_started_at, quiz_id, host_id, active_multiplier, question_order, late_join_through_index';
+  'id, pin, status, current_question_index, question_started_at, quiz_id, host_id, active_multiplier, question_order, late_join_through_index, join_locked';
 
 export const HOST_QUIZ_SELECT = 'id, title, randomize_questions, randomize_answers, team_mode';
 
 export const HOST_PLAYER_SELECT = 'id, session_id, nickname, team_name, score, streak, joined_at, connected';
 
 export const HOST_QUESTION_SELECT =
-  'id, type, prompt, media_url, media_type, time_limit_seconds, points_base, scoring_type, answers, order_index';
+  'id, type, prompt, media_url, media_type, time_limit_seconds, points_base, scoring_type, answers, order_index, archived_at';
 
 export type HostQuizInfo = {
   id: string;

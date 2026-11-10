@@ -4,8 +4,9 @@
 -- RPC and prints one line per case. Everything happens inside a transaction
 -- that rolls back, so no quiz, session, player, or answer survives the run.
 --
--- Requires: at least one row in public.hosts (sign up once), plus
--- schema-fast-submit.sql already applied.
+-- Requires: at least one row in public.hosts (sign up once), plus the
+-- current grader. A free host who already has five quizzes reuses one of
+-- them. The transaction rolls back, so that quiz is unchanged.
 --
 -- Linear cases allow 2 points of slack: this script sets question_started_at
 -- and then calls the RPC, so a few milliseconds of real time always elapse.
@@ -24,6 +25,7 @@ declare
   v_points int;
   v_correct boolean;
   v_streak int;
+  v_token text;
   v_slack int;
   v_ok boolean;
   v_pass int := 0;
@@ -35,9 +37,25 @@ begin
     raise exception 'No rows in public.hosts. Sign up as a host once, then re-run.';
   end if;
 
-  insert into public.quizzes (host_id, title, description)
-  values (v_host, 'scoring contract probe', 'temporary — rolled back')
-  returning id into v_quiz;
+  select id into v_quiz
+  from public.quizzes
+  where host_id = v_host and deleted_at is null
+  order by created_at
+  limit 1;
+
+  if v_quiz is null then
+    select id into v_quiz
+    from public.quizzes
+    where host_id = v_host
+    order by created_at
+    limit 1;
+  end if;
+
+  if v_quiz is null then
+    insert into public.quizzes (host_id, title, description)
+    values (v_host, 'scoring contract probe', 'temporary — rolled back')
+    returning id into v_quiz;
+  end if;
 
   for c in
     select *
@@ -79,6 +97,10 @@ begin
          'type_answer', '[{"id":"1","text":"Nayrouz;النيروز","is_correct":true}]'::jsonb,
          '["  NAYROUZ "]'::jsonb, 4000, 25, 500, 'flat', 0, 1, true, 500, 1),
 
+        ('type_answer folds Arabic alef, taa marbuta, and short vowels',
+         'type_answer', '[{"id":"1","text":"القاهرة","is_correct":true}]'::jsonb,
+         '["الْقَاهِرَة"]'::jsonb, 4000, 25, 500, 'flat', 0, 1, true, 500, 1),
+
         ('type_answer accepts the Arabic alternative',
          'type_answer', '[{"id":"1","text":"Nayrouz;النيروز","is_correct":true}]'::jsonb,
          '["النيروز"]'::jsonb, 4000, 25, 500, 'flat', 0, 1, true, 500, 1),
@@ -99,9 +121,11 @@ begin
          'mcq', '[{"id":"1","text":"Cairo","is_correct":false},{"id":"2","text":"Alexandria","is_correct":true}]'::jsonb,
          '["2"]'::jsonb, 0, 20, 1000, 'flat', 20, 1, true, 1250, 21),
 
+        -- Stored limits are 5–240 seconds. Elapsed 0 on a 20s clock is the full-base
+        -- case the database can still insert. The 0-second formula stays in scoring.ts.
         ('a missing time limit pays full base instead of decaying',
          'mcq', '[{"id":"1","text":"Cairo","is_correct":false},{"id":"2","text":"Alexandria","is_correct":true}]'::jsonb,
-         '["2"]'::jsonb, 0, 0, 1000, 'linear', 0, 1, true, 1000, 1)
+         '["2"]'::jsonb, 0, 20, 1000, 'linear', 0, 1, true, 1000, 1)
     ) as t(
       name, qtype, answers, selected, time_taken_ms, limit_s, base,
       scoring, prev_streak, mult, exp_correct, exp_points, exp_streak
@@ -128,8 +152,9 @@ begin
     values (v_session, 'probe', c.prev_streak)
     returning id into v_player;
 
+    v_token := 'probe-' || gen_random_uuid()::text;
     insert into public.player_tokens (player_id, client_token)
-    values (v_player, 'probe-token');
+    values (v_player, v_token);
 
     -- Start the clock last so the elapsed time is as close to the case as possible.
     update public.game_sessions
@@ -137,7 +162,7 @@ begin
     where id = v_session;
 
     v_result := public.submit_live_answer(
-      v_player, 'probe-token', v_session, v_question, c.selected
+      v_player, v_token, v_session, v_question, c.selected
     );
 
     v_correct := (v_result->>'isCorrect')::boolean;
@@ -165,7 +190,7 @@ begin
   if v_fail = 0 then
     raise notice 'Scoring contract holds: %/% cases passed.', v_pass, v_pass;
   else
-    raise notice 'DRIFT: % passed, % FAILED. submit_live_answer and scoring.ts disagree.',
+    raise exception 'DRIFT: % passed, % FAILED. submit_live_answer and scoring.ts disagree.',
       v_pass, v_fail;
   end if;
 end;

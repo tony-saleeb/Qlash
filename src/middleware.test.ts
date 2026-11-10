@@ -76,6 +76,45 @@ describe('middleware', () => {
     expect(res.headers.get('x-qlash-locale')).toBe('ar');
   });
 
+  it('enforces a nonce policy that allows Supabase video and reports violations', async () => {
+    const { middleware } = await import('@/middleware');
+    const first = await middleware(request('/'));
+    const second = await middleware(request('/play/abc'));
+    const policy = first.headers.get('Content-Security-Policy') ?? '';
+    const again = second.headers.get('Content-Security-Policy') ?? '';
+    expect(first.headers.get('Content-Security-Policy-Report-Only')).toBeNull();
+    expect(policy).toContain('media-src \'self\' blob: https://*.supabase.co https:');
+    expect(policy).toContain('report-uri /api/csp-report');
+    expect(policy).toMatch(/'nonce-[^']+'/);
+    expect(first.headers.get('Reporting-Endpoints')).toBe('csp-endpoint="/api/csp-report"');
+    expect(policy).not.toBe(again);
+  });
+
+  it('keeps that policy when an auth refresh rewrites the response', async () => {
+    const { createServerClient } = await import('@supabase/ssr');
+    vi.mocked(createServerClient).mockImplementationOnce(((
+      _url: string,
+      _key: string,
+      options: {
+        cookies: {
+          setAll: (cookies: { name: string; value: string; options?: Record<string, unknown> }[]) => void;
+        };
+      }
+    ) => ({
+      auth: {
+        getUser: async () => {
+          options.cookies.setAll([{ name: 'sb-refresh', value: '1' }]);
+          return { data: { user: { id: 'h' } }, error: null };
+        },
+        getSession,
+      },
+    })) as never);
+    const { middleware } = await import('@/middleware');
+    const res = await middleware(request('/dashboard'));
+    expect(res.headers.get('Content-Security-Policy')).toContain('https://*.supabase.co');
+    expect(res.cookies.get('sb-refresh')?.value).toBe('1');
+  });
+
   it('keeps an existing locale cookie', async () => {
     const { middleware } = await import('@/middleware');
     const req = new NextRequest(new URL('/', 'http://qlash.test'), {

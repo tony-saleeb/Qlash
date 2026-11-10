@@ -3,6 +3,18 @@
 import { getHostAuth } from '@/lib/supabase/hostAuth';
 import { createLiveLobby } from '@/lib/host/createLiveLobby';
 
+function missingScoredIdsColumn(error: { message?: string; code?: string }): boolean {
+  return error.code === '42703' || /scored_question_ids/i.test(error.message || '');
+}
+
+function throwIfReadFailed(
+  error: { message?: string; code?: string } | null | undefined,
+  allow?: (error: { message?: string; code?: string }) => boolean
+) {
+  if (!error || allow?.(error)) return;
+  throw new Error(error.message || 'Could not read the live room.');
+}
+
 async function applyScoresBeforeAdvance(
   supabase: Awaited<ReturnType<typeof getHostAuth>>['supabase'],
   sessionId: string,
@@ -13,23 +25,27 @@ async function applyScoresBeforeAdvance(
   const legacySelect =
     'status, current_question_index, question_order, scores_applied_question_id, quiz_id';
 
-  let { data: session } = await supabase
+  const first = await supabase
     .from('game_sessions')
     .select(scoredSelect)
     .eq('id', sessionId)
     .eq('host_id', hostId)
     .maybeSingle();
 
+  let session = first.data;
   if (!session) {
+    throwIfReadFailed(first.error, missingScoredIdsColumn);
     const fallback = await supabase
       .from('game_sessions')
       .select(legacySelect)
       .eq('id', sessionId)
       .eq('host_id', hostId)
       .maybeSingle();
-      session = fallback.data
+    throwIfReadFailed(fallback.error);
+    session = fallback.data
       ? { ...fallback.data, scored_question_ids: [] as string[] }
-      : null;  }
+      : null;
+  }
 
   if (!session) return;
   if (!['question_active', 'question_paused'].includes(session.status)) return;
@@ -37,13 +53,14 @@ async function applyScoresBeforeAdvance(
   const order = Array.isArray(session.question_order) ? (session.question_order as string[]) : null;
   let questionId = order?.[session.current_question_index] ?? null;
   if (!questionId && session.quiz_id) {
-    const { data: question } = await supabase
+    const question = await supabase
       .from('questions')
       .select('id')
       .eq('quiz_id', session.quiz_id)
       .eq('order_index', session.current_question_index)
       .maybeSingle();
-    questionId = question?.id ?? null;
+    throwIfReadFailed(question.error);
+    questionId = question.data?.id ?? null;
   }
   const scoredIds = Array.isArray((session as { scored_question_ids?: string[] }).scored_question_ids)
     ? ((session as { scored_question_ids?: string[] }).scored_question_ids as string[])
@@ -103,11 +120,30 @@ export async function kickPlayer(playerId: string, sessionId: string) {
       throw new Error('Unauthorized or session not found.');
     }
 
-    const { error } = await supabase
+    const { createAdminClient } = await import('@/lib/supabase/admin');
+    const admin = createAdminClient();
+    const { data: player } = await admin
       .from('players')
-      .delete()
+      .select('nickname')
       .eq('id', playerId)
-      .eq('session_id', sessionId);
+      .eq('session_id', sessionId)
+      .maybeSingle();
+
+    if (player && typeof player.nickname === 'string') {
+      const { data: tokenRow } = await admin
+        .from('player_tokens')
+        .select('client_token')
+        .eq('player_id', playerId)
+        .maybeSingle();
+      const { error: kickError } = await admin.from('session_kicks').insert({
+        session_id: sessionId,
+        nickname: player.nickname,
+        client_token: typeof tokenRow?.client_token === 'string' ? tokenRow.client_token : null,
+      });
+      if (kickError && kickError.code !== '23505') throw kickError;
+    }
+
+    const { error } = await admin.from('players').delete().eq('id', playerId).eq('session_id', sessionId);
 
     if (error) throw error;
 
@@ -153,6 +189,20 @@ export async function setSessionMultiplier(sessionId: string, multiplier: 1 | 2)
 
     if (multiplier !== 1 && multiplier !== 2) {
       throw new Error('Invalid multiplier.');
+    }
+
+    const { data: open, error: openError } = await supabase
+      .from('game_sessions')
+      .select('id, status')
+      .eq('id', sessionId)
+      .eq('host_id', user.id)
+      .maybeSingle();
+
+    if (openError || !open) {
+      throw new Error('Unauthorized or session not found.');
+    }
+    if (open.status !== 'lobby' && open.status !== 'leaderboard') {
+      throw new Error('Double points lock once the question starts.');
     }
 
     const { data: session, error: sessionError } = await supabase
@@ -332,6 +382,25 @@ export async function goToPodium(sessionId: string) {
   } catch (err) {
     console.error('goToPodium error:', err);
     throw new Error(err instanceof Error ? err.message : 'Failed to display podium.');
+  }
+}
+
+export async function setJoinLocked(sessionId: string, locked: boolean) {
+  try {
+    const { supabase, user } = await getHostAuth();
+    const { data, error } = await supabase
+      .from('game_sessions')
+      .update({ join_locked: locked })
+      .eq('id', sessionId)
+      .eq('host_id', user.id)
+      .select('join_locked')
+      .single();
+
+    if (error || !data) throw error || new Error('Unauthorized or session not found.');
+    return { success: true, join_locked: Boolean(data.join_locked) };
+  } catch (err) {
+    console.error('setJoinLocked error:', err);
+    throw new Error(err instanceof Error ? err.message : 'Failed to lock the room.');
   }
 }
 

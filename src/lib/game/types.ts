@@ -56,6 +56,8 @@ export interface Player {
   streak: number;
   joined_at: string;
   connected: boolean;
+  /** Set on the phone roster, which does not include other players' ids. */
+  isMe?: boolean;
 }
 
 export interface LeaderboardPlayer {
@@ -76,6 +78,9 @@ export interface GameSessionRow {
   active_multiplier?: number;
   question_order?: string[] | null;
   late_join_through_index?: number | null;
+  join_locked?: boolean;
+  /** Database clock at the last session write. The projector uses it as a clock sample. */
+  updated_at?: string | null;
 }
 
 export function sanitizeAnswers(answers: AnswerOption[]): PublicAnswerOption[] {

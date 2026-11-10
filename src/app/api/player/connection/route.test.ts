@@ -17,6 +17,27 @@ describe('POST /api/player/connection', () => {
   it('requires identity and a boolean connected flag', async () => {
     const { POST } = await import('@/app/api/player/connection/route');
     expect((await readJson(await POST(jsonRequest({ playerId: 'p1', token: 'tok' })))).status).toBe(400);
+    expect(
+      (await readJson(await POST(jsonRequest({ playerId: 'p1', token: 'tok', connected: 'false' })))).status
+    ).toBe(400);
+  });
+
+  it('rejects a token that does not match and a failed presence write', async () => {
+    const { POST } = await import('@/app/api/player/connection/route');
+    admin.setTables({
+      player_tokens: { data: { client_token: 'other', player_id: 'p1' }, error: null },
+    });
+    expect(
+      (await readJson(await POST(jsonRequest({ playerId: 'p1', token: 'tok', connected: false })))).status
+    ).toBe(401);
+
+    admin.setTables({
+      player_tokens: { data: { client_token: 'tok', player_id: 'p1' }, error: null },
+      players: { data: null, error: { message: 'write failed' } },
+    });
+    expect(
+      (await readJson(await POST(jsonRequest({ playerId: 'p1', token: 'tok', connected: true })))).status
+    ).toBe(500);
   });
 
   it('marks the player offline when the token matches', async () => {

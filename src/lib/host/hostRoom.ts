@@ -1,5 +1,6 @@
 import { createClient } from '@/lib/supabase/server';
 import type { Player, Question, GameSessionRow } from '@/lib/game/types';
+import { keepStoredQuestion, questionOrderIds } from '@/lib/game/questionArchive';
 import { parseCreatedSession, toGameSessionRow } from '@/lib/host/createLobbySession';
 import {
   HOST_PLAYER_SELECT,
@@ -87,7 +88,13 @@ export async function loadHostRoom(
     if (questionsResult.error) {
       console.error('Error fetching questions:', questionsResult.error);
     }
-    questions = asQuestions(questionsResult.data);
+    const order = questionOrderIds(session.question_order);
+    const rows = Array.isArray(questionsResult.data) ? questionsResult.data : [];
+    questions = asQuestions(
+      rows.filter((row) =>
+        keepStoredQuestion(row as { id: string; archived_at?: string | null }, order)
+      )
+    );
   }
 
   return {

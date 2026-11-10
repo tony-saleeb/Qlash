@@ -1,25 +1,35 @@
 /**
  * Rate limiter: Postgres buckets when the RPC exists (multi-instance Vercel),
- * in-memory fallback so a missing migration never takes down a live room.
+ * in-memory fallback when that function is not installed yet.
  */
 
+import { createHash } from 'crypto';
 import { createAdminClient } from '@/lib/supabase/admin';
+
+/** Keys longer than this never reach Postgres or the memory map as raw text. */
+const MAX_RATE_LIMIT_KEY_CHARS = 512;
 
 type Bucket = { count: number; resetAt: number };
 type RateLimitResult = { ok: true } | { ok: false; retryAfterSec: number };
 
 const buckets = new Map<string, Bucket>();
 
+export function boundRateLimitKey(key: string): string {
+  if (key.length <= MAX_RATE_LIMIT_KEY_CHARS && !key.includes('\0')) return key;
+  return createHash('sha256').update(key).digest('hex');
+}
+
 export function rateLimitMemory(params: {
   key: string;
   limit: number;
   windowMs: number;
 }): RateLimitResult {
+  const key = boundRateLimitKey(params.key);
   const now = Date.now();
-  const existing = buckets.get(params.key);
+  const existing = buckets.get(key);
 
   if (!existing || now >= existing.resetAt) {
-    buckets.set(params.key, { count: 1, resetAt: now + params.windowMs });
+    buckets.set(key, { count: 1, resetAt: now + params.windowMs });
     return { ok: true };
   }
 
@@ -33,8 +43,8 @@ export function rateLimitMemory(params: {
   existing.count += 1;
 
   if (buckets.size > 4000) {
-    buckets.forEach((bucket, key) => {
-      if (now >= bucket.resetAt) buckets.delete(key);
+    buckets.forEach((bucket, bucketKey) => {
+      if (now >= bucket.resetAt) buckets.delete(bucketKey);
     });
   }
 
@@ -53,6 +63,13 @@ export function resetRemoteRateLimitProbe() {
   remoteUnavailableUntil = 0;
 }
 
+function missingRateLimitRpc(error: { code?: string; message?: string } | null): boolean {
+  if (!error) return false;
+  if (error.code === '42883' || error.code === 'PGRST202') return true;
+  const message = error.message ?? '';
+  return /does not exist/i.test(message) || /could not find the function/i.test(message);
+}
+
 async function rateLimitRemote(params: {
   key: string;
   limit: number;
@@ -65,12 +82,14 @@ async function rateLimitRemote(params: {
   try {
     const admin = createAdminClient();
     const { data, error } = await admin.rpc('consume_rate_limit', {
-      p_key: params.key,
+      p_key: boundRateLimitKey(params.key),
       p_limit: params.limit,
       p_window_ms: params.windowMs,
     });
     if (error || data == null) {
-      remoteUnavailableUntil = Date.now() + REMOTE_PROBE_COOLDOWN_MS;
+      if (missingRateLimitRpc(error)) {
+        remoteUnavailableUntil = Date.now() + REMOTE_PROBE_COOLDOWN_MS;
+      }
       return null;
     }
     remoteUnavailableUntil = 0;
@@ -81,7 +100,6 @@ async function rateLimitRemote(params: {
       retryAfterSec: Math.max(1, Number(result.retryAfterSec) || 1),
     };
   } catch {
-    remoteUnavailableUntil = Date.now() + REMOTE_PROBE_COOLDOWN_MS;
     return null;
   }
 }
@@ -104,9 +122,10 @@ export async function rateLimit(params: {
 export const RATE_LIMIT_SHARDS = 8;
 
 export function shardedRateLimitKey(key: string, seed: string, shards = RATE_LIMIT_SHARDS): string {
+  const source = seed.length > 128 ? seed.slice(0, 128) : seed;
   let hash = 0;
-  for (let i = 0; i < seed.length; i += 1) {
-    hash = (hash * 31 + seed.charCodeAt(i)) | 0;
+  for (let i = 0; i < source.length; i += 1) {
+    hash = (hash * 31 + source.charCodeAt(i)) | 0;
   }
   return `${key}#${Math.abs(hash) % shards}`;
 }

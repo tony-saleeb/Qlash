@@ -50,6 +50,10 @@ describe('Landing page', () => {
     const google = await screen.findByRole('button', { name: /continue with google/i });
     expect(google).toBeInTheDocument();
     expect(google.querySelector('svg')).toBeTruthy();
+    expect(screen.getByLabelText('Email')).toBeInTheDocument();
+    expect(screen.getByLabelText('Password')).toBeInTheDocument();
+    await user.click(screen.getByRole('button', { name: /need an account/i }));
+    expect(screen.getByLabelText('Display name')).toBeInTheDocument();
   });
 
   it('joins a room through joinOrReconnect and routes into play', async () => {

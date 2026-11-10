@@ -13,6 +13,14 @@ describe('rank move', () => {
     expect(rankOfPlayer(rows, 'missing')).toBeNull();
   });
 
+  it('ranks the caller from isMe when the roster has no ids', () => {
+    const rows = [
+      { score: 100, isMe: false },
+      { score: 400, isMe: true },
+    ];
+    expect(rankOfPlayer(rows, 'unused')).toBe(1);
+  });
+
   it('treats a first known rank as held', () => {
     expect(rankMove(null, 4)).toEqual({ current: 4, delta: 0, kind: 'same' });
     expect(rankMove(undefined, 0)).toBeNull();

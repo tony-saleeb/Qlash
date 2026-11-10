@@ -2,6 +2,7 @@ import { NextResponse } from 'next/server';
 import { createAdminClient } from '@/lib/supabase/admin';
 import { limitPlayerHydrateSharded, tooManyRequests } from '@/lib/api/playerLimit';
 import { canCheerOnProjector, isLobbyReactionId } from '@/lib/game/reactions';
+import { scopedRateLimitKey } from '@/lib/api/ids';
 import { rateLimit } from '@/lib/rate-limit';
 
 export const dynamic = 'force-dynamic';
@@ -57,8 +58,8 @@ export async function POST(request: Request) {
     }
 
     const [playerLimited, roomLimited] = await Promise.all([
-      rateLimit({ key: `react:player:${playerId}`, limit: 1, windowMs: 1500 }),
-      rateLimit({ key: `react:room:${sessionId}`, limit: 10, windowMs: 1000 }),
+      rateLimit({ key: scopedRateLimitKey('react:player', playerId), limit: 1, windowMs: 1500 }),
+      rateLimit({ key: scopedRateLimitKey('react:room', sessionId), limit: 10, windowMs: 1000 }),
     ]);
     if (!playerLimited.ok || !roomLimited.ok) {
       return new NextResponse(null, { status: 204 });

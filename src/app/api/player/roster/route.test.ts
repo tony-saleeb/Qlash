@@ -43,8 +43,8 @@ describe('POST /api/player/roster', () => {
         { data: { id: 'p1' }, error: null },
         {
           data: [
-            { id: 'p1', nickname: 'Ada', score: 900, streak: 1, connected: true },
-            { id: 'p2', nickname: 'Bob', score: 100, streak: 0, connected: true },
+            { id: 'p1', nickname: 'Ada', team_name: 'Red', score: 900, streak: 1, connected: true },
+            { id: 'p2', nickname: 'Bob', team_name: 'Blue', score: 100, streak: 0, connected: true },
           ],
           error: null,
         },
@@ -55,6 +55,15 @@ describe('POST /api/player/roster', () => {
       await POST(jsonRequest({ sessionId: 'sess-1', token: 'tok' }))
     );
     expect(result.status).toBe(200);
-    expect(result.body.players[0].nickname).toBe('Ada');
+    expect(result.body.players[0]).toEqual({
+      nickname: 'Ada',
+      score: 900,
+      streak: 1,
+      connected: true,
+      team_name: 'Red',
+      isMe: true,
+    });
+    expect(result.body.players[1].isMe).toBe(false);
+    expect(JSON.stringify(result.body)).not.toContain('p2');
   });
 });

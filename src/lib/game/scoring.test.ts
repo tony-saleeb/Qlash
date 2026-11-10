@@ -219,9 +219,10 @@ describe('resolveMultiplier', () => {
     expect(resolveMultiplier(1, [], 'q1', 0)).toBe(1);
   });
 
-  it('matches configured question id or index string', () => {
+  it('matches the question id or its library position, not the play slot', () => {
     expect(resolveMultiplier(1, ['q1'], 'q1', 3)).toBe(2);
-    expect(resolveMultiplier(1, ['3'], 'other', 3)).toBe(2);
+    expect(resolveMultiplier(1, ['3'], 'shuffled-into-slot-3', 3)).toBe(2);
+    expect(resolveMultiplier(1, ['3'], 'played-first', 0)).toBe(1);
     expect(resolveMultiplier(1, ['2'], 'q1', 3)).toBe(1);
   });
 

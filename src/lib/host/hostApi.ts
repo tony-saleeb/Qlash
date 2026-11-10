@@ -41,6 +41,8 @@ export const resumeGameSession = (sessionId: string) =>
   hostOp<HostClock>('resumeGameSession', { sessionId });
 export const addQuestionTime = (sessionId: string, extraSeconds?: number) =>
   hostOp<HostClock>('addQuestionTime', { sessionId, extraSeconds });
+export const setJoinLocked = (sessionId: string, locked: boolean) =>
+  hostOp<{ join_locked: boolean }>('setJoinLocked', { sessionId, locked });
 export const setLateJoinThroughIndex = (sessionId: string, throughIndex: number) =>
   hostOp<{ late_join_through_index: number }>('setLateJoinThroughIndex', {
     sessionId,
@@ -54,8 +56,18 @@ export const cloneQuiz = (quizId: string) => hostOp<HostQuiz>('cloneQuiz', { qui
 export const createPackQuiz = (packId: string) => hostOp<HostQuiz>('createPackQuiz', { packId });
 export const enableQuizShare = (quizId: string) =>
   hostOp<{ shareCode: string }>('enableQuizShare', { quizId });
+export const rotateQuizShare = (quizId: string) =>
+  hostOp<{ shareCode: string }>('rotateQuizShare', { quizId });
+export const stopQuizShare = (quizId: string) =>
+  hostOp<{ shareCode: null }>('stopQuizShare', { quizId });
+export type SavedQuiz = {
+  success: true;
+  updatedAt: string;
+  questionIds: string[];
+};
+
 export const saveQuizData = (quizId: string, settings: unknown, questions: unknown) =>
-  hostOp('saveQuizData', { quizId, settings, questions });
+  hostOp<SavedQuiz>('saveQuizData', { quizId, settings, questions });
 
 export const createRecapQuiz = (sessionId: string) =>
   hostOp<HostQuiz>('createRecapQuiz', { sessionId });

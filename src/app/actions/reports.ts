@@ -8,6 +8,7 @@ import {
   recapQuestionIds,
   type SessionReport,
 } from '@/lib/game/sessionReport';
+import { questionOrderIds, questionsForReport } from '@/lib/game/questionArchive';
 import { revalidatePath } from 'next/cache';
 
 export async function getSessionReport(sessionId: string): Promise<SessionReport> {
@@ -16,7 +17,9 @@ export async function getSessionReport(sessionId: string): Promise<SessionReport
 
     const { data: session, error: sessionError } = await supabase
       .from('game_sessions')
-      .select('id, pin, status, created_at, quiz_id, question_order, quizzes(title, team_mode)')
+      .select(
+        'id, pin, status, created_at, quiz_id, question_order, current_question_index, scored_question_ids, quizzes(title, team_mode)'
+      )
       .eq('id', sessionId)
       .eq('host_id', user.id)
       .single();
@@ -34,19 +37,21 @@ export async function getSessionReport(sessionId: string): Promise<SessionReport
       await Promise.all([
         supabase
           .from('players')
-          .select('id, nickname, team_name, score, streak')
+          .select('id, nickname, team_name, score, streak, joined_at')
           .eq('session_id', sessionId)
           .order('score', { ascending: false }),
         session.quiz_id
           ? supabase
               .from('questions')
-              .select('id, prompt, type, order_index, answers')
+              .select('id, prompt, type, order_index, answers, archived_at')
               .eq('quiz_id', session.quiz_id)
               .order('order_index', { ascending: true })
           : Promise.resolve({ data: [], error: null }),
         supabase
           .from('answers_submitted')
-          .select('player_id, question_id, selected_answer_ids, points_awarded, is_correct, time_taken_ms')
+          .select(
+            'player_id, question_id, selected_answer_ids, points_awarded, is_correct, time_taken_ms, answered_at'
+          )
           .eq('session_id', sessionId),
       ]);
 
@@ -62,11 +67,17 @@ export async function getSessionReport(sessionId: string): Promise<SessionReport
         created_at: session.created_at,
         quiz_id: session.quiz_id,
         question_order: session.question_order,
+        current_question_index: session.current_question_index,
+        scored_question_ids: session.scored_question_ids,
       },
       quizTitle: quiz?.title ?? null,
       teamMode: Boolean(quiz?.team_mode),
       players: players || [],
-      questions: questions || [],
+      questions: questionsForReport(
+        questions || [],
+        answers || [],
+        questionOrderIds(session.question_order)
+      ),
       answers: answers || [],
     });
   } catch (err: unknown) {

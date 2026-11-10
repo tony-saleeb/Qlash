@@ -7,6 +7,7 @@ import { whatsAppShareUrl } from '@/lib/game/lobbyLink';
 import { readRequestLocale } from '@/lib/i18n/requestLocale';
 import { t } from '@/lib/i18n/messages';
 import { metadataBaseUrl } from '@/lib/siteUrl';
+import { pageTitle } from '@/lib/siteMeta';
 
 export const dynamic = 'force-dynamic';
 
@@ -16,16 +17,16 @@ export async function generateMetadata({ params }: PageProps): Promise<Metadata>
   const { sessionId } = await params;
   const podium = await getFinishedPodium(sessionId);
   if (!podium) {
-    return { title: 'Qlash', robots: { index: false } };
+    return { title: pageTitle('Qlash'), robots: { index: false, follow: false } };
   }
-  const names = podium.top.map((place) => place.nickname).join(' · ');
-  const description = names || 'Final podium';
+  const title = pageTitle(`${podium.quizTitle} · ${t('en', 'podium')}`);
   return {
-    title: `${podium.quizTitle} · ${t('en', 'podium')} | Qlash`,
-    description,
+    title,
+    description: title,
+    robots: { index: false, follow: false },
     openGraph: {
-      title: `${podium.quizTitle} | Qlash`,
-      description,
+      title,
+      description: title,
     },
   };
 }

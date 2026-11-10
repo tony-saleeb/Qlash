@@ -7,6 +7,7 @@ export interface ReportAnswerRow {
   points_awarded: number;
   is_correct: boolean;
   time_taken_ms: number;
+  answered_at?: string | null;
 }
 
 export interface ReportPlayerRow {
@@ -15,6 +16,7 @@ export interface ReportPlayerRow {
   team_name?: string | null;
   score: number;
   streak: number;
+  joined_at?: string | null;
 }
 
 export interface ReportQuestionRow {
@@ -33,6 +35,8 @@ export interface SessionReportInput {
     created_at: string;
     quiz_id: string | null;
     question_order?: unknown;
+    current_question_index?: number | null;
+    scored_question_ids?: unknown;
   };
   quizTitle: string | null;
   teamMode: boolean;
@@ -61,6 +65,7 @@ export interface PlayerReport {
   correct: number;
   answered: number;
   accuracy: number | null;
+  asked: number;
 }
 
 export interface SessionReport {
@@ -123,9 +128,87 @@ function pct(correct: number, total: number): number | null {
   return Math.round((correct / total) * 100);
 }
 
+function timeMs(value: string | null | undefined): number | null {
+  if (!value) return null;
+  const parsed = Date.parse(value);
+  return Number.isFinite(parsed) ? parsed : null;
+}
+
+/** Questions the room actually reached. Unset fields keep the full list for older callers. */
+export function playedQuestionIds(session: SessionReportInput['session']): string[] | null {
+  if (session.scored_question_ids === undefined && session.current_question_index == null) {
+    return null;
+  }
+  const order = asStringArray(session.question_order);
+  const scored = asStringArray(session.scored_question_ids);
+  if (scored.length > 0) {
+    const inOrder = order.filter((id) => scored.includes(id));
+    const extra = scored.filter((id) => !inOrder.includes(id));
+    return [...inOrder, ...extra];
+  }
+  if (order.length === 0) return [];
+  const index = session.current_question_index;
+  const through = typeof index === 'number' && index >= 0 ? index : order.length - 1;
+  return order.slice(0, through + 1);
+}
+
+function answerTimes(rows: ReportAnswerRow[]): number[] {
+  return rows.map((row) => timeMs(row.answered_at)).filter((value): value is number => value !== null);
+}
+
+function presentPlayerIds(
+  players: ReportPlayerRow[],
+  questionId: string,
+  playedIds: string[],
+  answersByQuestion: Map<string, ReportAnswerRow[]>
+): Set<string> {
+  const rows = answersByQuestion.get(questionId) ?? [];
+  const answered = new Set(rows.map((row) => row.player_id));
+  const times = answerTimes(rows);
+  const endedAt = times.length > 0 ? Math.max(...times) : null;
+  let nextStartedAt: number | null = null;
+  if (endedAt === null) {
+    const later = playedIds.slice(playedIds.indexOf(questionId) + 1);
+    for (const laterId of later) {
+      const laterTimes = answerTimes(answersByQuestion.get(laterId) ?? []);
+      if (laterTimes.length > 0) {
+        nextStartedAt = Math.min(...laterTimes);
+        break;
+      }
+    }
+  }
+
+  const present = new Set<string>();
+  for (const player of players) {
+    if (answered.has(player.id)) {
+      present.add(player.id);
+      continue;
+    }
+    const joined = timeMs(player.joined_at);
+    if (joined === null) {
+      present.add(player.id);
+      continue;
+    }
+    if (endedAt !== null) {
+      if (joined <= endedAt) present.add(player.id);
+      continue;
+    }
+    if (nextStartedAt !== null) {
+      if (joined < nextStartedAt) present.add(player.id);
+      continue;
+    }
+    present.add(player.id);
+  }
+  return present;
+}
+
 export function buildSessionReport(input: SessionReportInput): SessionReport {
-  const questions = orderQuestions(input.questions, input.session.question_order);
-  const scoredQuestions = questions.filter((q) => q.type !== 'poll');
+  const ordered = orderQuestions(input.questions, input.session.question_order);
+  const playedIds = playedQuestionIds(input.session);
+  const questions =
+    playedIds === null ? ordered : ordered.filter((question) => playedIds.includes(question.id));
+  const playedOrder = playedIds ?? questions.map((question) => question.id);
+  const scoredQuestions = questions.filter((question) => question.type !== 'poll');
   const answersByPlayer = new Map<string, ReportAnswerRow[]>();
   const answersByQuestion = new Map<string, ReportAnswerRow[]>();
 
@@ -147,6 +230,9 @@ export function buildSessionReport(input: SessionReportInput): SessionReport {
         return q && q.type !== 'poll';
       });
       const correct = scored.filter((row) => row.is_correct).length;
+      const asked = scoredQuestions.filter((question) =>
+        presentPlayerIds(input.players, question.id, playedOrder, answersByQuestion).has(player.id)
+      ).length;
       return {
         id: player.id,
         nickname: player.nickname,
@@ -155,7 +241,8 @@ export function buildSessionReport(input: SessionReportInput): SessionReport {
         streak: player.streak,
         correct,
         answered: scored.length,
-        accuracy: pct(correct, scoredQuestions.length),
+        asked,
+        accuracy: pct(correct, asked),
       };
     });
 
@@ -164,17 +251,18 @@ export function buildSessionReport(input: SessionReportInput): SessionReport {
     const isPoll = question.type === 'poll';
     const correct = rows.filter((row) => row.is_correct).length;
     const playerById = new Map(input.players.map((p) => [p.id, p]));
+    const present = presentPlayerIds(input.players, question.id, playedOrder, answersByQuestion);
     const missedBy = isPoll
       ? []
       : [
           ...rows
-            .filter((row) => !row.is_correct)
+            .filter((row) => !row.is_correct && present.has(row.player_id))
             .map((row) => ({
               nickname: playerById.get(row.player_id)?.nickname ?? 'Player',
               answer: selectedLabel(question, asStringArray(row.selected_answer_ids)),
             })),
           ...input.players
-            .filter((player) => !rows.some((row) => row.player_id === player.id))
+            .filter((player) => present.has(player.id) && !rows.some((row) => row.player_id === player.id))
             .map((player) => ({ nickname: player.nickname, answer: 'No answer' })),
         ];
 
@@ -185,7 +273,7 @@ export function buildSessionReport(input: SessionReportInput): SessionReport {
       correctLabels: correctLabels(question),
       answered: rows.length,
       correct,
-      accuracy: isPoll ? null : pct(correct, input.players.length),
+      accuracy: isPoll ? null : pct(correct, present.size),
       missedBy,
     };
   });
@@ -215,9 +303,12 @@ export function buildSessionReport(input: SessionReportInput): SessionReport {
   };
 }
 
+const CSV_FORMULA_START = /^[=+\-@\t\r]/;
+
 function csvCell(value: string | number | null | undefined): string {
-  const text = value === null || value === undefined ? '' : String(value);
-  if (/[",\n]/.test(text)) return `"${text.replace(/"/g, '""')}"`;
+  let text = value === null || value === undefined ? '' : String(value);
+  if (CSV_FORMULA_START.test(text)) text = `'${text}`;
+  if (/[",\n\r]/.test(text)) return `"${text.replace(/"/g, '""')}"`;
   return text;
 }
 
@@ -253,7 +344,7 @@ export function sessionReportToCsv(report: SessionReport): string {
         .join(',')
     ),
   ];
-  return lines.join('\n');
+  return `\uFEFF${lines.join('\n')}`;
 }
 
 export interface QuestionDelta {

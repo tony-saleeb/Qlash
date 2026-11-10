@@ -12,6 +12,8 @@ import { toast } from 'sonner';
 import { User } from '@supabase/supabase-js';
 import { ArenaFloor, BrandMark } from '@/components/brand/BrandMark';
 import { authCallbackUrl, publicSiteUrl } from '@/lib/siteUrl';
+import { hostEntryFromSearch } from '@/lib/auth/hostEntry';
+import { importQuizPath } from '@/lib/content/shareCode';
 import { unlockGameAudio } from '@/lib/sounds';
 import { LocaleToggle } from '@/components/brand/LocaleToggle';
 import { useLocale } from '@/lib/i18n/useLocale';
@@ -23,7 +25,7 @@ function hostAuthRedirect(): string {
   try {
     const importCode =
       new URLSearchParams(window.location.search).get('import') || sessionStorage.getItem('qlash_import');
-    if (importCode) return `${base}?next=${encodeURIComponent(`/import/${importCode}`)}`;
+    if (importCode) return `${base}?next=${encodeURIComponent(importQuizPath(importCode))}`;
   } catch {
     // ignore
   }
@@ -81,10 +83,12 @@ export default function LandingClient({ initialLocale }: { initialLocale?: Local
   useEffect(() => {
     if (typeof window === 'undefined') return;
     const params = new URLSearchParams(window.location.search);
-    if (params.get('host') === '1') {
+    const entry = hostEntryFromSearch(window.location.search);
+    if (entry.openHost) {
       setPanel('host');
-      setAuthMode('signup');
+      setAuthMode(entry.authMode);
     }
+    if (entry.authError) toast.error(t('authLinkFailed'));
     const importCode = params.get('import');
     if (importCode) {
       try {
@@ -101,7 +105,7 @@ export default function LandingClient({ initialLocale }: { initialLocale?: Local
       const importCode = sessionStorage.getItem('qlash_import');
       if (importCode) {
         sessionStorage.removeItem('qlash_import');
-        router.push(`/import/${importCode}`);
+        router.push(importQuizPath(importCode));
       }
     } catch {
       // ignore
@@ -113,7 +117,14 @@ export default function LandingClient({ initialLocale }: { initialLocale?: Local
     toast.success(welcome);
     setCurrentHost(user);
     const importCode = new URLSearchParams(window.location.search).get('import');
-    router.push(importCode ? `/import/${importCode}` : '/dashboard');
+    if (importCode) {
+      try {
+        sessionStorage.removeItem('qlash_import');
+      } catch {
+        // ignore
+      }
+    }
+    router.push(importCode ? importQuizPath(importCode) : '/dashboard');
   };
 
   const handleHostAuth = async (e: React.FormEvent) => {
@@ -135,6 +146,11 @@ export default function LandingClient({ initialLocale }: { initialLocale?: Local
           setAuthLoading(false);
           return;
         }
+        if (password.length < 8) {
+          toast.error(t('passwordTooShort'));
+          setAuthLoading(false);
+          return;
+        }
         const { data, error } = await supabase.auth.signUp({
           email,
           password,
@@ -150,6 +166,25 @@ export default function LandingClient({ initialLocale }: { initialLocale?: Local
         }
         enterHost(data.user, t('accountReady'));
       }
+    } catch (error) {
+      toast.error(error instanceof Error ? error.message : t('authFailed'));
+    } finally {
+      setAuthLoading(false);
+    }
+  };
+
+  const handleForgotPassword = async () => {
+    if (!email.trim()) {
+      toast.error(t('enterEmail'));
+      return;
+    }
+    setAuthLoading(true);
+    try {
+      const { error } = await supabase.auth.resetPasswordForEmail(email.trim(), {
+        redirectTo: `${publicSiteUrl() || window.location.origin}/auth/confirm?next=/reset-password`,
+      });
+      if (error) throw error;
+      toast.success(t('resetEmailSent'));
     } catch (error) {
       toast.error(error instanceof Error ? error.message : t('authFailed'));
     } finally {
@@ -383,29 +418,47 @@ export default function LandingClient({ initialLocale }: { initialLocale?: Local
                     </div>
                     <form onSubmit={handleHostAuth} className="space-y-3">
                       {authMode === 'signup' && (
-                        <Input
-                          placeholder={t('displayName')}
-                          value={displayName}
-                          onChange={(e) => setDisplayName(e.target.value)}
-                          className="h-11 rounded-none border-2 border-arena-ink/20"
-                        />
+                        <div>
+                          <Label htmlFor="hostDisplayName" className="text-[11px] font-bold uppercase tracking-[0.18em] text-arena-ink/60">
+                            {t('displayName')}
+                          </Label>
+                          <Input
+                            id="hostDisplayName"
+                            placeholder={t('displayName')}
+                            value={displayName}
+                            onChange={(e) => setDisplayName(e.target.value)}
+                            className="mt-2 h-11 rounded-none border-2 border-arena-ink/20"
+                          />
+                        </div>
                       )}
-                      <Input
-                        placeholder={t('email')}
-                        type="email"
-                        dir="ltr"
-                        value={email}
-                        onChange={(e) => setEmail(e.target.value)}
-                        className="h-11 rounded-none border-2 border-arena-ink/20"
-                      />
-                      <Input
-                        placeholder={t('password')}
-                        type="password"
-                        dir="ltr"
-                        value={password}
-                        onChange={(e) => setPassword(e.target.value)}
-                        className="h-11 rounded-none border-2 border-arena-ink/20"
-                      />
+                      <div>
+                        <Label htmlFor="hostEmail" className="text-[11px] font-bold uppercase tracking-[0.18em] text-arena-ink/60">
+                          {t('email')}
+                        </Label>
+                        <Input
+                          id="hostEmail"
+                          placeholder={t('email')}
+                          type="email"
+                          dir="ltr"
+                          value={email}
+                          onChange={(e) => setEmail(e.target.value)}
+                          className="mt-2 h-11 rounded-none border-2 border-arena-ink/20"
+                        />
+                      </div>
+                      <div>
+                        <Label htmlFor="hostPassword" className="text-[11px] font-bold uppercase tracking-[0.18em] text-arena-ink/60">
+                          {t('password')}
+                        </Label>
+                        <Input
+                          id="hostPassword"
+                          placeholder={t('password')}
+                          type="password"
+                          dir="ltr"
+                          value={password}
+                          onChange={(e) => setPassword(e.target.value)}
+                          className="mt-2 h-11 rounded-none border-2 border-arena-ink/20"
+                        />
+                      </div>
                       <Button
                         type="submit"
                         disabled={authLoading}
@@ -413,6 +466,15 @@ export default function LandingClient({ initialLocale }: { initialLocale?: Local
                       >
                         {authLoading ? t('pleaseWait') : authMode === 'login' ? t('signIn') : t('createHost')}
                       </Button>
+                      {authMode === 'login' && (
+                        <button
+                          type="button"
+                          onClick={() => void handleForgotPassword()}
+                          className="w-full text-center text-xs font-semibold text-arena-ink/60 underline-offset-4 hover:underline"
+                        >
+                          {t('forgotPassword')}
+                        </button>
+                      )}
                       <button
                         type="button"
                         onClick={() => setAuthMode(authMode === 'login' ? 'signup' : 'login')}

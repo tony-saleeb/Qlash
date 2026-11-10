@@ -27,8 +27,9 @@ import {
   type Question,
   type GameSessionRow,
 } from '@/lib/game/types';
-import { maybeSeededShuffle, questionsInPlayOrder } from '@/lib/game/shuffle';
+import { answersInPlayOrder, maybeSeededShuffle, questionsInPlayOrder } from '@/lib/game/shuffle';
 import { mergeLiveSession } from '@/lib/game/liveQuestion';
+import { patchQuestionBank } from '@/lib/game/liveQuestionEdit';
 import {
   activeQuestionForIndex,
   isLastSessionIndex,
@@ -77,11 +78,18 @@ export default function HostClickerClient({
 }: HostClickerClientProps) {
   const router = useRouter();
   const supabase = createClient();
-  const { questions, questionsLoading } = useHostQuestionBank(quiz.id, initialQuestions, supabase);
+  const { questions, questionsLoading, setQuestions } = useHostQuestionBank(
+    quiz.id,
+    initialQuestions,
+    supabase
+  );
   const { send: sendSessionEvent } = useSessionChannel(initialSession.id, {
     supabase,
     onEvents: {
       'clash:countdown': () => setClashRunning(true),
+      'question:update': (msg) => {
+        setQuestions((prev) => patchQuestionBank(prev, msg.payload) as Question[]);
+      },
     },
   });
   const { locale, setLocale, t } = useLocale(initialLocale);
@@ -116,7 +124,7 @@ export default function HostClickerClient({
   const prepareQuestionForPlay = useCallback(
     (question: Question): Question => ({
       ...question,
-      answers: maybeSeededShuffle(question.answers, randomizeAnswers, `${session.id}:${question.id}`),
+      answers: answersInPlayOrder(question.answers, randomizeAnswers, `${session.id}:${question.id}`),
     }),
     [randomizeAnswers, session.id]
   );

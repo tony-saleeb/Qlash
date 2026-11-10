@@ -2,6 +2,8 @@
 
 import { Button } from '@/components/ui/button';
 import { Plus, Trash2, Copy, ArrowUp, ArrowDown } from 'lucide-react';
+import { useLocale } from '@/lib/i18n/useLocale';
+import { fill } from '@/lib/i18n/messages';
 import type { Question } from './quizEditorModel';
 
 interface QuestionListSidebarProps {
@@ -25,45 +27,51 @@ export default function QuestionListSidebar({
   onRemove,
   onAdd,
 }: QuestionListSidebarProps) {
+  const { t } = useLocale();
   return (
-    <aside className="flex flex-col border-b border-arena-line bg-white/40 md:col-span-3 md:max-h-[calc(100dvh-4.5rem)] md:justify-between md:overflow-y-auto md:border-b-0 md:border-r">
+    <aside className="flex flex-col border-b border-arena-line bg-white/40 md:col-span-3 md:max-h-[calc(100dvh-4.5rem)] md:justify-between md:overflow-y-auto md:border-b-0 md:border-e">
       <div className="space-y-3 p-3 md:p-4">
         <span className="text-xs font-bold uppercase tracking-widest text-arena-ink/60">
-          Questions
+          {t('questionsHeading')}
         </span>
 
-        <div className="flex gap-2 overflow-x-auto pb-1 md:max-h-[60vh] md:flex-col md:space-y-2.5 md:overflow-x-visible md:overflow-y-auto md:pr-1">
+        <div className="flex gap-2 overflow-x-auto pb-1 md:max-h-[60vh] md:flex-col md:space-y-2.5 md:overflow-x-visible md:overflow-y-auto md:pe-1">
           {questions.map((q, idx) => {
             const isSelected = idx === activeIndex;
-            const isDouble = doublePointsRounds.includes(idx.toString());
+            const isDouble = Boolean(q.id && doublePointsRounds.includes(q.id));
 
             return (
               <div
                 key={idx}
-                onClick={() => onSelect(idx)}
-                className={`relative flex min-w-[11.5rem] shrink-0 cursor-pointer items-start justify-between gap-3 rounded-xl border p-3 transition-all group md:min-w-0 md:w-full ${
+                className={`group relative min-w-[11.5rem] shrink-0 rounded-xl border transition-all md:min-w-0 md:w-full ${
                   isSelected
                     ? 'border-arena-signal bg-arena-signal/10 text-arena-ink shadow-lg'
                     : 'border-arena-line bg-arena-mist/40 text-arena-ink/55 hover:border-arena-ink/20 hover:text-arena-ink'
                 }`}
               >
-                <div className="flex items-start gap-2.5 w-full">
+                <button
+                  type="button"
+                  onClick={() => onSelect(idx)}
+                  aria-current={isSelected ? 'true' : undefined}
+                  className="flex w-full cursor-pointer items-start gap-2.5 p-3 text-start"
+                >
                   <span className="text-xs font-bold bg-white border border-arena-line rounded w-5 h-5 flex items-center justify-center text-arena-ink/55 shrink-0">
                     {idx + 1}
                   </span>
-                  <div className="flex flex-col min-w-0 w-full gap-0.5">
+                  <span className="flex min-w-0 w-full flex-col gap-0.5">
                     <span className="text-xs text-arena-ink/60 font-semibold uppercase tracking-wider">
                       {q.type.replace('_', ' ')} {isDouble && '⭐ 2x'}
                     </span>
-                    <p dir="auto" className="text-xs font-medium truncate">
-                      {q.prompt || 'Untitled question prompt...'}
-                    </p>
-                  </div>
-                </div>
+                    <span dir="auto" className="truncate text-xs font-medium">
+                      {q.prompt || t('untitledPrompt')}
+                    </span>
+                  </span>
+                </button>
 
-                {/* Move and delete controls inside thumbnail hover */}
-                <div className="absolute right-2 top-2 flex items-center gap-1 rounded-lg border border-arena-line bg-arena-mist/90 p-0.5 opacity-100 transition-opacity md:opacity-0 md:group-hover:opacity-100">
+                <div className="absolute end-2 top-2 z-10 flex items-center gap-1 rounded-lg border border-arena-line bg-arena-mist/90 p-0.5 opacity-100 transition-opacity md:opacity-0 md:group-hover:opacity-100 md:focus-within:opacity-100">
                   <button
+                    type="button"
+                    aria-label={fill(t('moveQuestionUp'), { n: idx + 1 })}
                     onClick={(e) => {
                       e.stopPropagation();
                       onMove(idx, 'up');
@@ -74,6 +82,8 @@ export default function QuestionListSidebar({
                     <ArrowUp className="w-3 h-3" />
                   </button>
                   <button
+                    type="button"
+                    aria-label={fill(t('moveQuestionDown'), { n: idx + 1 })}
                     onClick={(e) => {
                       e.stopPropagation();
                       onMove(idx, 'down');
@@ -88,9 +98,10 @@ export default function QuestionListSidebar({
                       e.stopPropagation();
                       onDuplicate(idx);
                     }}
+                    type="button"
                     className="text-arena-ink/60 hover:text-arena-court"
-                    title="Duplicate Question"
-                    aria-label="Duplicate Question"
+                    title={t('duplicateQuestion')}
+                    aria-label={t('duplicateQuestion')}
                   >
                     <Copy className="w-3 h-3" />
                   </button>
@@ -99,9 +110,10 @@ export default function QuestionListSidebar({
                       e.stopPropagation();
                       onRemove(idx);
                     }}
+                    type="button"
                     className="text-arena-ink/60 hover:text-rose-400"
-                    title="Delete Question"
-                    aria-label="Delete Question"
+                    title={t('deleteQuestion')}
+                    aria-label={t('deleteQuestion')}
                   >
                     <Trash2 className="w-3 h-3" />
                   </button>
@@ -115,7 +127,7 @@ export default function QuestionListSidebar({
       {/* Quick Add Question Panel */}
       <div className="sticky bottom-0 mt-0 space-y-2 border-t border-arena-line bg-white/80 p-3 pt-3 md:mt-4 md:bg-white/80">
         <span className="text-[10px] text-arena-ink/60 font-bold uppercase tracking-wider block">
-          Add Question
+          {t('addQuestion')}
         </span>
         <div className="grid grid-cols-2 gap-1.5">
           <Button
@@ -123,28 +135,28 @@ export default function QuestionListSidebar({
             className="h-8 text-[11px] rounded-lg border-arena-line hover:bg-arena-mist justify-start px-2.5"
             onClick={() => onAdd('mcq')}
           >
-            <Plus className="w-3 h-3 mr-1 text-arena-court" /> MCQ
+            <Plus className="me-1 h-3 w-3 text-arena-court" /> {t('typeMcq')}
           </Button>
           <Button
             variant="outline"
             className="h-8 text-[11px] rounded-lg border-arena-line hover:bg-arena-mist justify-start px-2.5"
             onClick={() => onAdd('true_false')}
           >
-            <Plus className="w-3 h-3 mr-1 text-sky-500" /> True/False
+            <Plus className="me-1 h-3 w-3 text-sky-500" /> {t('typeTrueFalse')}
           </Button>
           <Button
             variant="outline"
             className="h-8 text-[11px] rounded-lg border-arena-line hover:bg-arena-mist justify-start px-2.5"
             onClick={() => onAdd('multi_select')}
           >
-            <Plus className="w-3 h-3 mr-1 text-emerald-500" /> Multi-select
+            <Plus className="me-1 h-3 w-3 text-emerald-500" /> {t('typeMulti')}
           </Button>
           <Button
             variant="outline"
             className="h-8 text-[11px] rounded-lg border-arena-line hover:bg-arena-mist justify-start px-2.5"
             onClick={() => onAdd('type_answer')}
           >
-            <Plus className="w-3 h-3 mr-1 text-fuchsia-500" /> Type Answer
+            <Plus className="me-1 h-3 w-3 text-fuchsia-500" /> {t('typeAnswerLabel')}
           </Button>
         </div>
         <Button
@@ -152,7 +164,7 @@ export default function QuestionListSidebar({
           className="w-full h-8 text-[11px] rounded-lg border-arena-line hover:bg-arena-mist justify-center px-2.5 mt-1"
           onClick={() => onAdd('poll')}
         >
-          <Plus className="w-3 h-3 mr-1 text-yellow-500" /> Add Poll Question (No Score)
+          <Plus className="me-1 h-3 w-3 text-yellow-500" /> {t('addPoll')}
         </Button>
       </div>
     </aside>

@@ -31,6 +31,7 @@ export function useSessionChannel(
   const onEventsRef = useRef(options?.onEvents);
   onEventsRef.current = options?.onEvents;
   const [ready, setReady] = useState(false);
+  const [connection, setConnection] = useState(0);
   const readyRef = useRef(false);
   const deniedRef = useRef(false);
 
@@ -73,6 +74,7 @@ export function useSessionChannel(
       const isReady = status === 'SUBSCRIBED';
       readyRef.current = isReady;
       setReady(isReady);
+      if (isReady) setConnection((count) => count + 1);
     });
 
     return () => {
@@ -117,5 +119,5 @@ export function useSessionChannel(
     return { ok: Boolean(channelRef.current) };
   }, []);
 
-  return { ready, send, supabase };
+  return { ready, connection, send, supabase };
 }
