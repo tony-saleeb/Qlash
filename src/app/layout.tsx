@@ -1,7 +1,6 @@
 import type { Metadata, Viewport } from "next";
 import { headers } from "next/headers";
 import Script from "next/script";
-import { Bricolage_Grotesque, Cairo, Figtree } from "next/font/google";
 import localFont from "next/font/local";
 import "./globals.css";
 import { Toaster } from "@/components/ui/sonner";
@@ -11,22 +10,32 @@ import { readRequestLocale } from "@/lib/i18n/requestLocale";
 import { SITE_DESCRIPTION, SITE_KEYWORDS, SITE_NAME, SITE_TITLE } from "@/lib/siteMeta";
 import { metadataBaseUrl } from "@/lib/siteUrl";
 
-const display = Bricolage_Grotesque({
-  subsets: ["latin"],
+const display = localFont({
+  src: [
+    { path: "./fonts/bricolage-grotesque-latin-700-normal.woff2", weight: "700", style: "normal" },
+    { path: "./fonts/bricolage-grotesque-latin-800-normal.woff2", weight: "800", style: "normal" },
+  ],
   variable: "--font-display",
-  weight: ["700", "800"],
 });
 
-const sans = Figtree({
-  subsets: ["latin"],
+const sans = localFont({
+  src: [
+    { path: "./fonts/figtree-latin-400-normal.woff2", weight: "400", style: "normal" },
+    { path: "./fonts/figtree-latin-600-normal.woff2", weight: "600", style: "normal" },
+    { path: "./fonts/figtree-latin-700-normal.woff2", weight: "700", style: "normal" },
+  ],
   variable: "--font-sans",
-  weight: ["400", "600", "700"],
 });
 
-const arabic = Cairo({
-  subsets: ["arabic"],
+const arabic = localFont({
+  src: [
+    { path: "./fonts/cairo-arabic-400-normal.woff2", weight: "400", style: "normal" },
+    { path: "./fonts/cairo-arabic-600-normal.woff2", weight: "600", style: "normal" },
+    { path: "./fonts/cairo-arabic-700-normal.woff2", weight: "700", style: "normal" },
+    { path: "./fonts/cairo-arabic-800-normal.woff2", weight: "800", style: "normal" },
+  ],
   variable: "--font-arabic",
-  weight: ["400", "600", "700", "800"],
+  preload: false,
 });
 
 const geistMono = localFont({
