@@ -101,4 +101,23 @@ describe('editor save and reorder', () => {
     expect(screen.getByRole('switch', { name: 'Randomize Answer Order' })).toBeInTheDocument();
     expect(screen.getByRole('switch', { name: 'Team Mode Activation' })).toBeInTheDocument();
   });
+
+  it('turns a settings switch on and shows the question sliders', async () => {
+    const user = userEvent.setup();
+    render(
+      <QuizEditorClient quiz={quiz} initialQuestions={[ready('q1', 'Alpha')]} />
+    );
+    const track = document.querySelector('[data-slot="slider-track"]');
+    const range = document.querySelector('[data-slot="slider-range"]');
+    expect(track?.className).toContain('h-1.5');
+    expect(track?.className).toContain('bg-arena-line');
+    expect(range?.className).toContain('bg-arena-court');
+
+    await user.click(screen.getByRole('button', { name: 'Settings' }));
+    const randomize = await screen.findByRole('switch', { name: 'Randomize Question Order' });
+    expect(randomize).toHaveAttribute('aria-checked', 'false');
+    await user.click(randomize);
+    expect(randomize).toHaveAttribute('aria-checked', 'true');
+    expect(randomize.className).toContain('data-[checked]:bg-arena-signal');
+  });
 });

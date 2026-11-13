@@ -95,7 +95,6 @@ export default function QuizSettingsDialog({
                 checked={randomizeQs}
                 onCheckedChange={onRandomizeQsChange}
                 aria-labelledby="randomize-questions-label"
-                className="data-[state=checked]:bg-arena-signal"
               />
             </div>
             <div className="flex items-center justify-between">
@@ -107,7 +106,6 @@ export default function QuizSettingsDialog({
                 checked={randomizeAs}
                 onCheckedChange={onRandomizeAsChange}
                 aria-labelledby="randomize-answers-label"
-                className="data-[state=checked]:bg-arena-signal"
               />
             </div>
             <div className="flex items-center justify-between">
@@ -119,7 +117,6 @@ export default function QuizSettingsDialog({
                 checked={teamMode}
                 onCheckedChange={onTeamModeChange}
                 aria-labelledby="team-mode-label"
-                className="data-[state=checked]:bg-arena-signal"
               />
             </div>
           </div>
