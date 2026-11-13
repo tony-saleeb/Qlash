@@ -153,7 +153,7 @@ export default function QuestionEditorPane({
               <Switch
                 checked={isDoublePointsRound}
                 onCheckedChange={onToggleDoublePoints}
-                className="data-[state=checked]:bg-arena-signal scale-75"
+                className="scale-75"
               />
               {t('doublePointsRound')}
             </label>
