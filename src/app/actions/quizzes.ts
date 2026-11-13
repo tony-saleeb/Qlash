@@ -6,6 +6,8 @@ import { DEFAULT_QUIZ_THEME } from '@/lib/game/theme';
 import { getHostAuth } from '@/lib/supabase/hostAuth';
 import { createAdminClient } from '@/lib/supabase/admin';
 import { quizLibraryCap } from '@/lib/game/constants';
+import { getContentPack } from '@/lib/content/packs';
+import { packToQuestionRows } from '@/lib/content/packRows';
 import { generateShareCode, isShareCode, normalizeShareCode } from '@/lib/content/shareCode';
 import { hasDuplicateAnswerIds } from '@/app/dashboard/quizzes/[id]/edit/quizEditorModel';
 import { remapDoublePointsRounds, doublePointsQuestionIds } from '@/lib/game/doublePoints';
@@ -46,7 +48,7 @@ interface QuizSettingsInput {
 }
 
 
-export async function assertQuizQuota(supabase: SupabaseClient, hostId: string) {
+async function assertQuizQuota(supabase: SupabaseClient, hostId: string) {
   const { data: host } = await supabase.from('hosts').select('plan').eq('id', hostId).maybeSingle();
   const cap = quizLibraryCap(host?.plan);
   if (!Number.isFinite(cap)) return;
@@ -316,6 +318,46 @@ export async function saveQuizData(
     console.error('saveQuizData error:', err);
     throw new Error(err instanceof Error ? err.message : 'Failed to save quiz.');
   }
+}
+
+export async function createPackQuiz(packId: string) {
+  try {
+    const pack = getContentPack(packId);
+    if (!pack) throw new Error('Unknown content pack.');
+    const rows = packToQuestionRows('pending', pack);
+    assertPlayableQuestions(rows);
+    const { supabase, user } = await getHostAuth();
+    await assertQuizQuota(supabase, user.id);
+
+    const { data: quiz, error: quizError } = await supabase
+      .from('quizzes')
+      .insert({
+        host_id: user.id,
+        title: pack.title,
+        description: pack.description,
+        theme: DEFAULT_QUIZ_THEME,
+      })
+      .select()
+      .single();
+
+    if (quizError || !quiz) throw quizError;
+
+    const { error: insertError } = await supabase
+      .from('questions')
+      .insert(rows.map((row) => ({ ...row, quiz_id: quiz.id })));
+
+    if (insertError) throw insertError;
+
+    revalidatePath('/dashboard');
+    return quiz;
+  } catch (err: unknown) {
+    console.error('createPackQuiz error:', err);
+    throw new Error(err instanceof Error ? err.message : 'Failed to add pack.');
+  }
+}
+
+export async function createTemplateQuiz() {
+  return createPackQuiz('sunday-school');
 }
 
 export async function enableQuizShare(quizId: string) {

@@ -1,5 +1,5 @@
 import { detectCsvDelimiter, parseCsvRecords } from '@/lib/content/csvRecords';
-import type { PackQuestion } from '@/lib/content/draftQuestion';
+import type { PackQuestion } from '@/lib/content/packs';
 
 const CORRECT_MARK = /(?:\s*(?:\*|✓|✔|✔︎|✅|\(صح\)|\[x\]|\[X\]))\s*$/u;
 
