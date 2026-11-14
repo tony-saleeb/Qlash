@@ -2,7 +2,7 @@ import { ANSWER_MARKS } from '@/lib/game/marks';
 import type { Locale } from '@/lib/i18n/locale';
 import { detectCsvDelimiter, parseCsvRecords } from '@/lib/content/csvRecords';
 import { looksLikeCsv, parseChatPaste } from '@/lib/content/parseChat';
-import type { PackQuestion } from '@/lib/content/draftQuestion';
+import type { PackQuestion } from '@/lib/content/packs';
 
 export type AnswerShape = 'slash' | 'qring' | 'bolt' | 'chevron' | 'spark' | 'bars';
 

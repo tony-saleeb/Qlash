@@ -17,6 +17,7 @@ import {
 } from '@/app/actions/game';
 import {
   cloneQuiz,
+  createPackQuiz,
   createQuiz,
   deleteQuiz,
   enableQuizShare,
@@ -24,15 +25,6 @@ import {
   stopQuizShare,
   saveQuizData,
 } from '@/app/actions/quizzes';
-import {
-  addBankQuestion,
-  createQuestionBank,
-  deleteBankQuestion,
-  deleteQuestionBank,
-  drawQuizFromBank,
-  listBankQuestions,
-  listQuestionBanks,
-} from '@/app/actions/questionBank';
 import { createRecapQuiz } from '@/app/actions/reports';
 import { setHostLocale } from '@/app/actions/host';
 import { tooManyRequests } from '@/lib/api/playerLimit';
@@ -86,20 +78,8 @@ async function runHostOp(op: HostOpName, args: Args) {
       return deleteQuiz(String(args.quizId));
     case 'cloneQuiz':
       return cloneQuiz(String(args.quizId));
-    case 'listQuestionBanks':
-      return listQuestionBanks();
-    case 'createQuestionBank':
-      return createQuestionBank(String(args.name ?? ''));
-    case 'deleteQuestionBank':
-      return deleteQuestionBank(String(args.bankId ?? ''));
-    case 'listBankQuestions':
-      return listBankQuestions(String(args.bankId ?? ''));
-    case 'addBankQuestion':
-      return addBankQuestion(String(args.bankId ?? ''), String(args.prompt ?? ''), args.answers);
-    case 'deleteBankQuestion':
-      return deleteBankQuestion(String(args.questionId ?? ''));
-    case 'drawQuizFromBank':
-      return drawQuizFromBank(String(args.bankId ?? ''), Number(args.count));
+    case 'createPackQuiz':
+      return createPackQuiz(String(args.packId));
     case 'enableQuizShare':
       return enableQuizShare(String(args.quizId));
     case 'rotateQuizShare':
