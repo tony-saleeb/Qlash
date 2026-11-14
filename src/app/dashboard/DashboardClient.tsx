@@ -19,18 +19,18 @@ import {
   createQuiz,
   deleteQuiz,
   cloneQuiz,
-  createPackQuiz,
   setHostLocale,
+  type DrawnQuiz,
 } from '@/lib/host/hostApi';
 import { ShareQuizDialog } from '@/app/dashboard/ShareQuizDialog';
-import { Plus, Play, Edit, Copy, Trash2, LogOut, BookTemplate, ClipboardList, Link2, Loader2 } from 'lucide-react';
+import { QuestionBankDialog } from '@/app/dashboard/QuestionBankDialog';
+import { Plus, Play, Edit, Copy, Trash2, LogOut, Library, ClipboardList, Link2, Loader2 } from 'lucide-react';
 import { BrandMark } from '@/components/brand/BrandMark';
 import { livePlayerCap, normalizeHostPlan, quizLibraryCap } from '@/lib/game/constants';
 import { LocaleToggle } from '@/components/brand/LocaleToggle';
 import { useLocale } from '@/lib/i18n/useLocale';
 import { fill } from '@/lib/i18n/messages';
 import { formatHostDate } from '@/lib/i18n/format';
-import { CONTENT_PACKS } from '@/lib/content/packs';
 import { claimInFlight, releaseInFlight } from '@/lib/ui/inFlight';
 import type { Locale } from '@/lib/i18n/locale';
 
@@ -81,15 +81,13 @@ export default function DashboardClient({
   };
   const [quizzes, setQuizzes] = useState<Quiz[]>(initialQuizzes);
   const [createDialogOpen, setCreateDialogOpen] = useState(false);
-  const [packsOpen, setPacksOpen] = useState(false);
+  const [bankOpen, setBankOpen] = useState(false);
   const [title, setTitle] = useState('');
   const [description, setDescription] = useState('');
   const [actionLoading, setActionLoading] = useState(false);
   const [hostingQuizId, setHostingQuizId] = useState<string | null>(null);
   const [shareQuizId, setShareQuizId] = useState<string | null>(null);
-  const [packPending, setPackPending] = useState(false);
   const [clonePending, setClonePending] = useState(false);
-  const packFlight = useRef(false);
   const cloneFlight = useRef(false);
 
   const plan = normalizeHostPlan(hostPlan);
@@ -138,26 +136,17 @@ export default function DashboardClient({
     }
   };
 
-  const handleCreatePack = async (packId: string) => {
-    if (atQuizCap) {
-      toastQuizCap();
-      return;
-    }
-    if (!claimInFlight(packFlight)) return;
-    setPackPending(true);
-    const loadingToast = toast.loading(t('addingPack'));
-    try {
-      const newQuiz = await createPackQuiz(packId);
-      const pack = CONTENT_PACKS.find((item) => item.id === packId);
-      toast.success(t('packAdded'), { id: loadingToast });
-      setQuizzes([{ ...newQuiz, questions: [{ count: pack?.questions.length ?? 0 }] }, ...quizzes]);
-      setPacksOpen(false);
-    } catch (err: unknown) {
-      toast.error(err instanceof Error ? err.message : t('failedAddPack'), { id: loadingToast });
-    } finally {
-      releaseInFlight(packFlight);
-      setPackPending(false);
-    }
+  const handleQuizFromBank = (quiz: DrawnQuiz) => {
+    setQuizzes((current) => [
+      {
+        id: quiz.id,
+        title: quiz.title,
+        description: quiz.description,
+        created_at: quiz.created_at,
+        questions: [{ count: quiz.questionCount }],
+      },
+      ...current,
+    ]);
   };
 
   const shareQuiz = quizzes.find((quiz) => quiz.id === shareQuizId) ?? null;
@@ -245,11 +234,10 @@ export default function DashboardClient({
           </div>
           <div className="flex flex-wrap gap-2">
             <Button
-              onClick={() => (atQuizCap ? toastQuizCap() : setPacksOpen(true))}
-              disabled={atQuizCap}
+              onClick={() => setBankOpen(true)}
               className="h-11 rounded-none border-2 border-arena-ink bg-transparent font-bold text-arena-ink hover:bg-arena-ink hover:text-white"
             >
-              <BookTemplate className="me-1.5 h-4 w-4" /> {t('packs')}
+              <Library className="me-1.5 h-4 w-4" /> {t('questionBank')}
             </Button>
             <Button
               onClick={() => (atQuizCap ? toastQuizCap() : setCreateDialogOpen(true))}
@@ -419,35 +407,13 @@ export default function DashboardClient({
         }}
       />
 
-      <Dialog open={packsOpen} onOpenChange={setPacksOpen}>
-        <DialogContent className="max-h-[min(90dvh,40rem)] max-w-lg overflow-y-auto rounded-none border-2 border-arena-ink bg-white text-arena-ink">
-          <DialogHeader>
-            <DialogTitle className="font-display text-xl font-extrabold">{t('packs')}</DialogTitle>
-            <DialogDescription className="text-arena-ink/55">
-              {t('packsHint')}
-            </DialogDescription>
-          </DialogHeader>
-          <ul className="mt-4 space-y-3">
-            {CONTENT_PACKS.map((pack) => (
-              <li key={pack.id}>
-                <button
-                  type="button"
-                  disabled={actionLoading || packPending}
-                  onClick={() => handleCreatePack(pack.id)}
-                  className="flex w-full flex-col items-start border-2 border-arena-ink/15 bg-arena-canvas px-4 py-3 text-start transition hover:border-arena-ink hover:bg-white"
-                >
-                  <span dir="auto" className="font-display text-lg font-extrabold">{pack.title}</span>
-                  <span dir="auto" className="mt-0.5 text-sm text-arena-ink/60">{pack.description}</span>
-                  <span className="mt-1 text-[11px] font-bold uppercase tracking-wider text-arena-ink/60">
-                    {locale === 'en' ? `${pack.blurbEn} · ` : ''}
-                    {pack.questions.length} {t('questionMany')}
-                  </span>
-                </button>
-              </li>
-            ))}
-          </ul>
-        </DialogContent>
-      </Dialog>
+      <QuestionBankDialog
+        open={bankOpen}
+        onOpenChange={setBankOpen}
+        atQuizCap={atQuizCap}
+        onQuizCap={toastQuizCap}
+        onQuizCreated={handleQuizFromBank}
+      />
 
       <Dialog open={createDialogOpen} onOpenChange={setCreateDialogOpen}>
         <DialogContent className="max-w-md rounded-2xl border-arena-line bg-white text-arena-ink">

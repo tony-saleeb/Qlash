@@ -34,6 +34,7 @@ files=(
   schema-p25-rate-limit-keys.sql
   schema-p26-stale-rooms.sql
   schema-p27-privilege-lock.sql
+  schema-p28-question-banks.sql
 )
 for file in "${files[@]}"; do
   echo "apply ${file}"

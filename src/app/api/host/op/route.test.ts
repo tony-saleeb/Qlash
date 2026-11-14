@@ -44,13 +44,22 @@ vi.mock('@/app/actions/game', () => ({
 
 vi.mock('@/app/actions/quizzes', () => ({
   cloneQuiz: vi.fn(),
-  createPackQuiz: vi.fn(),
   createQuiz: vi.fn(),
   deleteQuiz: vi.fn(),
   enableQuizShare: vi.fn(),
   rotateQuizShare: vi.fn(),
   stopQuizShare: vi.fn(),
   saveQuizData: vi.fn(),
+}));
+
+vi.mock('@/app/actions/questionBank', () => ({
+  listQuestionBanks: vi.fn(),
+  createQuestionBank: vi.fn(),
+  deleteQuestionBank: vi.fn(),
+  listBankQuestions: vi.fn(),
+  addBankQuestion: vi.fn(),
+  deleteBankQuestion: vi.fn(),
+  drawQuizFromBank: vi.fn(),
 }));
 
 vi.mock('@/app/actions/reports', () => ({

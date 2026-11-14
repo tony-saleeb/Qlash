@@ -59,8 +59,9 @@ Run these in the Supabase SQL editor, in order, on a new project:
 29. `schema-p25-rate-limit-keys.sql` — hashed rate-limit keys and pruning
 30. `schema-p26-stale-rooms.sql` — close quiet rooms and refuse joins after 12 hours
 31. `schema-p27-privilege-lock.sql` — fixed search path on the cap triggers; revoke truncate, trigger, and references
+32. `schema-p28-question-banks.sql` — host question banks. A category is not a quiz.
 
-Existing projects that already have the live loop: run **5–31** in that order.
+Existing projects that already have the live loop: run **5–32** in that order.
 
 ## Security
 

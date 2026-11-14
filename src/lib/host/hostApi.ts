@@ -53,7 +53,27 @@ export const createQuiz = (title: string, description = '') =>
   hostOp<HostQuiz>('createQuiz', { title, description });
 export const deleteQuiz = (quizId: string) => hostOp('deleteQuiz', { quizId });
 export const cloneQuiz = (quizId: string) => hostOp<HostQuiz>('cloneQuiz', { quizId });
-export const createPackQuiz = (packId: string) => hostOp<HostQuiz>('createPackQuiz', { packId });
+
+export type QuestionBankSummary = { id: string; name: string; count: number };
+export type BankQuestionSummary = { id: string; prompt: string };
+export type DrawnQuiz = HostQuiz & { questionCount: number };
+
+export const listQuestionBanks = () => hostOp<QuestionBankSummary[]>('listQuestionBanks', {});
+export const createQuestionBank = (name: string) =>
+  hostOp<QuestionBankSummary>('createQuestionBank', { name });
+export const deleteQuestionBank = (bankId: string) =>
+  hostOp<{ id: string }>('deleteQuestionBank', { bankId });
+export const listBankQuestions = (bankId: string) =>
+  hostOp<BankQuestionSummary[]>('listBankQuestions', { bankId });
+export const addBankQuestion = (
+  bankId: string,
+  prompt: string,
+  answers: { text: string; correct: boolean }[]
+) => hostOp<BankQuestionSummary>('addBankQuestion', { bankId, prompt, answers });
+export const deleteBankQuestion = (questionId: string) =>
+  hostOp<{ id: string }>('deleteBankQuestion', { questionId });
+export const drawQuizFromBank = (bankId: string, count: number) =>
+  hostOp<DrawnQuiz>('drawQuizFromBank', { bankId, count });
 export const enableQuizShare = (quizId: string) =>
   hostOp<{ shareCode: string }>('enableQuizShare', { quizId });
 export const rotateQuizShare = (quizId: string) =>

@@ -173,24 +173,6 @@ describe('quiz library actions', () => {
     expect(host.lastInsert('quizzes')).toBeUndefined();
   });
 
-  it('adds a content pack into the host library', async () => {
-    host.setTables({
-      hosts: { data: { plan: 'pro' }, error: null },
-      quizzes: { data: { id: 'pack-1', title: 'تسخين اللعبة' }, error: null },
-      questions: { data: {}, error: null },
-    });
-    const { createPackQuiz } = await import('@/app/actions/quizzes');
-    const quiz = await createPackQuiz('warmup');
-    expect(quiz.title).toBe('تسخين اللعبة');
-    expect(host.lastInsert('quizzes')).toMatchObject({
-      host_id: 'host-1',
-      title: 'تسخين اللعبة',
-    });
-    const rows = host.lastInsert('questions') as { prompt: string }[];
-    expect(rows).toHaveLength(8);
-    expect(rows[0].prompt).toContain('مصر');
-  });
-
   it('inserts a new question under the editor id and returns both ids', async () => {
     host.setTables({
       quizzes: { data: { updated_at: '2026-11-07T00:00:00.000Z' }, error: null },
