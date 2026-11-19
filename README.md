@@ -59,8 +59,9 @@ Run these in the Supabase SQL editor, in order, on a new project:
 29. `schema-p25-rate-limit-keys.sql` — hashed rate-limit keys and pruning
 30. `schema-p26-stale-rooms.sql` — close quiet rooms and refuse joins after 12 hours
 31. `schema-p27-privilege-lock.sql` — fixed search path on the cap triggers; revoke truncate, trigger, and references
+32. `schema-p28-answers-check-grant.sql` — hosts can execute `question_answers_valid`, which the question CHECK calls
 
-Existing projects that already have the live loop: run **5–31** in that order.
+Existing projects that already have the live loop: run **5–32** in that order.
 
 ## Security
 
@@ -69,6 +70,7 @@ Existing projects that already have the live loop: run **5–31** in that order.
 | Script | When |
 |---|---|
 | `node scripts/security/check-grants.mjs` | After p12, and again after later SQL. Env: `SUPABASE_URL`, `SUPABASE_ANON_KEY`, `TEST_HOST_EMAIL`, `TEST_HOST_PASSWORD`, `FOREIGN_QUIZ_ID`. |
+| `scripts/verify-check-function-grants.sql` | After p28. Fails if `authenticated` cannot execute a public function used by a public CHECK. |
 | `node scripts/security/realtime-probe.mjs <sessionId>` | After p14, once while public Realtime is still on and again after it is disabled. Env: `SUPABASE_URL`, `SUPABASE_ANON_KEY`. |
 | `node scripts/scale-realtime.mjs <sessionId> [players=80]` | On the plan production uses, during a real 3-question game. Env: `SUPABASE_URL`, `SUPABASE_ANON_KEY`. |
 

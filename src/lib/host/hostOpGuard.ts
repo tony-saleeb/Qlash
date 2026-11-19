@@ -31,6 +31,47 @@ export function hostOpRequestAllowed(request: Request): boolean {
   return site === 'same-origin' || site === 'none';
 }
 
+const DB_ERROR_FIELDS = ['code', 'details', 'hint'] as const;
+
+function dbField(err: object, name: string): string | null {
+  if (!Object.hasOwn(err, name)) return null;
+  const value = Reflect.get(err, name);
+  return typeof value === 'string' ? value : null;
+}
+
+/** Fields the browser must not see, kept on the server log. */
+export function hostOpFailureLog(err: unknown): {
+  message: string;
+  code: string | null;
+  details: string | null;
+  hint: string | null;
+} {
+  const message = err instanceof Error && err.message ? err.message : 'Host operation failed.';
+  if (!err || typeof err !== 'object') {
+    return { message, code: null, details: null, hint: null };
+  }
+  return {
+    message,
+    code: dbField(err, 'code'),
+    details: dbField(err, 'details'),
+    hint: dbField(err, 'hint'),
+  };
+}
+
+/** Rethrow with the Postgres code, details, and hint still attached. */
+export function preserveDbError(err: unknown, fallback: string): Error {
+  const failure = new Error(err instanceof Error ? err.message : fallback);
+  if (!err || typeof err !== 'object') return failure;
+  for (const key of DB_ERROR_FIELDS) {
+    if (!Object.hasOwn(err, key)) continue;
+    const value = Reflect.get(err, key);
+    if (typeof value === 'string' || value === null) {
+      Object.defineProperty(failure, key, { value, enumerable: true });
+    }
+  }
+  return failure;
+}
+
 /** App errors stay readable. Postgres and RLS text does not. */
 export function hostOpClientError(err: unknown): { status: number; message: string } {
   const raw = err instanceof Error ? err.message.trim() : '';

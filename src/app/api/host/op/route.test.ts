@@ -140,6 +140,30 @@ describe('POST /api/host/op', () => {
     expect(result.body).toEqual({ error: 'Could not complete that.' });
   });
 
+  it('logs the database code, details, and hint', async () => {
+    const spy = vi.spyOn(console, 'error').mockImplementation(() => {});
+    vi.mocked(createGameSession).mockRejectedValueOnce(
+      Object.assign(new Error('permission denied for function question_answers_valid'), {
+        code: '42501',
+        details: null,
+        hint: null,
+      })
+    );
+    const { POST } = await import('@/app/api/host/op/route');
+    const result = await readJson(
+      await POST(hostRequest({ op: 'createGameSession', args: { quizId: 'quiz-1' } }))
+    );
+    expect(result.status).toBe(400);
+    expect(result.body).toEqual({ error: 'Could not complete that.' });
+    expect(spy).toHaveBeenCalledWith('host op failed', {
+      message: 'permission denied for function question_answers_valid',
+      code: '42501',
+      details: null,
+      hint: null,
+    });
+    spy.mockRestore();
+  });
+
   it('rate limits a host', async () => {
     rateLimitMock.mockReturnValueOnce({ ok: true }).mockReturnValueOnce({ ok: false, retryAfterSec: 12 });
     const { POST } = await import('@/app/api/host/op/route');

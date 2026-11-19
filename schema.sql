@@ -900,3 +900,52 @@ end;
 $$;
 revoke all on function public.send_lobby_reaction(uuid, text, text) from public, anon, authenticated;
 grant execute on function public.send_lobby_reaction(uuid, text, text) to service_role;
+
+-- P19 / P28: questions_answers_check calls this function as the writing role.
+-- The CHECK is added in schema-p19-question-rules.sql. P19 also revoked
+-- EXECUTE from authenticated; schema-p28-answers-check-grant.sql puts it
+-- back on databases that already applied that revoke. anon stays revoked
+-- so PostgREST does not expose the function.
+create or replace function public.question_answers_valid(p_type text, p_answers jsonb)
+returns boolean
+language sql
+immutable
+set search_path = ''
+as $$
+  select
+    jsonb_typeof(p_answers) = 'array'
+    and jsonb_array_length(p_answers) between 1 and 6
+    and case p_type
+      when 'type_answer' then length(btrim(coalesce((
+        select e->>'text'
+        from jsonb_array_elements(p_answers) e
+        where coalesce((e->>'is_correct')::boolean, false)
+        limit 1
+      ), ''))) > 0
+      when 'poll' then jsonb_array_length(p_answers) between 2 and 6
+      when 'multi_select' then
+        jsonb_array_length(p_answers) between 2 and 6
+        and (
+          select count(*) from jsonb_array_elements(p_answers) e
+          where coalesce((e->>'is_correct')::boolean, false)
+        ) >= 1
+      when 'mcq' then
+        jsonb_array_length(p_answers) between 2 and 6
+        and (
+          select count(*) from jsonb_array_elements(p_answers) e
+          where coalesce((e->>'is_correct')::boolean, false)
+        ) = 1
+      when 'true_false' then
+        jsonb_array_length(p_answers) between 2 and 6
+        and (
+          select count(*) from jsonb_array_elements(p_answers) e
+          where coalesce((e->>'is_correct')::boolean, false)
+        ) = 1
+      else false
+    end;
+$$;
+
+revoke all on function public.question_answers_valid(text, jsonb) from public, anon;
+-- authenticated must keep EXECUTE because questions_answers_check depends on it.
+grant execute on function public.question_answers_valid(text, jsonb)
+  to authenticated, service_role;
