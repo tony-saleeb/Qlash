@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest';
-import { hostOpClientError, hostOpRequestAllowed } from '@/lib/host/hostOpGuard';
+import { hostOpClientError, hostOpFailureLog, hostOpRequestAllowed, preserveDbError } from '@/lib/host/hostOpGuard';
 
 function request(headers: Record<string, string>, url = 'http://localhost/api/host/op') {
   return new Request(url, { method: 'POST', headers });
@@ -45,6 +45,31 @@ describe('host operation requests', () => {
     expect(hostOpClientError(new Error('Unauthorized. Please log in.'))).toEqual({
       status: 401,
       message: 'Unauthorized. Please log in.',
+    });
+  });
+
+  it('keeps the postgres code, details, and hint for the server log', () => {
+    const err = Object.assign(new Error('permission denied for function question_answers_valid'), {
+      code: '42501',
+      details: null,
+      hint: null,
+    });
+    expect(hostOpFailureLog(err)).toEqual({
+      message: 'permission denied for function question_answers_valid',
+      code: '42501',
+      details: null,
+      hint: null,
+    });
+    const preserved = preserveDbError(err, 'Failed to save quiz.');
+    expect(hostOpFailureLog(preserved)).toEqual({
+      message: 'permission denied for function question_answers_valid',
+      code: '42501',
+      details: null,
+      hint: null,
+    });
+    expect(hostOpClientError(preserved)).toEqual({
+      status: 400,
+      message: 'Could not complete that.',
     });
   });
 });

@@ -297,6 +297,33 @@ describe('quiz library actions', () => {
     expect(host.lastUpdate('quizzes')).toBeUndefined();
   });
 
+  it('keeps the postgres code when a question write fails', async () => {
+    const dbError = Object.assign(new Error('permission denied for function question_answers_valid'), {
+      code: '42501',
+      details: null,
+      hint: null,
+    });
+    host.setTables({
+      quizzes: { data: { updated_at: '2026-11-07T00:00:02.000Z' }, error: null },
+      questions: [
+        { data: [{ id: 'old', archived_at: null }], error: null },
+        { data: null, error: dbError },
+      ],
+    });
+    const { saveQuizData } = await import('@/app/actions/quizzes');
+    await expect(
+      saveQuizData('quiz-1', quizSettings('2026-11-07T00:00:00.000Z'), [
+        editorQuestion('old', 'Kept'),
+        editorQuestion('client-new', 'Added'),
+      ])
+    ).rejects.toMatchObject({
+      message: 'permission denied for function question_answers_valid',
+      code: '42501',
+      details: null,
+      hint: null,
+    });
+  });
+
   it('revives an archived question instead of inserting its id twice', async () => {
     host.setTables({
       quizzes: { data: { updated_at: '2026-11-07T00:00:02.000Z' }, error: null },

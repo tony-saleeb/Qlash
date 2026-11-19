@@ -12,6 +12,7 @@ import { generateShareCode, isShareCode, normalizeShareCode } from '@/lib/conten
 import { hasDuplicateAnswerIds } from '@/app/dashboard/quizzes/[id]/edit/quizEditorModel';
 import { remapDoublePointsRounds, doublePointsQuestionIds } from '@/lib/game/doublePoints';
 import { assertPlayableQuestions } from '@/lib/game/questionRules';
+import { hostOpFailureLog, preserveDbError } from '@/lib/host/hostOpGuard';
 import type { SupabaseClient } from '@supabase/supabase-js';
 
 interface AnswerOptionInput {
@@ -338,8 +339,9 @@ export async function saveQuizData(
       questionIds,
     };
   } catch (err: unknown) {
-    console.error('saveQuizData error:', err);
-    throw new Error(err instanceof Error ? err.message : 'Failed to save quiz.');
+    const failure = preserveDbError(err, 'Failed to save quiz.');
+    console.error('saveQuizData error:', hostOpFailureLog(failure));
+    throw failure;
   }
 }
 

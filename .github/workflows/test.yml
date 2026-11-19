@@ -38,4 +38,5 @@ jobs:
       - run: bash scripts/ci-apply-schema.sh supabase_db_qlash
       - run: docker exec -i supabase_db_qlash psql -U postgres -d postgres -v ON_ERROR_STOP=1 < scripts/ci-seed-host.sql
       - run: docker exec -i supabase_db_qlash psql -U postgres -d postgres -v ON_ERROR_STOP=1 < scripts/verify-scoring.sql
+      - run: docker exec -i supabase_db_qlash psql -U postgres -d postgres -v ON_ERROR_STOP=1 < scripts/verify-check-function-grants.sql
       - run: supabase test db

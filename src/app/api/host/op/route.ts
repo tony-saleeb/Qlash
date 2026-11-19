@@ -29,7 +29,7 @@ import { createRecapQuiz } from '@/app/actions/reports';
 import { setHostLocale } from '@/app/actions/host';
 import { tooManyRequests } from '@/lib/api/playerLimit';
 import { RATE_LIMITS } from '@/lib/game/constants';
-import { hostOpClientError, hostOpRequestAllowed } from '@/lib/host/hostOpGuard';
+import { hostOpClientError, hostOpFailureLog, hostOpRequestAllowed } from '@/lib/host/hostOpGuard';
 import { isHostOp, type HostOpName } from '@/lib/host/ops';
 import { clientIpFromRequest, rateLimit } from '@/lib/rate-limit';
 import { readHostAuth } from '@/lib/supabase/hostAuth';
@@ -134,7 +134,7 @@ export async function POST(request: Request) {
     const data = await runHostOp(body.op, body.args ?? {});
     return NextResponse.json({ data });
   } catch (err) {
-    console.error('host op failed', err);
+    console.error('host op failed', hostOpFailureLog(err));
     const mapped = hostOpClientError(err);
     return NextResponse.json({ error: mapped.message }, { status: mapped.status });
   }
