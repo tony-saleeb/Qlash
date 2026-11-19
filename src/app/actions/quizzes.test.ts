@@ -276,6 +276,43 @@ describe('quiz library actions', () => {
     expect(questionWrites()).toHaveLength(0);
   });
 
+  it('leaves updated_at untouched when a question write fails', async () => {
+    // Regression: the quiz row used to be stamped before the question work ran,
+    // so a failure here advanced updated_at past the stamp the editor held and
+    // locked it out of every later save with "saved somewhere else".
+    host.setTables({
+      quizzes: { data: { updated_at: '2026-11-07T00:00:02.000Z' }, error: null },
+      questions: [
+        { data: [{ id: 'old', archived_at: null }], error: null },
+        { data: null, error: { message: 'duplicate key value violates unique constraint' } },
+      ],
+    });
+    const { saveQuizData } = await import('@/app/actions/quizzes');
+    await expect(
+      saveQuizData('quiz-1', quizSettings('2026-11-07T00:00:00.000Z'), [
+        editorQuestion('old', 'Kept'),
+        editorQuestion('client-new', 'Added'),
+      ])
+    ).rejects.toThrow();
+    expect(host.lastUpdate('quizzes')).toBeUndefined();
+  });
+
+  it('revives an archived question instead of inserting its id twice', async () => {
+    host.setTables({
+      quizzes: { data: { updated_at: '2026-11-07T00:00:02.000Z' }, error: null },
+      questions: { data: [{ id: 'old', archived_at: '2026-11-06T00:00:00.000Z' }], error: null },
+    });
+    const { saveQuizData } = await import('@/app/actions/quizzes');
+    await saveQuizData('quiz-1', quizSettings('2026-11-07T00:00:00.000Z'), [
+      editorQuestion('old', 'Back again'),
+    ]);
+    const writes = questionWrites();
+    expect(writes.some((call) => call.methods.includes('insert'))).toBe(false);
+    expect(writes.find((call) => call.methods.includes('update'))?.payload).toEqual(
+      expect.objectContaining({ archived_at: null, prompt: 'Back again' })
+    );
+  });
+
   it('reuses an existing share code', async () => {
     host.setTable('quizzes', { data: { id: 'q1', share_code: 'ABCD2345' }, error: null });
     const { enableQuizShare } = await import('@/app/actions/quizzes');
