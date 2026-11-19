@@ -206,47 +206,40 @@ export async function saveQuizData(
     const { supabase, user } = await getHostAuth();
     const updatedAt = new Date().toISOString();
 
-    // 1. Verify ownership. When the editor sends the stamp it loaded, the
-    // update matches zero rows if another tab saved in between, and we stop
-    // before any question is deleted.
-    let quizUpdate = supabase
+    // 1. Verify ownership and the optimistic stamp with a READ, not a write.
+    // The quiz row is written last (step 6) so a failure in the question work
+    // below cannot leave updated_at ahead of the stamp the editor is holding —
+    // that used to lock the editor out of every subsequent save.
+    let quizCheck = supabase
       .from('quizzes')
-      .update({
-        title: settings.title,
-        description: settings.description,
-        theme: settings.theme,
-        randomize_questions: settings.randomize_questions,
-        randomize_answers: settings.randomize_answers,
-        team_mode: settings.team_mode,
-        double_points_rounds: doublePointsQuestionIds(settings.double_points_rounds, questions),
-        updated_at: updatedAt,
-      })
+      .select('updated_at')
       .eq('id', quizId)
       .eq('host_id', user.id);
     if (settings.expected_updated_at) {
-      quizUpdate = quizUpdate.eq('updated_at', settings.expected_updated_at);
+      quizCheck = quizCheck.eq('updated_at', settings.expected_updated_at);
     }
-    const { data: savedQuiz, error: updateQuizError } = await quizUpdate
-      .select('updated_at')
-      .maybeSingle();
+    const { data: currentQuiz, error: checkQuizError } = await quizCheck.maybeSingle();
 
-    if (updateQuizError) throw updateQuizError;
-    if (!savedQuiz) {
+    if (checkQuizError) throw checkQuizError;
+    if (!currentQuiz) {
       throw new Error('This quiz was saved somewhere else. Reload the page before saving again.');
     }
 
-    // 2. Fetch existing question IDs to identify deletions
+    // 2. Fetch existing question IDs. Archived rows are included: their ids are
+    // still taken by the primary key, so re-adding a deleted question has to
+    // update (and un-archive) that row rather than insert a duplicate id.
     const { data: existingQs, error: fetchQsError } = await supabase
       .from('questions')
-      .select('id')
-      .eq('quiz_id', quizId)
-      .is('archived_at', null);
+      .select('id, archived_at')
+      .eq('quiz_id', quizId);
 
     if (fetchQsError) throw fetchQsError;
 
-    const existingIds = existingQs?.map((q) => q.id) || [];
+    const existingRows = (existingQs ?? []) as { id: string; archived_at: string | null }[];
+    const existingIds = existingRows.map((q) => q.id);
+    const liveIds = existingRows.filter((q) => !q.archived_at).map((q) => q.id);
     const incomingIds = questions.map((q) => q.id).filter((id): id is string => !!id);
-    const deleteIds = existingIds.filter((id) => !incomingIds.includes(id));
+    const deleteIds = liveIds.filter((id) => !incomingIds.includes(id));
 
     // 3. Perform Deletions
     if (deleteIds.length > 0) {
@@ -275,7 +268,9 @@ export async function saveQuizData(
         answers: q.answers,
       };
       if (q.id && existingIds.includes(q.id)) {
-        toUpdate.push({ id: q.id, row });
+        // archived_at is cleared so a re-added question comes back to life
+        // instead of colliding with its own soft-deleted row.
+        toUpdate.push({ id: q.id, row: { ...row, archived_at: null } });
       } else {
         // Keep the editor's id so the next save updates this row instead of
         // deleting it and inserting a copy (which cascades away past answers).
@@ -301,6 +296,34 @@ export async function saveQuizData(
       );
       const failed = results.find((result) => result.error);
       if (failed?.error) throw failed.error;
+    }
+
+    // 6. Every question write succeeded — now stamp the quiz row. Guarded by
+    // the same expected stamp so a concurrent save still loses the race here.
+    let quizUpdate = supabase
+      .from('quizzes')
+      .update({
+        title: settings.title,
+        description: settings.description,
+        theme: settings.theme,
+        randomize_questions: settings.randomize_questions,
+        randomize_answers: settings.randomize_answers,
+        team_mode: settings.team_mode,
+        double_points_rounds: doublePointsQuestionIds(settings.double_points_rounds, questions),
+        updated_at: updatedAt,
+      })
+      .eq('id', quizId)
+      .eq('host_id', user.id);
+    if (settings.expected_updated_at) {
+      quizUpdate = quizUpdate.eq('updated_at', settings.expected_updated_at);
+    }
+    const { data: savedQuiz, error: updateQuizError } = await quizUpdate
+      .select('updated_at')
+      .maybeSingle();
+
+    if (updateQuizError) throw updateQuizError;
+    if (!savedQuiz) {
+      throw new Error('This quiz was saved somewhere else. Reload the page before saving again.');
     }
 
     const insertedByOrder = new Map(insertedRows.map((row) => [row.order_index, row.id]));

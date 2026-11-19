@@ -59,8 +59,21 @@ export default function QuizEditorClient({
   const [importOpen, setImportOpen] = useState(false);
   const [saving, setSaving] = useState(false);
   const [csvText, setCsvText] = useState('');
+  const [stampStale, setStampStale] = useState(false);
 
   const activeQuestion = questions[activeIndex];
+
+  // A failed save may have committed part-way, so the stamp we hold can be
+  // behind the server. router.refresh() re-renders this page with the real
+  // updated_at; adopt it so the next save is guarded by a true stamp instead
+  // of failing with "saved somewhere else" on every attempt.
+  useEffect(() => {
+    if (!stampStale) return;
+    const fresh = quiz.updated_at ?? '';
+    if (!fresh || fresh === savedAt) return;
+    setSavedAt(fresh);
+    setStampStale(false);
+  }, [stampStale, quiz.updated_at, savedAt]);
 
   useEffect(() => {
     if (!dirty) return;
@@ -308,6 +321,11 @@ export default function QuizEditorClient({
       router.refresh();
     } catch (err: unknown) {
       const message = err instanceof Error ? err.message : t('failedSaveQuiz');
+      // The stamp we hold may now be behind the server. Pull the real one back
+      // so the next attempt is guarded by a fresh stamp rather than failing
+      // with the same conflict forever.
+      setStampStale(true);
+      router.refresh();
       toast.error(message, { id: loadingToast });
     } finally {
       setSaving(false);
