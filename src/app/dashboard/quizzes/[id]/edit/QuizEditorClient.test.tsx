@@ -5,13 +5,7 @@ import { beforeEach, describe, expect, it, vi } from 'vitest';
 import { createDefaultQuestion } from '@/app/dashboard/quizzes/[id]/edit/quizEditorModel';
 import type { Question } from '@/app/dashboard/quizzes/[id]/edit/quizEditorModel';
 
-const saveQuizData = vi.hoisted(() =>
-  vi.fn(async (..._args: unknown[]) => ({
-    success: true as const,
-    updatedAt: '2026-08-13T20:00:00.000Z',
-    questionIds: ['q1', 'q2'],
-  }))
-);
+const saveQuizData = vi.hoisted(() => vi.fn());
 
 vi.mock('next/navigation', () => ({
   useRouter: () => ({ push: vi.fn(), refresh: vi.fn(), prefetch: vi.fn() }),
@@ -56,9 +50,90 @@ const quiz = {
 
 describe('editor save and reorder', () => {
   beforeEach(() => {
-    saveQuizData.mockClear();
+    saveQuizData.mockReset();
+    saveQuizData.mockImplementation(async () => ({
+      success: true as const,
+      updatedAt: '2026-08-13T20:00:00.000Z',
+      questionIds: ['q1', 'q2'],
+    }));
     localStorage.removeItem('qlash_locale');
     document.cookie = 'qlash_locale=; path=/; max-age=0';
+  });
+
+  it('adopts a newer server stamp after a failed save', async () => {
+    saveQuizData.mockRejectedValueOnce(new Error('duplicate key'));
+    const user = userEvent.setup();
+    const { rerender } = render(
+      <QuizEditorClient quiz={quiz} initialQuestions={[ready('q1', 'Alpha')]} />
+    );
+
+    await user.click(screen.getByRole('button', { name: 'Save' }));
+    rerender(
+      <QuizEditorClient
+        quiz={{ ...quiz, updated_at: '2026-08-13T20:30:00.000Z' }}
+        initialQuestions={[ready('q1', 'Alpha')]}
+      />
+    );
+    await user.click(screen.getByRole('button', { name: 'Save' }));
+
+    expect(saveQuizData).toHaveBeenCalledTimes(2);
+    expect(saveQuizData.mock.calls[1][1]).toMatchObject({
+      expected_updated_at: '2026-08-13T20:30:00.000Z',
+    });
+  });
+
+  it('does not replace a successful save stamp with a later refresh', async () => {
+    saveQuizData
+      .mockRejectedValueOnce(new Error('duplicate key'))
+      .mockResolvedValueOnce({
+        success: true,
+        updatedAt: '2026-08-13T21:00:00.000Z',
+        questionIds: ['q1'],
+      });
+    const user = userEvent.setup();
+    const { rerender } = render(
+      <QuizEditorClient quiz={quiz} initialQuestions={[ready('q1', 'Alpha')]} />
+    );
+
+    await user.click(screen.getByRole('button', { name: 'Save' }));
+    await user.click(screen.getByRole('button', { name: 'Save' }));
+    rerender(
+      <QuizEditorClient
+        quiz={{ ...quiz, updated_at: '2026-08-13T22:00:00.000Z' }}
+        initialQuestions={[ready('q1', 'Alpha')]}
+      />
+    );
+    await user.click(screen.getByRole('button', { name: 'Save' }));
+
+    expect(saveQuizData.mock.calls[2][1]).toMatchObject({
+      expected_updated_at: '2026-08-13T21:00:00.000Z',
+    });
+  });
+
+  it('keeps a successful retry stamp when the failed save refresh is still stale', async () => {
+    saveQuizData
+      .mockRejectedValueOnce(new Error('duplicate key'))
+      .mockResolvedValueOnce({
+        success: true,
+        updatedAt: '2026-08-13T21:00:00.000Z',
+        questionIds: ['q1'],
+      });
+    const user = userEvent.setup();
+    const { rerender } = render(
+      <QuizEditorClient quiz={quiz} initialQuestions={[ready('q1', 'Alpha')]} />
+    );
+
+    await user.click(screen.getByRole('button', { name: 'Save' }));
+    await user.click(screen.getByRole('button', { name: 'Save' }));
+    rerender(
+      <QuizEditorClient quiz={quiz} initialQuestions={[ready('q1', 'Alpha')]} />
+    );
+    await user.click(screen.getByRole('button', { name: 'Save' }));
+
+    expect(saveQuizData).toHaveBeenCalledTimes(3);
+    expect(saveQuizData.mock.calls[2][1]).toMatchObject({
+      expected_updated_at: '2026-08-13T21:00:00.000Z',
+    });
   });
 
   it('saves the questions in the order the host moved them', async () => {

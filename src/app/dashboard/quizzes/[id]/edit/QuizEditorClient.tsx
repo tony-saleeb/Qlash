@@ -65,12 +65,17 @@ export default function QuizEditorClient({
 
   // A failed save may have committed part-way, so the stamp we hold can be
   // behind the server. router.refresh() re-renders this page with the real
-  // updated_at; adopt it so the next save is guarded by a true stamp instead
-  // of failing with "saved somewhere else" on every attempt.
+  // updated_at; adopt it when it is newer so the next save is guarded by a
+  // true stamp. Never walk the stamp backwards: a retry that already
+  // succeeded has a newer savedAt than the props that refresh started from,
+  // and replacing it would lock the following save out again.
   useEffect(() => {
     if (!stampStale) return;
     const fresh = quiz.updated_at ?? '';
     if (!fresh || fresh === savedAt) return;
+    const freshMs = Date.parse(fresh);
+    const savedMs = Date.parse(savedAt);
+    if (Number.isFinite(savedMs) && Number.isFinite(freshMs) && freshMs < savedMs) return;
     setSavedAt(fresh);
     setStampStale(false);
   }, [stampStale, quiz.updated_at, savedAt]);
@@ -316,6 +321,10 @@ export default function QuizEditorClient({
       );
       setQuestions((current) => withSavedQuestionIds(current, saved.questionIds));
       setSavedAt(saved.updatedAt);
+      // This save's stamp is authoritative. Leave the failure-recovery effect
+      // disarmed so a late refresh cannot replace it with an older prop value
+      // or with a concurrent edit's stamp.
+      setStampStale(false);
       setDirty(false);
       toast.success(t('quizSaved'), { id: loadingToast });
       router.refresh();
